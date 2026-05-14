@@ -13,6 +13,7 @@ function startServer({ port = 19080 } = {}) {
     ...process.env,
     NODE_ENV: 'test',
     PORT: String(port),
+    HOST: '127.0.0.1',
     DATA_DIR: dataDir,
     PLUGIN_DIR: path.join(dataDir, 'plugins'),
     SESSION_SECRET: 'test-session-secret-change-me',

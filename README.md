@@ -170,7 +170,7 @@ See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
 The first plugin lives separately at:
 
 ```text
-/mnt/storage/code/home-lab-launcher-plugins/news
+home-lab-launcher-plugins/news
 ```
 
 It implements an optional RSS/news dashboard section with feed management, folders, per-feed refresh status, cleanup/retention, and OPML import/export. See that plugin’s README for packaging notes.
@@ -213,8 +213,12 @@ docker compose logs -f launcher
 
 ## Project status
 
-This project is in early development. The core app is functional, but plugin APIs and schemas may still change before a stable release. See [ROADMAP.md](ROADMAP.md) for the active milestone plan and completion notes.
+This project is in early development. The core app is functional, but plugin APIs and schemas may still change before a stable release. Public release work is tracked through GitHub issues, milestones, and `CHANGELOG.md`.
+
+## Screenshots
+
+Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`.
 
 ## License
 
-Add your preferred open-source license before publishing the repository.
+MIT — see [LICENSE](LICENSE).

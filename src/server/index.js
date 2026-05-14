@@ -11,6 +11,7 @@ const { securityHeaders, csrfProtection } = require('./security');
 
 const app = express();
 const port = Number(process.env.PORT || 8080);
+const host = process.env.HOST || '0.0.0.0';
 const dataDir = process.env.DATA_DIR || path.join(process.cwd(), 'data');
 const pluginDir = process.env.PLUGIN_DIR || path.join(dataDir, 'plugins');
 const db = openDb(dataDir);
@@ -42,6 +43,6 @@ pluginManager.reload().catch((error) => {
 app.use(express.static(path.join(__dirname, '../public')));
 app.get(/^\/(?!api\/|plugins\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
-app.listen(port, () => {
-  console.log(`Home Lab Launcher listening on http://0.0.0.0:${port}`);
+app.listen(port, host, () => {
+  console.log(`Home Lab Launcher listening on http://${host}:${port}`);
 });
