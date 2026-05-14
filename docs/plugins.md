@@ -179,6 +179,8 @@ plugin_news_items
 
 During development, start the launcher with `NODE_ENV=development` and install a plugin from a local path in **Admin → Plugins**. Local plugin reloads unmount and remount plugin routes/static assets so backend and frontend changes can be tested without rebuilding the launcher.
 
+For Docker Compose development, set `ENABLE_LOCAL_PLUGIN_INSTALL=true`, set `LOCAL_PLUGIN_HOST_DIR` to the host directory containing plugin projects, and use the mounted container path in the UI. Example: host `./local-plugins` is mounted as `/app/local-plugins`, so install `/app/local-plugins/news`. Host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
+
 In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTALL=true` is explicitly set.
 
 ## Publishing a plugin

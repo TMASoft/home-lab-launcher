@@ -161,7 +161,7 @@ Plugins are trusted Admin-installed code. The Admin console shows lifecycle stat
 - static frontend assets, and
 - dashboard sections.
 
-The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`.
+The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
 
 See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
 

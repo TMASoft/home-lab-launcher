@@ -407,7 +407,7 @@ function adminPluginsHtml() {
   }).join('') || '<p>No plugins installed.</p>';
   return `<div class="settings-card"><div class="inline-between"><h3>Plugin manager</h3><button class="ghost" id="plugins-reload" type="button">Reload plugins</button></div>${rows}
     <h3>Install from GitHub</h3><div class="field"><label>Repository URL</label><input id="plugin-repo" placeholder="https://github.com/owner/repo"></div><div class="inline-controls"><button class="ghost" id="plugin-discover" type="button">Discover versions</button><select id="plugin-version"></select><button class="primary" id="plugin-install" type="button">Install selected version</button></div><div id="plugin-release-notes" class="plugin-release-notes"></div>
-    <h3>Local development plugin</h3><p>Available outside production, or when ENABLE_LOCAL_PLUGIN_INSTALL=true.</p><div class="inline-controls"><input id="plugin-local-path" placeholder="/mnt/storage/code/home-lab-launcher-plugins/news"><button class="ghost" id="plugin-install-local" type="button">Install local plugin</button></div></div>`;
+    <h3>Local development plugin</h3><p id="local-plugin-help">Loading local plugin status…</p><div class="inline-controls"><input id="plugin-local-path" placeholder="/app/local-plugins/news"><button class="ghost" id="plugin-install-local" type="button">Install local plugin</button></div></div>`;
 }
 
 function adminLogsHtml() {
@@ -626,9 +626,24 @@ function bindPluginHandlers(content) {
     await api('/api/plugins/install', { method: 'POST', body: JSON.stringify({ repoUrl: formValue('plugin-repo'), version: $('plugin-version').value }) });
     await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin installed');
   });
+  api('/api/plugin-sources/local/status').then((status) => {
+    const help = $('local-plugin-help');
+    if (help) help.textContent = status.enabled
+      ? `Enabled. Docker users should mount ${status.hostDir} to ${status.containerDir} and enter ${status.containerDir}/<plugin-id>. Host paths under ${status.hostDir} are auto-mapped when possible.`
+      : `Disabled. Set ENABLE_LOCAL_PLUGIN_INSTALL=true and mount LOCAL_PLUGIN_HOST_DIR to enable local plugin installs.`;
+  }).catch(() => {});
   $('plugin-install-local')?.addEventListener('click', async () => {
-    await api('/api/plugins/install-local', { method: 'POST', body: JSON.stringify({ path: formValue('plugin-local-path') }) });
-    await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Local plugin installed');
+    const button = $('plugin-install-local');
+    try {
+      button.disabled = true;
+      button.textContent = 'Installing…';
+      await api('/api/plugins/install-local', { method: 'POST', body: JSON.stringify({ path: formValue('plugin-local-path') }) });
+      await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Local plugin installed');
+    } catch (error) {
+      toast(error.message);
+    } finally {
+      if (button) { button.disabled = false; button.textContent = 'Install local plugin'; }
+    }
   });
 }
 

@@ -246,11 +246,31 @@ class PluginManager {
     return { id: manifest.id, name: manifest.name, version, enabled: true, installedHash };
   }
 
+  resolveLocalPluginPath(localPath) {
+    const requested = String(localPath || '').trim();
+    if (!requested) throw new Error('Local plugin path is required');
+    let resolved = path.resolve(requested);
+    if (!fs.existsSync(resolved)) {
+      const hostDir = process.env.LOCAL_PLUGIN_HOST_DIR ? path.resolve(process.env.LOCAL_PLUGIN_HOST_DIR) : '';
+      const containerDir = process.env.LOCAL_PLUGIN_CONTAINER_DIR || '/app/local-plugins';
+      if (hostDir && resolved.startsWith(hostDir)) {
+        const relative = path.relative(hostDir, resolved);
+        const mapped = path.resolve(containerDir, relative);
+        if (fs.existsSync(mapped)) return mapped;
+      }
+      if (!path.isAbsolute(requested)) {
+        const mapped = path.resolve(containerDir, requested);
+        if (fs.existsSync(mapped)) return mapped;
+      }
+    }
+    return resolved;
+  }
+
   async installFromLocal(localPath) {
-    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_LOCAL_PLUGIN_INSTALL !== 'true') throw new Error('Local plugin install is disabled in production');
-    const resolved = path.resolve(String(localPath || ''));
+    if (process.env.NODE_ENV === 'production' && process.env.ENABLE_LOCAL_PLUGIN_INSTALL !== 'true') throw new Error('Local plugin install is disabled. Set ENABLE_LOCAL_PLUGIN_INSTALL=true and mount LOCAL_PLUGIN_HOST_DIR into the launcher container.');
+    const resolved = this.resolveLocalPluginPath(localPath);
     const manifestPath = path.join(resolved, 'plugin.json');
-    if (!fs.existsSync(manifestPath)) throw new Error('Local plugin is missing plugin.json');
+    if (!fs.existsSync(manifestPath)) throw new Error(`Local plugin is missing plugin.json at ${manifestPath}. If running in Docker, mount the host plugin directory and use the container path, usually /app/local-plugins/<plugin>.`);
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     validateManifest(manifest);
     const installedHash = hashBuffer(Buffer.from(JSON.stringify(manifest)));

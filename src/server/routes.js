@@ -939,6 +939,15 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     res.json({ updates: await pluginManager.checkUpdates() });
   });
 
+  router.get('/plugin-sources/local/status', requireRole('admin'), (req, res) => {
+    res.json({
+      enabled: process.env.NODE_ENV !== 'production' || process.env.ENABLE_LOCAL_PLUGIN_INSTALL === 'true',
+      nodeEnv: process.env.NODE_ENV || 'development',
+      hostDir: process.env.LOCAL_PLUGIN_HOST_DIR || './local-plugins',
+      containerDir: process.env.LOCAL_PLUGIN_CONTAINER_DIR || '/app/local-plugins'
+    });
+  });
+
   router.post('/plugins/install', requireRole('admin'), express.json(), async (req, res) => {
     try {
       const plugin = await pluginManager.installFromGithub(req.body.repoUrl, req.body.version);

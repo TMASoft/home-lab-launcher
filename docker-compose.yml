@@ -12,10 +12,14 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
       DATA_DIR: /app/data
       PLUGIN_DIR: /app/data/plugins
+      ENABLE_LOCAL_PLUGIN_INSTALL: ${ENABLE_LOCAL_PLUGIN_INSTALL:-false}
+      LOCAL_PLUGIN_HOST_DIR: ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}
+      LOCAL_PLUGIN_CONTAINER_DIR: ${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}
     ports:
       - "${HOST_PORT:-8080}:8080"
     volumes:
       - launcher-data:/app/data
+      - ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}:${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}:ro
 
 volumes:
   launcher-data:
