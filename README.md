@@ -1,0 +1,220 @@
+# Home Lab Launcher
+
+> A self-hosted, role-aware home portal for service links, weather, user favorites, admin settings, and trusted plugin-powered dashboard sections.
+
+Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple—service cards and weather—but is designed to grow through installable plugins such as RSS/news, status widgets, inventory panels, or custom household dashboards.
+
+![Status](https://img.shields.io/badge/status-early%20development-ffd166?style=flat-square)
+![Node](https://img.shields.io/badge/node-%3E%3D20-79f2c0?style=flat-square)
+![SQLite](https://img.shields.io/badge/storage-SQLite-4de7ff?style=flat-square)
+![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
+
+## Highlights
+
+- **Configurable service launchpad** — add, edit, duplicate, delete, bulk manage, reorder, group, enable/disable, feature, tag, color, assign emoji/uploaded/downloaded image icons, and enable health checks from the UI.
+- **Role-based access** — Admins, Editors, Basic Users, and optional anonymous read-only access.
+- **Personal favorites and layout** — logged-in users get saved favorites, favorite ordering, card/list/compact layout preferences, and hidden categories; anonymous users get browser-local preferences.
+- **Admin console** — manage users, services, app settings, health, effective config, backups/restores, plugins, and audit logs.
+- **Weather widget** — configurable by ZIP/city search or manual coordinates; refreshes every 5 minutes.
+- **Trusted plugin system** — install pinned plugin versions from GitHub releases/tags, review permissions/compatibility, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
+- **HTTP or HTTPS** — run directly over HTTP or place behind Nginx, Caddy, Traefik, or another reverse proxy.
+- **Portable by default** — no baked-in domain names or home-lab-specific assumptions.
+- **Security foundations** — CSRF protection, login throttling, secure headers, session revocation, audit logging, log retention, and admin notices.
+
+## Screens and capabilities
+
+The main page includes:
+
+- a service card grid,
+- quick favorites,
+- current weather,
+- a signed-in user menu,
+- optional plugin sections, and
+- an admin console visible only to Admins.
+
+The UI intentionally hides empty dynamic/plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
+
+## Quick start
+
+### 1. Clone and configure
+
+```bash
+git clone https://github.com/YOUR-ORG/home-lab-launcher.git
+cd home-lab-launcher
+cp .env.example .env
+```
+
+Edit `.env` before first start:
+
+```env
+SESSION_SECRET=replace-with-a-long-random-string
+BOOTSTRAP_ADMIN_USERNAME=admin
+BOOTSTRAP_ADMIN_PASSWORD=replace-this-password
+APP_BASE_URL=http://localhost:8080
+```
+
+> If you omit `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD`, the first browser load will show a first-admin setup flow.
+
+### 2. Start with Docker Compose
+
+```bash
+docker compose up --build -d
+```
+
+Open:
+
+```text
+http://localhost:8080
+```
+
+To use a different host port, set `HOST_PORT` in `.env`:
+
+```env
+HOST_PORT=9090
+APP_BASE_URL=http://localhost:9090
+```
+
+The container still listens on port `8080` internally.
+
+## Launchpad personalization and health
+
+The launchpad supports card, compact grouped, and list views. Logged-in users can save their layout preference, reorder favorites, and hide categories. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled.
+
+Editors and Admins can enable HTTP health checks per service, optionally override the health-check URL, set the check interval, and trigger manual checks. Cards show the latest status, last-check timing, response time, and error details where available.
+
+## Service icons
+
+Service cards can use either a simple emoji/text icon or an image. When an Editor/Admin pastes an `http://` or `https://` image URL into the icon field, the launcher downloads and stores the image locally instead of hotlinking it. Editors/Admins can also choose a local image file from the service form.
+
+Supported image formats are JPEG, PNG, GIF, and WebP. Animated GIF/WebP files and transparent images are preserved. Icon uploads/downloads are limited to 5 MiB.
+
+## User roles
+
+| Role | Can view | Favorites | Manage services | Plugin settings | Install/remove plugins | Users/app settings/logs |
+| --- | --- | --- | --- | --- | --- | --- |
+| **Admin** | Yes | Yes | Yes | Yes | Yes | Yes |
+| **Editor** | Yes | Yes | Yes | Editor-safe plugin settings | No | No |
+| **Basic User** | Yes | Yes | No | User-safe plugin preferences, when exposed | No | No |
+| **Anonymous** | Optional | Browser-local only | No | No | No | No |
+
+Admins can choose whether anonymous visitors may view the portal. Disable anonymous read-only access in **Admin console → Settings** to require login for all page views.
+
+## Admin console
+
+Logged-in Admins see an **Admin** link in the top navigation. The console includes:
+
+- **Overview** — service/user/plugin/log counts, runtime information, configuration warnings, and admin notices.
+- **Settings** — app name, base URL, public read-only access, and weather settings.
+- **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
+- **Users** — create users, change roles, reset passwords, and delete users.
+- **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.
+- **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record the desired scheduled backup location.
+- **Plugins** — discover GitHub versions, install pinned plugin releases/tags, enable/disable, and remove plugins.
+- **Logs** — filtered audit log entries for login, settings, user, service, weather, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
+
+Users access profile actions from the username dropdown in the header. The profile menu includes password changes, active session review, session revocation, and logout.
+
+## Configuration
+
+Most runtime settings are environment variables on first boot, then editable in the Admin console where applicable.
+
+| Variable | Purpose | Default/example |
+| --- | --- | --- |
+| `HOST_PORT` | Host port published by Docker Compose | `8080` |
+| `PORT` | App port inside the container or native Node process | `8080` |
+| `APP_NAME` | Initial displayed application name | `Home Lab Launcher` |
+| `APP_BASE_URL` | External URL users open in a browser | `http://localhost:8080` |
+| `SESSION_SECRET` | Required session signing secret | Change this |
+| `DATA_DIR` | SQLite/session/plugin data directory | `/app/data` in Docker |
+| `PLUGIN_DIR` | Installed plugin directory | `/app/data/plugins` |
+| `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username | `admin` |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password | Change this |
+| `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `true` |
+| `WEATHER_LOCATION_LABEL` | Initial weather label | `Bellows Falls, VT 05101` |
+| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | Initial weather coordinates | `43.13341`, `-72.44398` |
+| `WEATHER_UNITS` | `fahrenheit` or `celsius` | `fahrenheit` |
+| `LOG_RETENTION_DAYS` | Initial audit-log retention window | `90` |
+| `SCHEDULED_BACKUP_LOCATION` | Optional operator note for desired backup destination | empty |
+
+Runtime data is stored in SQLite in the Docker volume `launcher-data` unless you override `DATA_DIR`.
+
+## HTTPS and domains
+
+Home Lab Launcher does **not** issue or manage certificates itself. This keeps the app portable and avoids security-sensitive certificate handling in the application process.
+
+Supported deployment styles:
+
+- direct HTTP, such as `http://server-ip:8080`,
+- HTTPS behind Nginx with your own certificate,
+- HTTPS behind Caddy with ACME, or
+- any other reverse proxy that forwards to the launcher container.
+
+See [docs/deployment.md](docs/deployment.md) for examples.
+
+## Plugin system
+
+Plugins are trusted Admin-installed code. The Admin console shows lifecycle state, compatibility, permissions, installed hash, config schema fields, logs, update discovery, and release-note previews. A plugin can add:
+
+- backend API routes,
+- SQLite tables/migrations,
+- scheduled jobs,
+- static frontend assets, and
+- dashboard sections.
+
+The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`.
+
+See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
+
+### Example plugin
+
+The first plugin lives separately at:
+
+```text
+/mnt/storage/code/home-lab-launcher-plugins/news
+```
+
+It implements an optional RSS/news dashboard section with feed management, folders, per-feed refresh status, cleanup/retention, and OPML import/export. See that plugin’s README for packaging notes.
+
+## Development
+
+Native development requires Node.js 20+.
+
+```bash
+npm install
+npm run check
+npm run dev
+```
+
+Useful commands:
+
+```bash
+# Validate JavaScript syntax
+npm run check
+
+# Build and run with Docker
+docker compose up --build
+
+# Inspect logs
+docker compose logs -f launcher
+```
+
+## Security notes
+
+- Change `SESSION_SECRET` before deployment.
+- Change or remove the bootstrap password after first login.
+- CSRF protection is enabled for mutating API routes after login.
+- Failed logins are rate-limited and audited.
+- Security headers are set by the application; still use HTTPS for real deployments.
+- Users can revoke other active sessions from their profile.
+- Admins can export logs, set retention, prune old audit events, and review management-plane notices.
+- Plugins are not sandboxed. Install only plugins from sources you trust.
+- Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
+- Put the launcher behind HTTPS if credentials traverse an untrusted network.
+
+## Project status
+
+This project is in early development. The core app is functional, but plugin APIs and schemas may still change before a stable release. See [ROADMAP.md](ROADMAP.md) for the active milestone plan and completion notes.
+
+## License
+
+Add your preferred open-source license before publishing the repository.

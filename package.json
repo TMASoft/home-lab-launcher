@@ -1,0 +1,28 @@
+{
+  "name": "home-lab-launcher",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Configurable home lab portal/launcher with roles, weather, and plugins.",
+  "main": "src/server/index.js",
+  "scripts": {
+    "start": "node src/server/index.js",
+    "dev": "NODE_ENV=development node --watch src/server/index.js",
+    "check": "node --check src/server/index.js && node --check src/server/db.js && node --check src/server/plugins.js && node --check src/server/routes.js && node --check src/server/session-store.js && node --check src/public/app.js",
+    "test": "node --test test/*.test.js",
+    "test:api": "node --test test/api.test.js",
+    "test:frontend": "node --test test/frontend-smoke.test.js",
+    "audit:ci": "npm audit --omit=dev --audit-level=high"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.10.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "fast-xml-parser": "^4.5.3",
+    "tar": "^7.4.3"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

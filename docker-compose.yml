@@ -1,0 +1,21 @@
+services:
+  launcher:
+    build: .
+    container_name: home-lab-launcher
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: 8080
+      APP_NAME: ${APP_NAME:-Home Lab Launcher}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
+      DATA_DIR: /app/data
+      PLUGIN_DIR: /app/data/plugins
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    volumes:
+      - launcher-data:/app/data
+
+volumes:
+  launcher-data:
