@@ -8,7 +8,9 @@ const state = {
   pluginSections: [],
   csrfToken: null,
   adminTab: 'overview',
-  admin: { overview: null, health: null, config: null, notices: [], users: [], plugins: [], logs: [] }
+  layoutEditing: false,
+  draggedLayoutId: '',
+  admin: { overview: null, health: null, config: null, notices: [], users: [], plugins: [], logs: [], appearance: null, presets: [] }
 };
 
 const $ = (id) => document.getElementById(id);
@@ -32,6 +34,9 @@ const escapeHtml = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&a
 const getHost = (url) => { try { return new URL(url).host; } catch { return String(url).replace(/^https?:\/\//, ''); } };
 const isHttpUrl = (value) => { try { const parsed = new URL(String(value)); return ['http:', 'https:'].includes(parsed.protocol); } catch { return false; } };
 const isStoredIconImage = (value) => String(value || '').startsWith('/api/service-icons/');
+const isStoredAppAsset = (value) => /^\/api\/app-assets\/[a-f0-9]{64}\.(jpg|png|gif|webp)$/i.test(String(value || ''));
+const appearanceCssVariables = ['--bg', '--surface', '--surface-2', '--surface-3', '--ink', '--muted', '--quiet', '--line', '--line-strong', '--primary', '--primary-ink', '--success', '--warning', '--danger'];
+const sanitizeClientFontFamily = (value) => String(value || '').replace(/[\u0000-\u001f\u007f;{}<>]/g, '').trim().slice(0, 160);
 function iconHtml(icon, label = 'Service icon') {
   const value = String(icon || '🔗');
   if (isStoredIconImage(value)) return `<span class="icon image-icon"><img src="${escapeHtml(value)}" alt="" loading="lazy"></span>`;
@@ -49,7 +54,11 @@ function readFileAsDataUrl(file) {
 const canEditServices = () => ['admin', 'editor'].includes(state.user?.role);
 const isAdmin = () => state.user?.role === 'admin';
 const roleLabel = (role) => ({ admin: 'Admin', editor: 'Editor', user: 'Basic User' }[role] || 'Anonymous');
-const weatherCodes = { 0: ['Clear', '☀️', '🌙'], 1: ['Mostly clear', '🌤️', '🌙'], 2: ['Partly cloudy', '⛅', '☁️'], 3: ['Overcast', '☁️', '☁️'], 45: ['Fog', '🌫️', '🌫️'], 48: ['Freezing fog', '🌫️', '🌫️'], 51: ['Light drizzle', '🌦️', '🌧️'], 53: ['Drizzle', '🌦️', '🌧️'], 55: ['Heavy drizzle', '🌧️', '🌧️'], 61: ['Light rain', '🌦️', '🌧️'], 63: ['Rain', '🌧️', '🌧️'], 65: ['Heavy rain', '⛈️', '⛈️'], 71: ['Light snow', '🌨️', '🌨️'], 73: ['Snow', '❄️', '❄️'], 75: ['Heavy snow', '❄️', '❄️'], 80: ['Rain showers', '🌦️', '🌧️'], 81: ['Rain showers', '🌧️', '🌧️'], 82: ['Heavy showers', '⛈️', '⛈️'], 95: ['Thunderstorm', '⛈️', '⛈️'] };
+const defaultLayoutOrder = ['hero', 'weather', 'profile', 'services', 'plugins'];
+const layoutLabels = { hero: 'Hero', weather: 'Weather', profile: 'Current user', services: 'Service launchpad', plugins: 'Dynamic sections' };
+const weatherCodes = { 0: ['Clear', '☀️', '🌙'], 1: ['Mostly clear', '🌤️', '🌙'], 2: ['Partly cloudy', '⛅', '☁️'], 3: ['Overcast', '☁️', '☁️'], 45: ['Fog', '🌫️', '🌫️'], 48: ['Freezing fog', '🌫️', '🌫️'], 51: ['Light drizzle', '🌦️', '🌧️'], 53: ['Drizzle', '🌦️', '🌧️'], 55: ['Heavy drizzle', '🌧️', '🌧️'], 56: ['Freezing drizzle', '🌧️', '🌧️'], 57: ['Heavy freezing drizzle', '🌧️', '🌧️'], 61: ['Light rain', '🌦️', '🌧️'], 63: ['Rain', '🌧️', '🌧️'], 65: ['Heavy rain', '⛈️', '⛈️'], 66: ['Freezing rain', '🌧️', '🌧️'], 67: ['Heavy freezing rain', '🌧️', '🌧️'], 71: ['Light snow', '🌨️', '🌨️'], 73: ['Snow', '❄️', '❄️'], 75: ['Heavy snow', '❄️', '❄️'], 77: ['Snow grains', '❄️', '❄️'], 80: ['Rain showers', '🌦️', '🌧️'], 81: ['Rain showers', '🌧️', '🌧️'], 82: ['Heavy showers', '⛈️', '⛈️'], 85: ['Snow showers', '🌨️', '🌨️'], 86: ['Heavy snow showers', '❄️', '❄️'], 95: ['Thunderstorm', '⛈️', '⛈️'], 96: ['Thunderstorm with hail', '⛈️', '⛈️'], 99: ['Heavy thunderstorm with hail', '⛈️', '⛈️'] };
+const dayFormatter = new Intl.DateTimeFormat([], { weekday: 'short' });
+const hourFormatter = new Intl.DateTimeFormat([], { hour: 'numeric' });
 
 function toast(message) {
   const el = $('toast');
@@ -60,6 +69,61 @@ function toast(message) {
 function openModal(html) { modalContent.innerHTML = html; modal.showModal(); }
 function closeModal() { modal.close(); }
 function formValue(id) { return $(id)?.value?.trim() || ''; }
+
+function applyAppearance(appearance = {}) {
+  const brand = appearance.brand || {};
+  const hero = appearance.hero || {};
+  const theme = appearance.theme || {};
+  document.title = brand.pageTitle || brand.appName || 'Home Lab Launcher';
+  $('brand-name').textContent = brand.brandText || brand.appName || 'Home Lab Launcher';
+  $('brand-subtitle').textContent = brand.brandSubtitle || 'Home lab control plane';
+  const mark = $('brand-mark');
+  if (mark) {
+    mark.replaceChildren();
+    if (isStoredAppAsset(brand.brandIconUrl)) {
+      const img = document.createElement('img');
+      img.src = brand.brandIconUrl;
+      img.alt = '';
+      mark.appendChild(img);
+    } else {
+      mark.textContent = brand.brandMarkText || 'HL';
+    }
+  }
+  $('hero-eyebrow').textContent = hero.eyebrow || 'Home lab operations';
+  $('hero-heading').textContent = hero.heading || 'Launch and manage your internal services.';
+  $('hero-subheading').textContent = hero.subheading || '';
+  const siteNote = $('site-note');
+  if (siteNote) {
+    siteNote.textContent = brand.footerNote || '';
+    siteNote.hidden = !brand.footerNote;
+  }
+  const favicon = document.querySelector('link[rel="icon"]');
+  if (isStoredAppAsset(brand.faviconUrl)) {
+    const link = favicon || document.head.appendChild(Object.assign(document.createElement('link'), { rel: 'icon' }));
+    link.href = brand.faviconUrl;
+  } else if (favicon) {
+    favicon.remove();
+  }
+  const heroCard = document.querySelector('.hero-card');
+  if (heroCard) {
+    if (isStoredAppAsset(brand.heroImageUrl)) {
+      heroCard.style.backgroundImage = `linear-gradient(90deg, var(--surface) 0%, rgba(15,20,27,.88) 58%, rgba(15,20,27,.48)), url("${brand.heroImageUrl}")`;
+      heroCard.style.backgroundSize = 'cover';
+      heroCard.style.backgroundPosition = 'center';
+    } else {
+      heroCard.style.removeProperty('background-image');
+      heroCard.style.removeProperty('background-size');
+      heroCard.style.removeProperty('background-position');
+    }
+  }
+  const root = document.documentElement;
+  appearanceCssVariables.forEach((key) => root.style.removeProperty(key));
+  Object.entries(theme.cssVariables || {}).forEach(([key, value]) => root.style.setProperty(key, value));
+  document.body.classList.remove('theme-light', 'theme-dark', 'theme-system', 'density-compact', 'density-comfortable', 'density-spacious', 'radius-square', 'radius-rounded', 'radius-soft', 'font-system', 'font-inter', 'font-serif', 'font-mono', 'font-custom');
+  document.body.classList.add(`theme-${theme.mode || 'dark'}`, `density-${theme.density || 'comfortable'}`, `radius-${theme.radius || 'soft'}`, `font-${theme.fontFamily || 'system'}`);
+  if (theme.fontFamily === 'custom' && theme.customFontFamily) document.body.style.fontFamily = sanitizeClientFontFamily(theme.customFontFamily);
+  else document.body.style.fontFamily = '';
+}
 
 async function init() {
   await loadSession();
@@ -83,8 +147,7 @@ async function loadSession() {
 async function loadSettings() {
   const data = await api('/api/settings/public');
   state.settings = data;
-  document.title = data.appName || 'Home Lab Launcher';
-  $('brand-name').textContent = data.appName || 'Home Lab Launcher';
+  applyAppearance(data.appearance || { brand: { appName: data.appName } });
 }
 async function loadServices() { state.services = (await api('/api/services')).services; }
 async function loadPreferences() {
@@ -111,14 +174,15 @@ async function loadPluginSections() {
 }
 async function loadAdminData() {
   if (!isAdmin()) return;
-  const [overview, health, config, notices, users, plugins, logs] = await Promise.all([
+  const [overview, health, config, notices, users, plugins, logs, appearance] = await Promise.all([
     api('/api/admin/overview'),
     api('/api/admin/health'),
     api('/api/admin/config'),
     api('/api/admin/notices'),
     api('/api/users'),
     api('/api/plugins'),
-    api('/api/admin/logs?limit=100')
+    api('/api/admin/logs?limit=100'),
+    api('/api/admin/appearance')
   ]);
   state.admin.overview = overview;
   state.admin.health = health;
@@ -127,6 +191,8 @@ async function loadAdminData() {
   state.admin.users = users.users;
   state.admin.plugins = plugins.plugins;
   state.admin.logs = logs.logs;
+  state.admin.appearance = appearance.appearance;
+  state.admin.presets = appearance.presets || [];
   renderAdminConsole();
 }
 async function loadWeather() {
@@ -147,13 +213,59 @@ async function loadWeather() {
     $('weather-summary').textContent = `${code[0]} · Feels like ${Number.isFinite(feelsLike) ? Math.round(feelsLike) : '—'}°${unit}`;
     $('weather-meta').textContent = `H ${Number.isFinite(high) ? Math.round(high) : '—'}° · L ${Number.isFinite(low) ? Math.round(low) : '—'}° · Updated ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
     $('weather-icon').textContent = Number(current.is_day) === 1 ? code[1] : code[2];
+    renderWeatherForecasts(data.weather);
   } catch (error) {
     card?.classList.add('is-error');
     $('weather-temp').textContent = '—°';
     $('weather-summary').textContent = 'Weather unavailable';
     $('weather-meta').textContent = `${error.message}. Retrying automatically every 5 minutes.`;
     $('weather-icon').textContent = '⚠️';
+    $('weather-hourly').innerHTML = '';
+    $('weather-daily').innerHTML = '';
   }
+}
+
+function renderWeatherForecasts(weather) {
+  const hourly = weather.hourly || {};
+  const daily = weather.daily || {};
+  const now = Date.now();
+  const hourlyItems = (hourly.time || [])
+    .map((time, index) => ({
+      time: new Date(time).getTime(),
+      label: hourFormatter.format(new Date(time)),
+      temp: Number((hourly.temperature_2m || [])[index]),
+      code: (hourly.weather_code || [])[index],
+      precip: Number((hourly.precipitation_probability || [])[index]),
+      isDay: Number((hourly.is_day || [])[index])
+    }))
+    .filter((item) => item.time >= now - 60 * 60 * 1000)
+    .slice(0, 8);
+  $('weather-hourly').innerHTML = hourlyItems.map(weatherHourlyItemHtml).join('');
+
+  const dailyItems = (daily.time || []).slice(0, 7).map((time, index) => ({
+    label: index === 0 ? 'Today' : dayFormatter.format(new Date(`${time}T12:00:00`)),
+    high: Number((daily.temperature_2m_max || [])[index]),
+    low: Number((daily.temperature_2m_min || [])[index]),
+    code: (daily.weather_code || [])[index],
+    precip: Number((daily.precipitation_probability_max || [])[index])
+  }));
+  $('weather-daily').innerHTML = dailyItems.map(weatherDailyItemHtml).join('');
+}
+
+function weatherHourlyItemHtml(item) {
+  const code = weatherCodes[item.code] || ['Forecast', '🌤️', '🌙'];
+  const icon = item.isDay === 0 ? code[2] : code[1];
+  const temp = Number.isFinite(item.temp) ? `${Math.round(item.temp)}°` : '—°';
+  const precip = Number.isFinite(item.precip) ? `${Math.round(item.precip)}%` : '—';
+  return `<article class="forecast-chip" title="${escapeHtml(code[0])}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(icon)} ${escapeHtml(temp)}</strong><small>${escapeHtml(precip)}</small></article>`;
+}
+
+function weatherDailyItemHtml(item) {
+  const code = weatherCodes[item.code] || ['Forecast', '🌤️', '🌙'];
+  const high = Number.isFinite(item.high) ? Math.round(item.high) : '—';
+  const low = Number.isFinite(item.low) ? Math.round(item.low) : '—';
+  const precip = Number.isFinite(item.precip) ? `${Math.round(item.precip)}%` : '—';
+  return `<article class="forecast-chip daily-chip" title="${escapeHtml(code[0])}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(code[1])} ${escapeHtml(high)}°/${escapeHtml(low)}°</strong><small>${escapeHtml(precip)}</small></article>`;
 }
 
 function render() {
@@ -175,7 +287,68 @@ function render() {
   $('plugin-manager-button').hidden = !isAdmin();
   renderServices();
   renderPluginSections();
+  applyLayoutOrder();
+  updateLayoutEditingUi();
   if (isAdmin()) renderAdminConsole();
+}
+
+function normalizeLayoutOrder(order = []) {
+  const seen = new Set();
+  const valid = [];
+  for (const id of Array.isArray(order) ? order : []) {
+    if (defaultLayoutOrder.includes(id) && !seen.has(id)) {
+      seen.add(id);
+      valid.push(id);
+    }
+  }
+  for (const id of defaultLayoutOrder) if (!seen.has(id)) valid.push(id);
+  return valid;
+}
+
+function applyLayoutOrder() {
+  const root = $('layout-root');
+  if (!root) return;
+  const order = normalizeLayoutOrder(state.preferences.layoutOrder);
+  state.preferences.layoutOrder = order;
+  for (const id of order) {
+    const item = root.querySelector(`[data-layout-id="${CSS.escape(id)}"]`);
+    if (item) root.appendChild(item);
+  }
+}
+
+function updateLayoutEditingUi() {
+  document.body.classList.toggle('layout-editing', state.layoutEditing);
+  $('layout-toolbar').hidden = !state.layoutEditing;
+  document.querySelectorAll('[data-layout-id]').forEach((item) => {
+    item.draggable = state.layoutEditing;
+    item.classList.toggle('is-layout-editable', state.layoutEditing);
+    let handle = item.querySelector(':scope > .layout-drag-handle');
+    if (state.layoutEditing && !handle) {
+      handle = document.createElement('div');
+      handle.className = 'layout-drag-handle';
+      handle.innerHTML = `<span>☰ ${escapeHtml(layoutLabels[item.dataset.layoutId] || 'Section')}</span><span class="layout-keyboard-controls"><button class="ghost" type="button" data-layout-move="up" data-layout-target="${escapeHtml(item.dataset.layoutId)}" aria-label="Move ${escapeHtml(layoutLabels[item.dataset.layoutId] || 'section')} up">↑</button><button class="ghost" type="button" data-layout-move="down" data-layout-target="${escapeHtml(item.dataset.layoutId)}" aria-label="Move ${escapeHtml(layoutLabels[item.dataset.layoutId] || 'section')} down">↓</button></span>`;
+      item.prepend(handle);
+    } else if (!state.layoutEditing && handle) {
+      handle.remove();
+    }
+  });
+}
+
+async function setLayoutEditing(enabled) {
+  state.layoutEditing = enabled;
+  updateLayoutEditingUi();
+  if (enabled) toast('Drag sections to rearrange your layout');
+  else {
+    await persistLayoutOrder();
+    toast('Layout saved');
+  }
+}
+
+async function persistLayoutOrder() {
+  const root = $('layout-root');
+  if (!root) return;
+  state.preferences.layoutOrder = normalizeLayoutOrder([...root.querySelectorAll('[data-layout-id]')].map((item) => item.dataset.layoutId));
+  await saveLaunchpadPreferences();
 }
 
 function showAccessError(error) {
@@ -304,7 +477,7 @@ function renderAdminConsole() {
   document.querySelectorAll('.admin-tab').forEach((tab) => tab.classList.toggle('active', tab.dataset.adminTab === state.adminTab));
   const content = $('admin-content');
   if (!state.admin.overview) { content.innerHTML = '<p>Loading admin console…</p>'; return; }
-  const renderers = { overview: adminOverviewHtml, settings: adminSettingsHtml, services: adminServicesHtml, users: adminUsersHtml, security: adminSecurityHtml, backups: adminBackupsHtml, plugins: adminPluginsHtml, logs: adminLogsHtml };
+  const renderers = { overview: adminOverviewHtml, settings: adminSettingsHtml, appearance: adminAppearanceHtml, services: adminServicesHtml, users: adminUsersHtml, security: adminSecurityHtml, backups: adminBackupsHtml, plugins: adminPluginsHtml, logs: adminLogsHtml };
   content.innerHTML = renderers[state.adminTab]();
   bindAdminTabHandlers();
 }
@@ -317,12 +490,13 @@ function onboardingChecklistHtml() {
   const highWarnings = (o.warnings || []).filter((w) => w.level === 'high');
   const weatherConfigured = Boolean(h.weatherProvider?.configured);
   const backupLocation = Boolean(c.scheduledBackupLocation);
-  return `<div class="settings-card"><h3>Onboarding checklist</h3><ul class="checklist">${[
+  return `<div class="settings-card beta-card"><h3>Beta readiness checklist</h3><ul class="checklist">${[
     checklistItem(highWarnings.length === 0, 'Secure bootstrap configuration', highWarnings.length ? 'Resolve high-severity configuration warnings.' : 'No high-severity warnings detected.'),
     checklistItem(Boolean(c.urls?.appBaseUrlValid), 'Set application base URL', c.urls?.appBaseUrl || 'Base URL is not configured.'),
     checklistItem((o.counts?.services || 0) > 0, 'Add launchpad services', `${o.counts?.services || 0} services configured.`),
     checklistItem(weatherConfigured, 'Configure weather', h.weatherProvider?.location || 'Weather location is not configured.'),
-    checklistItem(backupLocation, 'Plan backups', backupLocation ? c.scheduledBackupLocation : 'Optional backup location is not configured yet.')
+    checklistItem(backupLocation, 'Plan backups', backupLocation ? c.scheduledBackupLocation : 'Optional backup location is not configured yet.'),
+    checklistItem(!c.security?.publicReadEnabled, 'Review public access', c.security?.publicReadEnabled ? 'Anonymous read-only access is enabled.' : 'Anonymous public read access is disabled.')
   ].join('')}</ul></div>`;
 }
 function adminOverviewHtml() {
@@ -344,13 +518,45 @@ function formatBytes(bytes) {
 }
 function adminSettingsHtml() {
   const s = state.settings || {};
-  return `<div class="settings-card"><h3>Application settings</h3><div class="form-grid">
-    <div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"></div></div>
-    <label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label>
-    <h3>Weather</h3><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="05101 or Bellows Falls"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div>
-    <div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div>
-    <div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div>
-    <button class="primary" id="admin-save-settings" type="button">Save settings</button></div></div>`;
+  return `<div class="admin-stack">
+    <div class="settings-card"><h3>General</h3><div class="form-grid"><div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"><small>Used for secure cookies, proxy checks, and beta readiness warnings.</small></div></div></div></div>
+    <div class="settings-card"><h3>Weather</h3><div class="form-grid"><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="05101 or Bellows Falls"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div><div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div><div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div></div></div>
+    <div class="settings-card"><h3>Access</h3><label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label><p>Review this before exposing the launcher outside your LAN.</p><button class="primary" id="admin-save-settings" type="button">Save settings</button></div>
+  </div>`;
+}
+
+const themeColorFields = [
+  ['background', 'Background'], ['surface', 'Surface'], ['surface2', 'Secondary surface'], ['text', 'Text'], ['mutedText', 'Muted text'], ['border', 'Border'], ['primary', 'Primary/accent'], ['success', 'Success'], ['warning', 'Warning'], ['danger', 'Danger']
+];
+function adminAppearanceHtml() {
+  const a = state.admin.appearance || state.settings?.appearance || {};
+  const b = a.brand || {};
+  const h = a.hero || {};
+  const t = a.theme || {};
+  const colors = t.colors || {};
+  const presets = state.admin.presets || [];
+  return `<div class="admin-stack">
+    <div class="settings-card"><div class="inline-between"><h3>Appearance & branding</h3><div class="inline-controls"><button class="ghost" id="appearance-preview" type="button">Preview without saving</button><button class="ghost" id="appearance-reset-unsaved" type="button">Reset unsaved</button><button class="ghost danger" id="appearance-restore-default" type="button">Restore default theme</button><button class="primary" id="appearance-save" type="button">Save appearance</button></div></div>
+      <div class="appearance-preview" id="appearance-live-preview"><div class="brand"><span class="brand-mark">${escapeHtml(b.brandMarkText || 'HL')}</span><span><strong>${escapeHtml(b.brandText || b.appName || 'Home Lab Launcher')}</strong><small>${escapeHtml(b.brandSubtitle || 'Home lab control plane')}</small></span></div><h2>${escapeHtml(h.heading || '')}</h2><p>${escapeHtml(h.subheading || '')}</p><article class="service-card"><div class="card-top"><span class="icon">🏠</span><span class="status-badge success">Preview</span></div><h3>Service tile</h3><p>Theme colors, radius, and density apply across the launcher.</p></article></div>
+      <h3>Branding</h3><div class="form-grid">
+        <div class="row"><div class="field"><label>Site/app name</label><input id="appearance-app-name" value="${escapeHtml(b.appName || '')}"></div><div class="field"><label>Browser page title</label><input id="appearance-page-title" value="${escapeHtml(b.pageTitle || '')}"></div></div>
+        <div class="row"><div class="field"><label>Header brand text</label><input id="appearance-brand-text" value="${escapeHtml(b.brandText || '')}"></div><div class="field"><label>Header subtitle</label><input id="appearance-brand-subtitle" value="${escapeHtml(b.brandSubtitle || '')}"></div></div>
+        <div class="row"><div class="field"><label>Brand mark initials</label><input id="appearance-brand-mark" value="${escapeHtml(b.brandMarkText || '')}" maxlength="8"></div><div class="field"><label>Footer/site note</label><input id="appearance-footer-note" value="${escapeHtml(b.footerNote || '')}"></div></div>
+        ${assetFieldHtml('favicon', 'Favicon image', b.faviconUrl)}${assetFieldHtml('brand-icon', 'Brand icon image', b.brandIconUrl)}${assetFieldHtml('hero-image', 'Hero/header image', b.heroImageUrl)}
+      </div>
+      <h3>Hero content</h3><div class="form-grid"><div class="field"><label>Eyebrow</label><input id="appearance-hero-eyebrow" value="${escapeHtml(h.eyebrow || '')}"></div><div class="field"><label>Heading</label><input id="appearance-hero-heading" value="${escapeHtml(h.heading || '')}"></div><div class="field"><label>Subheading</label><textarea id="appearance-hero-subheading" rows="3">${escapeHtml(h.subheading || '')}</textarea></div></div>
+      <h3>Theme</h3><div class="form-grid"><div class="row"><div class="field"><label>Theme mode</label><select id="appearance-mode"><option value="dark" ${t.mode !== 'light' && t.mode !== 'system' ? 'selected' : ''}>Dark</option><option value="light" ${t.mode === 'light' ? 'selected' : ''}>Light</option><option value="system" ${t.mode === 'system' ? 'selected' : ''}>System</option></select></div><div class="field"><label>Font</label><select id="appearance-font"><option value="system" ${t.fontFamily === 'system' ? 'selected' : ''}>System default</option><option value="inter" ${t.fontFamily === 'inter' ? 'selected' : ''}>Inter/system sans</option><option value="serif" ${t.fontFamily === 'serif' ? 'selected' : ''}>Serif</option><option value="mono" ${t.fontFamily === 'mono' ? 'selected' : ''}>Mono</option><option value="custom" ${t.fontFamily === 'custom' ? 'selected' : ''}>Custom CSS font-family</option></select></div></div>
+        <div class="field"><label>Custom font-family</label><input id="appearance-custom-font" value="${escapeHtml(t.customFontFamily || '')}" placeholder='ui-rounded, "SF Pro", sans-serif'></div>
+        <div class="row"><div class="field"><label>Density</label><select id="appearance-density"><option value="compact" ${t.density === 'compact' ? 'selected' : ''}>Compact</option><option value="comfortable" ${t.density !== 'compact' && t.density !== 'spacious' ? 'selected' : ''}>Comfortable</option><option value="spacious" ${t.density === 'spacious' ? 'selected' : ''}>Spacious</option></select></div><div class="field"><label>Radius</label><select id="appearance-radius"><option value="square" ${t.radius === 'square' ? 'selected' : ''}>Square</option><option value="rounded" ${t.radius === 'rounded' ? 'selected' : ''}>Rounded</option><option value="soft" ${t.radius !== 'square' && t.radius !== 'rounded' ? 'selected' : ''}>Soft</option></select></div></div>
+        <div class="color-grid">${themeColorFields.map(([key, label]) => `<div class="field"><label>${escapeHtml(label)}</label><input data-appearance-color="${escapeHtml(key)}" type="color" value="${escapeHtml(colors[key] || defaultColorFor(key))}"></div>`).join('')}</div></div></div>
+    <div class="settings-card"><div class="inline-between"><h3>Theme presets</h3><div class="inline-controls"><button class="ghost" id="theme-save-preset" type="button">Save current as preset</button><button class="ghost" id="theme-import-preset" type="button">Import preset JSON</button></div></div><p>Preset exports include only appearance and branding data. They never include users, services, secrets, sessions, plugin configuration, or logs.</p><div class="log-list">${presets.map((p) => `<article class="log-item"><strong>${escapeHtml(p.name)}</strong><span>${escapeHtml(p.description || 'No description')}</span><div class="inline-controls"><button class="ghost" data-preset-apply="${escapeHtml(p.id)}" type="button">Apply</button><button class="ghost" data-preset-duplicate="${escapeHtml(p.id)}" type="button">Duplicate</button><button class="ghost" data-preset-export="${escapeHtml(p.id)}" type="button">Export</button><button class="ghost danger" data-preset-delete="${escapeHtml(p.id)}" type="button">Delete</button></div></article>`).join('') || '<p>No saved presets yet.</p>'}</div></div>
+  </div>`;
+}
+function assetFieldHtml(id, label, value) {
+  return `<div class="field"><label>${escapeHtml(label)}</label><div class="inline-controls"><input id="appearance-${id}-url" value="${escapeHtml(value || '')}" placeholder="/api/app-assets/..."><input id="appearance-${id}-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><button class="ghost" data-upload-app-asset="${escapeHtml(id)}" type="button">Upload</button></div><small>PNG, JPG, GIF, and WebP only. SVG is intentionally not accepted in this release.</small></div>`;
+}
+function defaultColorFor(key) {
+  return { background: '#090c11', surface: '#0f141b', surface2: '#141a23', text: '#eef3f8', mutedText: '#a5afbb', border: '#273241', primary: '#8fd3ff', success: '#8ee6b0', warning: '#ffd27a', danger: '#ff8f9d' }[key] || '#8fd3ff';
 }
 
 function adminServicesHtml() {
@@ -379,7 +585,7 @@ function adminSecurityHtml() {
 function adminBackupsHtml() {
   const h = state.admin.health || {};
   const c = state.admin.config || {};
-  return `<div class="settings-card"><h3>Backups & storage</h3><p>Download a portable configuration backup containing settings, services, user names/roles, and plugin metadata. Password hashes, sessions, and private runtime data are not exported.</p><div class="inline-controls"><button class="primary" id="download-backup" type="button">Download config backup</button><button class="ghost" id="download-db" type="button">Download SQLite database</button></div><div class="stats-row">${statCard('Database', formatBytes(h.storage?.databaseBytes || 0))}${statCard('WAL', formatBytes(h.storage?.walBytes || 0))}</div><p><strong>Data dir:</strong> ${escapeHtml(h.storage?.dataDir || '')}</p><p><strong>Plugin dir:</strong> ${escapeHtml(h.storage?.pluginDir || '')}</p><h3>Scheduled backup planning</h3><p>The app records the desired backup location for operators. Automated backup execution can be wired to this path in a later milestone.</p><div class="inline-controls"><input id="scheduled-backup-location" value="${escapeHtml(c.scheduledBackupLocation || '')}" placeholder="/backups/home-lab-launcher"><button class="ghost" id="save-backup-location" type="button">Save location</button></div><h3>Restore configuration backup</h3><p>Restore settings and services from a Home Lab Launcher config backup. User passwords and active sessions are not changed.</p><div class="field"><label>Backup JSON</label><textarea id="restore-backup-json" rows="8" placeholder='{"format":"home-lab-launcher-config-v1",...}'></textarea></div><button class="ghost danger" id="restore-backup" type="button">Restore backup</button></div>`;
+  return `<div class="settings-card"><h3>Backups & storage</h3><p>Download a portable configuration backup containing settings, services, user names/roles, and plugin metadata. Password hashes, sessions, and private runtime data are not exported.</p><div class="inline-controls"><button class="primary" id="download-backup" type="button">Download config backup</button><button class="ghost" id="download-db" type="button">Download SQLite database</button></div><div class="stats-row">${statCard('Database', formatBytes(h.storage?.databaseBytes || 0))}${statCard('WAL', formatBytes(h.storage?.walBytes || 0))}</div><p><strong>Data dir:</strong> ${escapeHtml(h.storage?.dataDir || '')}</p><p><strong>Plugin dir:</strong> ${escapeHtml(h.storage?.pluginDir || '')}</p><h3>Scheduled backup planning</h3><p>The app records the desired backup location for operators. Automated backup execution can be wired to this path in a later milestone.</p><div class="inline-controls"><input id="scheduled-backup-location" value="${escapeHtml(c.scheduledBackupLocation || '')}" placeholder="/backups/home-lab-launcher"><button class="ghost" id="save-backup-location" type="button">Save location</button></div><h3>Restore configuration backup</h3><p>Restore settings and services from a Home Lab Launcher config backup. User passwords and active sessions are not changed.</p><div class="field"><label>Backup JSON</label><textarea id="restore-backup-json" rows="8" placeholder='{"format":"home-lab-launcher-config-v1",...}'></textarea></div><div class="inline-controls"><button class="ghost" id="preview-restore" type="button">Preview restore</button><button class="ghost danger" id="restore-backup" type="button">Restore backup</button></div><div id="restore-preview" class="restore-preview"></div></div>`;
 }
 
 function adminUsersHtml() {
@@ -405,7 +611,7 @@ function adminPluginsHtml() {
     const update = p.update?.updateAvailable ? `<span class="status-badge warning">Update: ${escapeHtml(p.update.latest.version)}</span>` : '';
     return `<div class="plugin-row plugin-row-expanded" data-plugin-row="${escapeHtml(p.id)}"><div><strong>${escapeHtml(p.name)}</strong><br><small>${escapeHtml(p.sourceType)} · ${escapeHtml(p.sourceUrl)} · ${escapeHtml(p.version)} · ${escapeHtml(p.lifecycle || (p.enabled ? 'enabled' : 'disabled'))}</small><div class="service-meta">${compat}${update}<span class="status-badge">hash ${escapeHtml((p.installedHash || 'none').slice(0, 12))}</span></div><div class="tags">${permissions}</div>${p.lastError ? `<code>${escapeHtml(p.lastError)}</code>` : ''}</div><div class="service-row-actions"><button class="ghost" data-plugin-toggle="${escapeHtml(p.id)}" data-enabled="${p.enabled}" type="button">${p.enabled ? 'Disable' : 'Enable'}</button><button class="ghost" data-plugin-logs="${escapeHtml(p.id)}" type="button">Logs</button>${p.sourceType === 'github' ? `<button class="ghost" data-plugin-update="${escapeHtml(p.id)}" data-source="${escapeHtml(p.sourceUrl)}" type="button">Discover update</button>` : `<button class="ghost" data-plugin-reload-local="${escapeHtml(p.id)}" type="button">Reload</button>`}<button class="ghost danger" data-plugin-delete="${escapeHtml(p.id)}" type="button">Remove</button></div><div class="plugin-config"><h4>Configuration</h4><div class="form-grid" data-plugin-config="${escapeHtml(p.id)}">${renderConfigFields(p)}<button class="ghost" data-plugin-save-config="${escapeHtml(p.id)}" type="button">Save plugin config</button></div></div></div>`;
   }).join('') || '<p>No plugins installed.</p>';
-  return `<div class="settings-card"><div class="inline-between"><h3>Plugin manager</h3><button class="ghost" id="plugins-reload" type="button">Reload plugins</button></div>${rows}
+  return `<div class="settings-card"><div class="inline-between"><h3>Plugin manager</h3><button class="ghost" id="plugins-reload" type="button">Reload plugins</button></div><div class="callout warning"><strong>Trusted code boundary</strong><p>Plugins are trusted code and can run server-side. Install or update plugins only from authors and commits you trust.</p><label class="check-line"><input id="plugin-trust-confirm" type="checkbox"> I understand plugins can run server-side code.</label></div>${rows}
     <h3>Install from GitHub</h3><div class="field"><label>Repository URL</label><input id="plugin-repo" placeholder="https://github.com/owner/repo"></div><div class="inline-controls"><button class="ghost" id="plugin-discover" type="button">Discover versions</button><select id="plugin-version"></select><button class="primary" id="plugin-install" type="button">Install selected version</button></div><div id="plugin-release-notes" class="plugin-release-notes"></div>
     <h3>Local development plugin</h3><p id="local-plugin-help">Loading local plugin status…</p><div class="inline-controls"><input id="plugin-local-path" placeholder="/app/local-plugins/news"><button class="ghost" id="plugin-install-local" type="button">Install local plugin</button></div></div>`;
 }
@@ -418,6 +624,7 @@ function adminLogsHtml() {
 function bindAdminTabHandlers() {
   const content = $('admin-content');
   if (state.adminTab === 'settings') bindSettingsHandlers();
+  if (state.adminTab === 'appearance') bindAppearanceHandlers(content);
   if (state.adminTab === 'services') bindServiceToolHandlers();
   if (state.adminTab === 'users') bindUserHandlers(content);
   if (state.adminTab === 'backups') bindBackupHandlers();
@@ -443,9 +650,9 @@ function bindServiceToolHandlers() {
   $('import-services')?.addEventListener('click', async () => {
     const payload = JSON.parse($('services-import-json').value || '{}');
     payload.mode = $('services-import-mode').value;
-    await api('/api/services/import', { method: 'POST', body: JSON.stringify(payload) });
+    const result = await api('/api/services/import', { method: 'POST', body: JSON.stringify(payload) });
     await Promise.all([loadServices(), loadAdminData()]);
-    render(); toast('Services imported');
+    render(); toast(`Services imported: ${result.summary?.created ?? result.count} added, ${result.summary?.updated ?? 0} updated`);
   });
   bindServiceAdminList();
 }
@@ -505,9 +712,17 @@ function bindBackupHandlers() {
     await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ scheduled_backup_location: formValue('scheduled-backup-location') }) });
     await loadAdminData(); toast('Backup location saved');
   });
-  $('restore-backup')?.addEventListener('click', async () => {
-    if (!confirm('Restore settings and services from this backup? Current services will be replaced.')) return;
+  $('preview-restore')?.addEventListener('click', async () => {
     const payload = JSON.parse($('restore-backup-json').value || '{}');
+    const data = await api('/api/admin/restore/preview', { method: 'POST', body: JSON.stringify(payload) });
+    const c = data.preview.counts;
+    $('restore-preview').innerHTML = `<div class="callout"><strong>Restore preview</strong><p>${escapeHtml(c.settings)} settings, ${escapeHtml(c.validServices)}/${escapeHtml(c.services)} valid services, ${escapeHtml(c.serviceConflicts)} service conflicts, ${escapeHtml(c.plugins)} plugin metadata entries, ${escapeHtml(c.users)} user metadata entries.</p><ul>${data.preview.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join('')}</ul></div>`;
+  });
+  $('restore-backup')?.addEventListener('click', async () => {
+    const payload = JSON.parse($('restore-backup-json').value || '{}');
+    const data = await api('/api/admin/restore/preview', { method: 'POST', body: JSON.stringify(payload) });
+    const c = data.preview.counts;
+    if (!confirm(`Restore backup? This applies ${c.settings} settings and replaces current services with ${c.validServices} valid services. Plugin code, users, and sessions will not be imported.`)) return;
     await api('/api/admin/restore', { method: 'POST', body: JSON.stringify(payload) });
     await Promise.all([loadSettings(), loadServices(), loadAdminData()]);
     render(); toast('Backup restored');
@@ -555,6 +770,108 @@ function bindSettingsHandlers() {
     render(); toast('Settings saved');
   });
 }
+
+function readAppearanceForm() {
+  const colors = {};
+  document.querySelectorAll('[data-appearance-color]').forEach((input) => { colors[input.dataset.appearanceColor] = input.value; });
+  return {
+    version: 1,
+    brand: {
+      appName: formValue('appearance-app-name') || 'Home Lab Launcher',
+      pageTitle: formValue('appearance-page-title') || formValue('appearance-app-name') || 'Home Lab Launcher',
+      brandText: formValue('appearance-brand-text') || formValue('appearance-app-name') || 'Home Lab Launcher',
+      brandSubtitle: formValue('appearance-brand-subtitle'),
+      brandMarkText: formValue('appearance-brand-mark') || 'HL',
+      faviconUrl: formValue('appearance-favicon-url'),
+      brandIconUrl: formValue('appearance-brand-icon-url'),
+      heroImageUrl: formValue('appearance-hero-image-url'),
+      footerNote: formValue('appearance-footer-note')
+    },
+    hero: {
+      eyebrow: formValue('appearance-hero-eyebrow'),
+      heading: formValue('appearance-hero-heading'),
+      subheading: formValue('appearance-hero-subheading')
+    },
+    theme: {
+      mode: $('appearance-mode')?.value || 'dark',
+      fontFamily: $('appearance-font')?.value || 'system',
+      customFontFamily: formValue('appearance-custom-font'),
+      density: $('appearance-density')?.value || 'comfortable',
+      radius: $('appearance-radius')?.value || 'soft',
+      colors
+    }
+  };
+}
+async function uploadAppearanceAsset(id) {
+  const file = $(`appearance-${id}-file`)?.files?.[0];
+  if (!file) throw new Error('Choose an image file first');
+  if (file.size > 5 * 1024 * 1024) throw new Error('Asset image must be 5 MiB or smaller');
+  const data = await api('/api/app-assets', { method: 'POST', body: JSON.stringify({ assetData: await readFileAsDataUrl(file), name: file.name }) });
+  $(`appearance-${id}-url`).value = data.url;
+  return data.url;
+}
+function bindAppearanceHandlers(content) {
+  content.querySelectorAll('[data-upload-app-asset]').forEach((button) => button.addEventListener('click', async () => {
+    try { await uploadAppearanceAsset(button.dataset.uploadAppAsset); toast('Asset uploaded'); } catch (error) { toast(error.message); }
+  }));
+  $('appearance-preview')?.addEventListener('click', () => { applyAppearance(readAppearanceForm()); toast('Preview applied locally'); });
+  $('appearance-reset-unsaved')?.addEventListener('click', () => {
+    applyAppearance(state.admin.appearance || state.settings?.appearance || {});
+    renderAdminConsole();
+  });
+  $('appearance-restore-default')?.addEventListener('click', async () => {
+    if (!confirm('Restore the default theme and branding?')) return;
+    const data = await api('/api/admin/appearance/reset', { method: 'POST' });
+    state.admin.appearance = data.appearance;
+    await loadSettings();
+    renderAdminConsole();
+    toast('Default theme restored');
+  });
+  $('appearance-save')?.addEventListener('click', async () => {
+    const data = await api('/api/admin/appearance', { method: 'PUT', body: JSON.stringify({ appearance: readAppearanceForm() }) });
+    state.admin.appearance = data.appearance;
+    await Promise.all([loadSettings(), loadAdminData()]);
+    render(); toast('Appearance saved');
+  });
+  $('theme-save-preset')?.addEventListener('click', async () => {
+    const name = prompt('Preset name', 'My theme');
+    if (!name) return;
+    const description = prompt('Preset description', '') || '';
+    await api('/api/admin/theme-presets', { method: 'POST', body: JSON.stringify({ name, description, appearance: readAppearanceForm() }) });
+    await loadAdminData(); toast('Preset saved');
+  });
+  $('theme-import-preset')?.addEventListener('click', () => {
+    openModal(`<h2>Import theme preset</h2><p>Only safe appearance fields are imported.</p><div class="field"><label>Preset JSON</label><textarea id="theme-import-json" rows="10" placeholder='{"format":"home-lab-launcher-theme-v1",...}'></textarea></div><button class="primary" id="theme-import-confirm" type="button">Import preset</button>`);
+    $('theme-import-confirm').onclick = async () => {
+      const payload = JSON.parse($('theme-import-json').value || '{}');
+      if (!confirm(`Import preset "${payload.name || 'Untitled'}"?`)) return;
+      await api('/api/admin/theme-presets/import', { method: 'POST', body: JSON.stringify(payload) });
+      closeModal(); await loadAdminData(); toast('Preset imported');
+    };
+  });
+  content.querySelectorAll('[data-preset-apply]').forEach((button) => button.addEventListener('click', async () => {
+    if (!confirm('Apply this preset to the global site appearance?')) return;
+    const data = await api(`/api/admin/theme-presets/${button.dataset.presetApply}/apply`, { method: 'POST' });
+    state.admin.appearance = data.appearance;
+    await Promise.all([loadSettings(), loadAdminData()]);
+    render(); toast('Preset applied');
+  }));
+  content.querySelectorAll('[data-preset-duplicate]').forEach((button) => button.addEventListener('click', async () => {
+    const preset = state.admin.presets.find((p) => p.id === button.dataset.presetDuplicate);
+    if (!preset) return;
+    await api('/api/admin/theme-presets', { method: 'POST', body: JSON.stringify({ name: `${preset.name} Copy`, description: preset.description, appearance: preset.appearance }) });
+    await loadAdminData(); toast('Preset duplicated');
+  }));
+  content.querySelectorAll('[data-preset-export]').forEach((button) => button.addEventListener('click', async () => {
+    const data = await api(`/api/admin/theme-presets/${button.dataset.presetExport}/export`);
+    downloadJson(`${(data.name || 'theme').toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'theme'}-theme.json`, data);
+  }));
+  content.querySelectorAll('[data-preset-delete]').forEach((button) => button.addEventListener('click', async () => {
+    if (!confirm('Delete this theme preset?')) return;
+    await api(`/api/admin/theme-presets/${button.dataset.presetDelete}`, { method: 'DELETE' });
+    await loadAdminData(); toast('Preset deleted');
+  }));
+}
 function bindUserHandlers(content) {
   content.querySelector('#add-user')?.addEventListener('click', async () => {
     await api('/api/users', { method: 'POST', body: JSON.stringify({ username: formValue('new-user'), password: formValue('new-pass'), role: $('new-role').value }) });
@@ -600,7 +917,7 @@ function bindPluginHandlers(content) {
     const latest = data.versions[0];
     if (!latest) return toast('No versions found');
     openModal(`<h2>Update ${escapeHtml(button.dataset.pluginUpdate)}</h2><p><strong>Latest:</strong> ${escapeHtml(latest.version)} (${escapeHtml(latest.type)})</p><pre class="release-notes">${escapeHtml((latest.body || 'No release notes available.').slice(0, 4000))}</pre><button class="primary" id="confirm-plugin-update" type="button">Update to ${escapeHtml(latest.version)}</button>`);
-    $('confirm-plugin-update').onclick = async () => { await api(`/api/plugins/${button.dataset.pluginUpdate}/update`, { method: 'POST', body: JSON.stringify({ version: latest.version }) }); closeModal(); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin updated'); };
+    $('confirm-plugin-update').onclick = async () => { await api(`/api/plugins/${button.dataset.pluginUpdate}/update`, { method: 'POST', body: JSON.stringify({ version: latest.version, trustConfirmed: true }) }); closeModal(); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin updated'); };
   }));
   content.querySelectorAll('[data-plugin-reload-local]').forEach((button) => button.addEventListener('click', async () => { await api('/api/plugins/reload', { method: 'POST' }); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Local plugin reloaded'); }));
   content.querySelectorAll('[data-plugin-toggle]').forEach((button) => button.addEventListener('click', async () => {
@@ -623,7 +940,8 @@ function bindPluginHandlers(content) {
     $('plugin-release-notes').innerHTML = option ? `<pre class="release-notes">${escapeHtml((option.dataset.notes || 'No release notes available.').slice(0, 2000))}</pre>` : '';
   });
   $('plugin-install')?.addEventListener('click', async () => {
-    await api('/api/plugins/install', { method: 'POST', body: JSON.stringify({ repoUrl: formValue('plugin-repo'), version: $('plugin-version').value }) });
+    if (!$('plugin-trust-confirm')?.checked) return toast('Confirm the plugin trust boundary before installing');
+    await api('/api/plugins/install', { method: 'POST', body: JSON.stringify({ repoUrl: formValue('plugin-repo'), version: $('plugin-version').value, trustConfirmed: true }) });
     await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin installed');
   });
   api('/api/plugin-sources/local/status').then((status) => {
@@ -637,7 +955,8 @@ function bindPluginHandlers(content) {
     try {
       button.disabled = true;
       button.textContent = 'Installing…';
-      await api('/api/plugins/install-local', { method: 'POST', body: JSON.stringify({ path: formValue('plugin-local-path') }) });
+      if (!$('plugin-trust-confirm')?.checked) throw new Error('Confirm the plugin trust boundary before installing');
+      await api('/api/plugins/install-local', { method: 'POST', body: JSON.stringify({ path: formValue('plugin-local-path'), trustConfirmed: true }) });
       await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Local plugin installed');
     } catch (error) {
       toast(error.message);
@@ -647,6 +966,55 @@ function bindPluginHandlers(content) {
   });
 }
 
+function layoutDropTarget(event) {
+  const root = $('layout-root');
+  const target = event.target.closest('[data-layout-id]');
+  if (!root || !target || !root.contains(target) || target.dataset.layoutId === state.draggedLayoutId) return null;
+  return target;
+}
+
+$('layout-root').addEventListener('click', async (event) => {
+  const button = event.target.closest('[data-layout-move]');
+  if (!button || !state.layoutEditing) return;
+  const item = document.querySelector(`[data-layout-id="${CSS.escape(button.dataset.layoutTarget)}"]`);
+  const root = $('layout-root');
+  if (!item || !root) return;
+  if (button.dataset.layoutMove === 'up' && item.previousElementSibling) root.insertBefore(item, item.previousElementSibling);
+  if (button.dataset.layoutMove === 'down' && item.nextElementSibling) root.insertBefore(item.nextElementSibling, item);
+  await persistLayoutOrder();
+  toast('Layout saved');
+});
+
+$('layout-root').addEventListener('dragstart', (event) => {
+  if (!state.layoutEditing) return;
+  const item = event.target.closest('[data-layout-id]');
+  if (!item) return;
+  state.draggedLayoutId = item.dataset.layoutId;
+  item.classList.add('is-dragging');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', state.draggedLayoutId);
+});
+$('layout-root').addEventListener('dragover', (event) => {
+  if (!state.layoutEditing || !state.draggedLayoutId) return;
+  const target = layoutDropTarget(event);
+  if (!target) return;
+  event.preventDefault();
+  const dragged = document.querySelector(`[data-layout-id="${CSS.escape(state.draggedLayoutId)}"]`);
+  if (!dragged) return;
+  const rect = target.getBoundingClientRect();
+  const after = event.clientY > rect.top + rect.height / 2 || (Math.abs(event.clientY - (rect.top + rect.height / 2)) < 20 && event.clientX > rect.left + rect.width / 2);
+  target.parentNode.insertBefore(dragged, after ? target.nextSibling : target);
+});
+$('layout-root').addEventListener('drop', async (event) => {
+  if (!state.layoutEditing) return;
+  event.preventDefault();
+  await persistLayoutOrder();
+});
+$('layout-root').addEventListener('dragend', async () => {
+  document.querySelectorAll('.is-dragging').forEach((item) => item.classList.remove('is-dragging'));
+  state.draggedLayoutId = '';
+  if (state.layoutEditing) await persistLayoutOrder();
+});
 
 $('launchpad-controls').addEventListener('click', async (event) => {
   const categoryButton = event.target.closest('[data-launch-category]');
@@ -703,10 +1071,17 @@ $('services-empty').addEventListener('click', (event) => { if (event.target.clos
 $('add-service-button').addEventListener('click', () => showServiceModal());
 $('login-button').addEventListener('click', showLoginModal);
 $('session-button').addEventListener('click', () => { const dd = $('user-dropdown'); const open = dd.hidden; dd.hidden = !open; $('session-button').setAttribute('aria-expanded', String(open)); });
-$('user-dropdown').addEventListener('click', async (event) => { const action = event.target.closest('[data-profile-action]')?.dataset.profileAction; if (action === 'profile') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); showProfileModal(); } if (action === 'logout') await logout(); });
+$('user-dropdown').addEventListener('click', async (event) => {
+  const action = event.target.closest('[data-profile-action]')?.dataset.profileAction;
+  if (action === 'profile') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); showProfileModal(); }
+  if (action === 'layout') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); await setLayoutEditing(!state.layoutEditing); }
+  if (action === 'logout') await logout();
+});
 document.addEventListener('click', (event) => { if (!$('user-menu').contains(event.target)) { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); } });
 $('side-profile-button').addEventListener('click', showProfileModal);
 async function logout() { await api('/api/auth/logout', { method: 'POST' }); location.reload(); }
+$('layout-done').addEventListener('click', () => setLayoutEditing(false));
+$('layout-reset').addEventListener('click', async () => { state.preferences.layoutOrder = [...defaultLayoutOrder]; applyLayoutOrder(); await persistLayoutOrder(); toast('Layout reset'); });
 $('settings-button').addEventListener('click', () => { location.hash = 'admin-panel'; state.adminTab = 'settings'; renderAdminConsole(); });
 $('users-button').addEventListener('click', () => { location.hash = 'admin-panel'; state.adminTab = 'users'; renderAdminConsole(); });
 $('plugin-manager-button').addEventListener('click', () => { location.hash = 'admin-panel'; state.adminTab = 'plugins'; renderAdminConsole(); });
@@ -715,7 +1090,7 @@ document.querySelectorAll('.admin-tab').forEach((tab) => tab.addEventListener('c
 
 const iconChoices = ['🔗','🏠','📈','📶','🎬','🧰','🖥️','☁️','🔒','📦','🧪','📰'];
 const colorChoices = ['#8fd3ff','#8ee6b0','#ffd27a','#ff8f9d','#b99cff','#6da8ff','#4de7ff','#94a3b8'];
-function serviceForm(s = {}) { return `<h2>${s.id ? 'Edit' : 'Add'} service</h2><div class="form-grid"><div class="row"><div class="field"><label>Name</label><input id="svc-name" value="${escapeHtml(s.name || '')}"></div><div class="field"><label>Icon</label><input id="svc-icon" value="${escapeHtml(s.icon || '🔗')}" placeholder="Emoji or https://... image URL"><small>Use an emoji, paste an image URL, or choose a local JPEG, PNG, GIF, or WebP. Remote/local images are stored by the launcher.</small><div class="choice-row">${iconChoices.map((icon) => `<button class="ghost choice-btn" type="button" data-icon-choice="${escapeHtml(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div></div><div class="field"><label>Local icon image</label><input id="svc-icon-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><small>Animated GIFs/WebP and transparent images are preserved. Maximum size: 5 MiB.</small></div><div class="field"><label>URL</label><input id="svc-url" value="${escapeHtml(s.url || '')}"></div><div class="field"><label>Description</label><textarea id="svc-description">${escapeHtml(s.description || '')}</textarea></div><div class="row"><div class="field"><label>Category</label><input id="svc-category" value="${escapeHtml(s.category || 'general')}"></div><div class="field"><label>Accent color</label><input id="svc-accent" type="color" value="${escapeHtml(s.accent || '#8fd3ff')}"><div class="choice-row">${colorChoices.map((color) => `<button class="color-choice" type="button" data-color-choice="${escapeHtml(color)}" style="--swatch:${escapeHtml(color)}" aria-label="Use ${escapeHtml(color)}"></button>`).join('')}</div></div></div><div class="field"><label>Tags, comma-separated</label><input id="svc-tags" value="${escapeHtml((s.tags || []).join(', '))}"></div><div class="row"><div class="field"><label>Sort order</label><input id="svc-sort" type="number" value="${escapeHtml(s.sortOrder || 0)}"></div><div class="field"><label>Health interval minutes</label><input id="svc-health-interval" type="number" min="1" value="${escapeHtml(s.healthCheckIntervalMinutes || 15)}"></div></div><label class="check-line"><input id="svc-health-enabled" type="checkbox" ${s.healthCheckEnabled ? 'checked' : ''}> Enable HTTP health checks</label><div class="field"><label>Health check URL</label><input id="svc-health-url" value="${escapeHtml(s.healthCheckUrl || '')}" placeholder="Defaults to service URL"><small>Leave blank to check the main service URL. Checks run in the background and can also be triggered manually.</small></div><div class="row"><label><input id="svc-featured" type="checkbox" ${s.featured ? 'checked' : ''}> Featured</label><label><input id="svc-enabled" type="checkbox" ${s.enabled !== false ? 'checked' : ''}> Enabled</label></div><button class="primary" id="save-service" type="button">Save service</button></div>`; }
+function serviceForm(s = {}) { return `<h2>${s.id ? 'Edit' : 'Add'} service</h2><div class="form-grid"><div class="row"><div class="field"><label>Name</label><input id="svc-name" value="${escapeHtml(s.name || '')}"></div><div class="field"><label>Icon</label><input id="svc-icon" value="${escapeHtml(s.icon || '🔗')}" placeholder="Emoji or https://... image URL"><small>Use an emoji, paste an image URL, or choose a local JPEG, PNG, GIF, or WebP. Remote/local images are stored by the launcher.</small><div class="choice-row">${iconChoices.map((icon) => `<button class="ghost choice-btn" type="button" data-icon-choice="${escapeHtml(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div></div><div class="field"><label>Local icon image</label><input id="svc-icon-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><small>Animated GIFs/WebP and transparent images are preserved. Maximum size: 5 MiB.</small></div><div class="field"><label>URL</label><input id="svc-url" value="${escapeHtml(s.url || '')}"></div><div class="field"><label>Description</label><textarea id="svc-description">${escapeHtml(s.description || '')}</textarea></div><div class="row"><div class="field"><label>Category</label><input id="svc-category" value="${escapeHtml(s.category || 'general')}"></div><div class="field"><label>Accent color</label><input id="svc-accent" type="color" value="${escapeHtml(s.accent || '#8fd3ff')}"><div class="choice-row">${colorChoices.map((color) => `<button class="color-choice" type="button" data-color-choice="${escapeHtml(color)}" style="--swatch:${escapeHtml(color)}" aria-label="Use ${escapeHtml(color)}"></button>`).join('')}</div></div></div><div class="field"><label>Tags, comma-separated</label><input id="svc-tags" value="${escapeHtml((s.tags || []).join(', '))}"></div><div class="row"><div class="field"><label>Sort order</label><input id="svc-sort" type="number" value="${escapeHtml(s.sortOrder || 0)}"></div><div class="field"><label>Health interval minutes</label><input id="svc-health-interval" type="number" min="1" value="${escapeHtml(s.healthCheckIntervalMinutes || 15)}"></div></div><label class="check-line"><input id="svc-health-enabled" type="checkbox" ${s.healthCheckEnabled ? 'checked' : ''}> Enable HTTP health checks</label><div class="field"><label>Health check URL</label><input id="svc-health-url" value="${escapeHtml(s.healthCheckUrl || '')}" placeholder="Defaults to service URL"><small>Leave blank to check the main service URL. Checks run in the background and can also be triggered manually.</small></div><div class="inline-controls"><button class="ghost" id="test-service-url" type="button">Test URL</button><span id="service-url-test-result" class="test-result"></span></div><div class="row"><label><input id="svc-featured" type="checkbox" ${s.featured ? 'checked' : ''}> Featured</label><label><input id="svc-enabled" type="checkbox" ${s.enabled !== false ? 'checked' : ''}> Enabled</label></div><button class="primary" id="save-service" type="button">Save service</button></div>`; }
 async function readServiceForm() {
   const file = $('svc-icon-file')?.files?.[0];
   const payload = { name: formValue('svc-name'), icon: formValue('svc-icon') || '🔗', url: formValue('svc-url'), description: formValue('svc-description'), category: formValue('svc-category') || 'general', accent: $('svc-accent').value, tags: formValue('svc-tags'), sortOrder: Number(formValue('svc-sort') || 0), featured: $('svc-featured').checked, enabled: $('svc-enabled').checked, healthCheckEnabled: $('svc-health-enabled').checked, healthCheckUrl: formValue('svc-health-url'), healthCheckIntervalMinutes: Number(formValue('svc-health-interval') || 15) };
@@ -730,6 +1105,19 @@ function showServiceModal(s) {
   openModal(serviceForm(s));
   modalContent.querySelectorAll('[data-icon-choice]').forEach((button) => button.addEventListener('click', () => { $('svc-icon').value = button.dataset.iconChoice; }));
   modalContent.querySelectorAll('[data-color-choice]').forEach((button) => button.addEventListener('click', () => { $('svc-accent').value = button.dataset.colorChoice; }));
+  $('test-service-url').onclick = async () => {
+    const target = formValue('svc-health-url') || formValue('svc-url');
+    const result = $('service-url-test-result');
+    result.textContent = 'Testing…';
+    try {
+      const data = await api('/api/services/test-url', { method: 'POST', body: JSON.stringify({ url: target }) });
+      result.textContent = data.ok ? `OK · HTTP ${data.statusCode} · ${data.responseMs}ms` : `Failed · ${data.error || data.status || 'unreachable'}`;
+      result.className = `test-result ${data.ok ? 'success' : 'danger'}`;
+    } catch (error) {
+      result.textContent = error.message;
+      result.className = 'test-result danger';
+    }
+  };
   $('save-service').onclick = async () => { try { const body = await readServiceForm(); await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) }); closeModal(); await loadServices(); if (isAdmin()) await loadAdminData(); renderServices(); toast('Service saved'); } catch (error) { toast(error.message); } };
 }
 
@@ -737,9 +1125,21 @@ function showLoginModal() { openModal(`<h2>Login</h2><div class="form-grid"><div
 function showBootstrapModal() { openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><button class="primary" id="boot-submit" type="button">Create Admin</button></div>`); $('boot-submit').onclick = async () => { await api('/api/bootstrap', { method: 'POST', body: JSON.stringify({ username: formValue('boot-username'), password: formValue('boot-password') }) }); location.reload(); }; }
 async function showProfileModal() {
   const [me, sessions] = await Promise.all([api('/api/me'), api('/api/me/sessions')]);
-  openModal(`<h2>Profile</h2><div class="settings-card"><p><strong>${escapeHtml(me.user.username)}</strong></p><p>${escapeHtml(roleLabel(me.user.role))} · Created ${new Date(me.user.createdAt).toLocaleString()}</p></div><h3>Change password</h3><div class="form-grid"><div class="field"><label>Current password</label><input id="profile-current" type="password"></div><div class="field"><label>New password</label><input id="profile-new" type="password" placeholder="10+ characters"></div><button class="primary" id="profile-save-password" type="button">Change password</button></div><h3>Active sessions</h3><div class="log-list">${sessions.sessions.map((item) => `<article class="log-item"><strong>${item.current ? 'Current session' : 'Other session'}</strong><span>${escapeHtml(item.ip)} · expires ${new Date(item.expiresAt).toLocaleString()}</span><small>${escapeHtml(item.userAgent)}</small>${item.current ? '' : `<button class="ghost danger" data-revoke-session="${escapeHtml(item.sid)}" type="button">Revoke</button>`}</article>`).join('')}</div><button class="ghost danger" id="revoke-other-sessions" type="button">Revoke all other sessions</button>`);
+  openModal(`<h2>Profile</h2><div class="settings-card"><p><strong>${escapeHtml(me.user.username)}</strong></p><p>${escapeHtml(roleLabel(me.user.role))} · Created ${new Date(me.user.createdAt).toLocaleString()}</p></div><h3>Change password</h3><div class="form-grid"><div class="field"><label>Current password</label><input id="profile-current" type="password"></div><div class="field"><label>New password</label><input id="profile-new" type="password" placeholder="10+ characters"></div><button class="primary" id="profile-save-password" type="button">Change password</button></div><h3>Active sessions</h3><div class="log-list">${sessions.sessions.map((item) => `<article class="log-item"><strong>${item.current ? 'Current session' : 'Other session'}</strong><span>${escapeHtml(item.ip)} · expires ${new Date(item.expiresAt).toLocaleString()}</span><small>${escapeHtml(item.userAgent)}</small>${item.current ? '' : `<button class="ghost danger" data-revoke-session="${escapeHtml(item.sid)}" type="button">Revoke</button>`}</article>`).join('')}</div><button class="ghost danger" id="revoke-other-sessions" type="button">Revoke all other sessions</button><h3>Preferences</h3><div class="inline-controls"><button class="ghost" id="reset-layout-preferences" type="button">Reset layout/preferences</button><button class="ghost" id="reset-favorites" type="button">Reset favorites</button></div><p class="muted-copy">Reset layout order, hidden categories, and view mode separately from favorites.</p>`);
   $('profile-save-password').onclick = async () => { await api('/api/me/password', { method: 'PATCH', body: JSON.stringify({ currentPassword: formValue('profile-current'), newPassword: formValue('profile-new') }) }); closeModal(); toast('Password changed'); };
   $('revoke-other-sessions').onclick = async () => { await api('/api/me/sessions', { method: 'DELETE' }); closeModal(); toast('Other sessions revoked'); };
+  $('reset-layout-preferences').onclick = async () => {
+    if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
+    else localStorage.removeItem('hll.launchpad');
+    state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder] };
+    closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
+  };
+  $('reset-favorites').onclick = async () => {
+    if (state.user) await api('/api/me/preferences/favorites', { method: 'DELETE' });
+    else localStorage.removeItem('hll.favorites');
+    state.favorites = [];
+    closeModal(); renderServices(); toast('Favorites reset');
+  };
   modalContent.querySelectorAll('[data-revoke-session]').forEach((button) => button.addEventListener('click', async () => { await api(`/api/me/sessions/${button.dataset.revokeSession}`, { method: 'DELETE' }); closeModal(); toast('Session revoked'); }));
 }
 

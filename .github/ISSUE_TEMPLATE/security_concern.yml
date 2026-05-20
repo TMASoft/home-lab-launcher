@@ -1,0 +1,24 @@
+name: Security concern
+description: Report a potential security issue without posting secrets
+title: "[Security]: "
+labels: [security]
+body:
+  - type: markdown
+    attributes:
+      value: "Do not include secrets, tokens, private URLs, or exploit details that would put an exposed instance at immediate risk."
+  - type: textarea
+    id: concern
+    attributes:
+      label: Concern
+      description: What risk did you find?
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Authentication/session, CSRF/headers, Plugins/trusted code, Backup/restore, Service images/fetching, Other]
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and suggested fix

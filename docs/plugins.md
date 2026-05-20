@@ -2,7 +2,7 @@
 
 Plugins let Home Lab Launcher add optional dynamic sections without baking every feature into the core application.
 
-> **Security model:** plugins are trusted Admin-installed code. They run in the launcher process with application privileges. Do not install plugins from sources you do not trust.
+> **Security model:** plugins are trusted Admin-installed code. They run in the launcher process with application privileges, can create routes, run scheduled jobs, access the launcher database, and make server-side network requests. Do not install or update plugins from sources you do not trust. The Admin UI requires explicit acknowledgement of this trust boundary before install/update.
 
 ## What plugins can do
 

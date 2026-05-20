@@ -44,6 +44,41 @@ function compareVersions(a, b) {
   return 0;
 }
 
+async function fetchBufferWithLimit(url, { maxBytes = 20 * 1024 * 1024, timeoutMs = 15000, headers = {} } = {}) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { headers, signal: controller.signal, redirect: 'follow' });
+    if (!response.ok) throw new Error(`Request failed: ${response.status}`);
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > maxBytes) throw new Error(`Download is larger than ${Math.round(maxBytes / 1024 / 1024)} MiB`);
+    const chunks = [];
+    let total = 0;
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          controller.abort();
+          throw new Error(`Download is larger than ${Math.round(maxBytes / 1024 / 1024)} MiB`);
+        }
+        chunks.push(Buffer.from(value));
+      }
+      return Buffer.concat(chunks, total);
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > maxBytes) throw new Error(`Download is larger than ${Math.round(maxBytes / 1024 / 1024)} MiB`);
+    return buffer;
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error('Download timed out');
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 class PluginManager {
   constructor({ app, db, pluginDir }) {
     this.app = app;
@@ -226,9 +261,7 @@ class PluginManager {
     fs.rmSync(destination, { recursive: true, force: true });
     fs.mkdirSync(destination, { recursive: true });
     const tarUrl = `https://api.github.com/repos/${owner}/${repo}/tarball/${encodeURIComponent(version)}`;
-    const response = await fetch(tarUrl, { headers: { 'User-Agent': 'home-lab-launcher' } });
-    if (!response.ok) throw new Error(`Could not download plugin tarball: ${response.status}`);
-    const tarball = Buffer.from(await response.arrayBuffer());
+    const tarball = await fetchBufferWithLimit(tarUrl, { maxBytes: 25 * 1024 * 1024, timeoutMs: 20000, headers: { 'User-Agent': 'home-lab-launcher' } });
     const installedHash = hashBuffer(tarball);
     const tmpFile = path.join(this.pluginDir, `${owner}-${repo}-${safeVersion}.tgz`);
     fs.writeFileSync(tmpFile, tarball);

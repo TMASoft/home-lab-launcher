@@ -4,7 +4,7 @@
 
 Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple—service cards and weather—but is designed to grow through installable plugins such as RSS/news, status widgets, inventory panels, or custom household dashboards.
 
-![Status](https://img.shields.io/badge/status-early%20development-ffd166?style=flat-square)
+![Status](https://img.shields.io/badge/status-public%20beta%20prep-ffd166?style=flat-square)
 ![Node](https://img.shields.io/badge/node-%3E%3D20-79f2c0?style=flat-square)
 ![SQLite](https://img.shields.io/badge/storage-SQLite-4de7ff?style=flat-square)
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
@@ -14,6 +14,7 @@ Home Lab Launcher is a small Docker-first web app for turning a home server, lab
 - **Configurable service launchpad** — add, edit, duplicate, delete, bulk manage, reorder, group, enable/disable, feature, tag, color, assign emoji/uploaded/downloaded image icons, and enable health checks from the UI.
 - **Role-based access** — Admins, Editors, Basic Users, and optional anonymous read-only access.
 - **Personal favorites and layout** — logged-in users get saved favorites, favorite ordering, card/list/compact layout preferences, and hidden categories; anonymous users get browser-local preferences.
+- **Appearance and theme presets** — Admins can customize global branding, hero copy, colors, fonts, density, radius, favicons, and brand images, then export/import safe shareable theme JSON.
 - **Admin console** — manage users, services, app settings, health, effective config, backups/restores, plugins, and audit logs.
 - **Weather widget** — configurable by ZIP/city search or manual coordinates; refreshes every 5 minutes.
 - **Trusted plugin system** — install pinned plugin versions from GitHub releases/tags, review permissions/compatibility, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
@@ -33,6 +34,10 @@ The main page includes:
 - an admin console visible only to Admins.
 
 The UI intentionally hides empty dynamic/plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
+
+## Public beta quick start
+
+This beta is intended for self-hosters who can manage a Docker Compose service and review security warnings before exposing it beyond a private LAN. After first login, open **Admin → Overview** and complete the beta readiness checklist.
 
 ## Quick start
 
@@ -74,7 +79,7 @@ HOST_PORT=9090
 APP_BASE_URL=http://localhost:9090
 ```
 
-The container still listens on port `8080` internally.
+The container still listens on port `8080` internally. Validate the anonymous health endpoint with `curl -fsS http://localhost:8080/api/healthz`; it returns only `{ ok, version, uptimeSeconds }`.
 
 ## Launchpad personalization and health
 
@@ -87,6 +92,59 @@ Editors and Admins can enable HTTP health checks per service, optionally overrid
 Service cards can use either a simple emoji/text icon or an image. When an Editor/Admin pastes an `http://` or `https://` image URL into the icon field, the launcher downloads and stores the image locally instead of hotlinking it. Editors/Admins can also choose a local image file from the service form.
 
 Supported image formats are JPEG, PNG, GIF, and WebP. Animated GIF/WebP files and transparent images are preserved. Icon uploads/downloads are limited to 5 MiB.
+
+## Appearance customization and theme packs
+
+Admins control the global look of the launcher from **Admin console → Appearance**. Basic Users keep personal launchpad preferences such as favorites, favorite order, view mode, and hidden categories, but cannot change the site-wide theme.
+
+Appearance settings include:
+
+- site/app name, browser title, header brand text/subtitle, and initials fallback,
+- favicon, brand icon, and optional hero/header image assets,
+- hero eyebrow, heading, and subheading copy,
+- dark/light/system mode,
+- controlled theme colors, fonts, density, and corner radius.
+
+Branding assets are separate from service icons. App assets are stored under the launcher data directory and served from `/api/app-assets/:filename`; service icons continue to use `/api/service-icons/:filename`. Supported app asset formats are JPEG, PNG, GIF, and WebP up to 5 MiB. SVG is intentionally rejected for app assets in this release because unsafe SVG content can include script-like behavior.
+
+Admins can save the current appearance as a preset, apply a preset, duplicate/delete presets, export a preset, or import one. Preset exports are designed for safe sharing and contain only appearance data:
+
+```json
+{
+  "format": "home-lab-launcher-theme-v1",
+  "name": "Midnight Lab",
+  "description": "Dark blue theme for network dashboards",
+  "appearance": {
+    "version": 1,
+    "brand": {
+      "appName": "Home Lab Launcher",
+      "pageTitle": "Home Lab Launcher",
+      "brandText": "Home Lab Launcher",
+      "brandSubtitle": "Home lab control plane",
+      "brandMarkText": "HL",
+      "faviconUrl": "",
+      "brandIconUrl": "",
+      "heroImageUrl": ""
+    },
+    "hero": {
+      "eyebrow": "Home lab operations",
+      "heading": "Launch and manage your internal services.",
+      "subheading": "A role-aware launcher for the tools, dashboards, and dynamic sections that make up your home lab."
+    },
+    "theme": {
+      "mode": "dark",
+      "fontFamily": "system",
+      "density": "comfortable",
+      "radius": "soft",
+      "colors": {
+        "primary": "#8fd3ff"
+      }
+    }
+  }
+}
+```
+
+Theme preset JSON never includes users, services, sessions, secrets, plugin configuration, logs, or backups. Imported presets are validated and sanitized before they can be applied.
 
 ## User roles
 
@@ -105,6 +163,7 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 
 - **Overview** — service/user/plugin/log counts, runtime information, configuration warnings, and admin notices.
 - **Settings** — app name, base URL, public read-only access, and weather settings.
+- **Appearance** — branding, hero content, app assets, color/font/density controls, live preview, default restore, and theme preset import/export.
 - **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
 - **Users** — create users, change roles, reset passwords, and delete users.
 - **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.
@@ -207,7 +266,8 @@ docker compose logs -f launcher
 - Security headers are set by the application; still use HTTPS for real deployments.
 - Users can revoke other active sessions from their profile.
 - Admins can export logs, set retention, prune old audit events, and review management-plane notices.
-- Plugins are not sandboxed. Install only plugins from sources you trust.
+- Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement.
+- Remote service/branding image fetches are initiated by trusted Editors/Admins, use timeouts and size limits, and reject SVG assets.
 - Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
 - Put the launcher behind HTTPS if credentials traverse an untrusted network.
 
@@ -217,7 +277,7 @@ This project is in early development. The core app is functional, but plugin API
 
 ## Screenshots
 
-Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`.
+Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`: launchpad, service edit, appearance customization, admin overview, and mobile view.
 
 ## License
 
