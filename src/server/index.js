@@ -4,7 +4,7 @@ const path = require('path');
 const express = require('express');
 const session = require('express-session');
 const { BetterSqliteSessionStore } = require('./session-store');
-const { openDb } = require('./db');
+const { openDb, getSetting } = require('./db');
 const { registerCoreRoutes } = require('./routes');
 const { PluginManager } = require('./plugins');
 const { securityHeaders, csrfProtection } = require('./security');
@@ -43,6 +43,21 @@ pluginManager.reload().catch((error) => {
 app.use(express.static(path.join(__dirname, '../public')));
 app.get(/^\/(?!api\/|plugins\/).*/, (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
 
+function startupWarnings() {
+  const warnings = [];
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const appBaseUrl = process.env.APP_BASE_URL || getSetting(db, 'app_base_url', '');
+  const publicReadEnabled = getSetting(db, 'public_read_enabled', true);
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.includes('change-this') || process.env.SESSION_SECRET.includes('dev-only')) warnings.push('SESSION_SECRET is missing or still set to a default value.');
+  if (process.env.BOOTSTRAP_ADMIN_PASSWORD && ['change-me-immediately', 'change-me', 'password'].includes(process.env.BOOTSTRAP_ADMIN_PASSWORD)) warnings.push('Bootstrap admin password still appears to be a default value.');
+  if (!process.env.APP_BASE_URL) warnings.push('APP_BASE_URL is not configured in the environment.');
+  if (nodeEnv === 'production' && appBaseUrl && appBaseUrl.startsWith('http://')) warnings.push('Production is configured over plain HTTP. Use HTTPS behind a reverse proxy when possible.');
+  if (publicReadEnabled) warnings.push('Anonymous read-only public access is enabled.');
+  if (nodeEnv !== 'production' || process.env.ENABLE_LOCAL_PLUGIN_INSTALL === 'true') warnings.push('Local plugin install is enabled; plugins are trusted Admin-installed server-side code.');
+  return warnings;
+}
+
 app.listen(port, host, () => {
   console.log(`Home Lab Launcher listening on http://${host}:${port}`);
+  for (const warning of startupWarnings()) console.warn(`[beta-readiness] ${warning}`);
 });

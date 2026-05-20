@@ -25,3 +25,12 @@ If you run from a published image in the future, replace the build step with an 
 1. Open **Admin → Security** and check warnings.
 2. Open **Admin → Plugins** and reload plugins.
 3. Review plugin lifecycle states for failed or incompatible plugins.
+
+
+## Public beta backup-before-upgrade checklist
+
+1. Download a config backup from **Admin → Backups**.
+2. Click **Preview restore** with the backup file if you want to validate counts before relying on it.
+3. Back up the Docker volume or SQLite database.
+4. Run `npm run check`, `npm test`, and `npm audit --omit=dev --audit-level=high` after updating source.
+5. Rebuild/restart with `docker compose up --build -d`, then check `/api/healthz` and container logs.

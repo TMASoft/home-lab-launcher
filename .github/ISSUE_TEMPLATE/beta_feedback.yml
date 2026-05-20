@@ -1,0 +1,25 @@
+name: Beta feedback
+description: Share public beta installation or usability feedback
+title: "[Beta feedback]: "
+labels: [beta, feedback]
+body:
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: Docker/native, reverse proxy, browser, public/internal exposure.
+  - type: textarea
+    id: worked
+    attributes:
+      label: What worked well?
+  - type: textarea
+    id: rough_edges
+    attributes:
+      label: What felt confusing or risky?
+    validations:
+      required: true
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or logs
+      description: Redact hostnames, users, tokens, and private URLs if needed.

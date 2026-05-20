@@ -10,6 +10,34 @@ const DEFAULT_SERVICES = [
   { id: 'media', name: 'Media Server', icon: '🎬', url: 'http://media.local', category: 'media', accent: '#b99cff', description: 'Streaming and media library.', tags: ['media', 'streaming'], sort_order: 40, featured: 1, enabled: 1 }
 ];
 
+const DEFAULT_APPEARANCE = {
+  version: 1,
+  brand: {
+    appName: 'Home Lab Launcher',
+    pageTitle: 'Home Lab Launcher',
+    brandText: 'Home Lab Launcher',
+    brandSubtitle: 'Home lab control plane',
+    brandMarkText: 'HL',
+    faviconUrl: '',
+    brandIconUrl: '',
+    heroImageUrl: '',
+    footerNote: ''
+  },
+  hero: {
+    eyebrow: 'Home lab operations',
+    heading: 'Launch and manage your internal services.',
+    subheading: 'A role-aware launcher for the tools, dashboards, and dynamic sections that make up your home lab.'
+  },
+  theme: {
+    mode: 'dark',
+    fontFamily: 'system',
+    customFontFamily: '',
+    density: 'comfortable',
+    radius: 'soft',
+    colors: {}
+  }
+};
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -160,6 +188,19 @@ function seed(db) {
   for (const [key, value] of Object.entries(defaults)) {
     if (getSetting(db, key, undefined) === undefined) setSetting(db, key, value);
   }
+  if (getSetting(db, 'appearance', undefined) === undefined) {
+    const appName = getSetting(db, 'app_name', DEFAULT_APPEARANCE.brand.appName);
+    setSetting(db, 'appearance', {
+      ...DEFAULT_APPEARANCE,
+      brand: {
+        ...DEFAULT_APPEARANCE.brand,
+        appName,
+        pageTitle: appName,
+        brandText: appName
+      }
+    });
+  }
+  if (getSetting(db, 'theme_presets', undefined) === undefined) setSetting(db, 'theme_presets', []);
 
   const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount === 0 && process.env.BOOTSTRAP_ADMIN_USERNAME && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
@@ -168,4 +209,4 @@ function seed(db) {
   }
 }
 
-module.exports = { openDb, getSetting, setSetting };
+module.exports = { openDb, getSetting, setSetting, DEFAULT_APPEARANCE };

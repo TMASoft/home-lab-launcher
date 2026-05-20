@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const express = require('express');
 const packageJson = require('../../package.json');
-const { getSetting, setSetting } = require('./db');
+const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
 const { issueCsrfToken } = require('./security');
 
 function serviceFromRow(row) {
@@ -57,8 +57,123 @@ function publicSettings(db) {
     appName: getSetting(db, 'app_name', 'Home Lab Launcher'),
     appBaseUrl: getSetting(db, 'app_base_url', ''),
     publicReadEnabled: getSetting(db, 'public_read_enabled', true),
-    weather: getSetting(db, 'weather', null)
+    weather: getSetting(db, 'weather', null),
+    appearance: getAppearance(db)
   };
+}
+
+const THEME_PRESET_FORMAT = 'home-lab-launcher-theme-v1';
+const HEX_COLOR_RE = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const APPEARANCE_COLOR_KEYS = ['background', 'surface', 'surface2', 'surface3', 'text', 'mutedText', 'quietText', 'border', 'borderStrong', 'primary', 'primaryInk', 'success', 'warning', 'danger'];
+const CSS_COLOR_VARIABLES = {
+  background: '--bg',
+  surface: '--surface',
+  surface2: '--surface-2',
+  surface3: '--surface-3',
+  text: '--ink',
+  mutedText: '--muted',
+  quietText: '--quiet',
+  border: '--line',
+  borderStrong: '--line-strong',
+  primary: '--primary',
+  primaryInk: '--primary-ink',
+  success: '--success',
+  warning: '--warning',
+  danger: '--danger'
+};
+
+function deepMerge(base, override) {
+  const out = { ...base };
+  for (const [key, value] of Object.entries(override || {})) {
+    if (value && typeof value === 'object' && !Array.isArray(value) && base[key] && typeof base[key] === 'object' && !Array.isArray(base[key])) out[key] = deepMerge(base[key], value);
+    else if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
+function cleanText(value, fallback = '', max = 240) {
+  const cleaned = String(value ?? fallback).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, max);
+  return cleaned || String(fallback || '').slice(0, max);
+}
+
+function cleanAssetUrl(value) {
+  const str = String(value || '').trim();
+  if (!str) return '';
+  if (/^\/api\/app-assets\/[a-f0-9]{64}\.(jpg|png|gif|webp)$/i.test(str)) return str;
+  return '';
+}
+
+function sanitizeAppearance(input = {}, { partial = false } = {}) {
+  const merged = partial ? deepMerge(DEFAULT_APPEARANCE, input || {}) : deepMerge(DEFAULT_APPEARANCE, input || {});
+  const brand = merged.brand || {};
+  const hero = merged.hero || {};
+  const theme = merged.theme || {};
+  const colors = {};
+  for (const key of APPEARANCE_COLOR_KEYS) {
+    const color = theme.colors?.[key];
+    if (color === '' || color === undefined || color === null) continue;
+    if (!HEX_COLOR_RE.test(String(color))) throw new Error(`Invalid theme color: ${key}`);
+    colors[key] = String(color);
+  }
+  const mode = ['dark', 'light', 'system'].includes(theme.mode) ? theme.mode : DEFAULT_APPEARANCE.theme.mode;
+  const fontFamily = ['system', 'inter', 'serif', 'mono', 'custom'].includes(theme.fontFamily) ? theme.fontFamily : DEFAULT_APPEARANCE.theme.fontFamily;
+  const density = ['compact', 'comfortable', 'spacious'].includes(theme.density) ? theme.density : DEFAULT_APPEARANCE.theme.density;
+  const radius = ['square', 'rounded', 'soft'].includes(theme.radius) ? theme.radius : DEFAULT_APPEARANCE.theme.radius;
+  return {
+    version: 1,
+    brand: {
+      appName: cleanText(brand.appName, DEFAULT_APPEARANCE.brand.appName, 80),
+      pageTitle: cleanText(brand.pageTitle, brand.appName || DEFAULT_APPEARANCE.brand.pageTitle, 120),
+      brandText: cleanText(brand.brandText, brand.appName || DEFAULT_APPEARANCE.brand.brandText, 80),
+      brandSubtitle: cleanText(brand.brandSubtitle, DEFAULT_APPEARANCE.brand.brandSubtitle, 120),
+      brandMarkText: cleanText(brand.brandMarkText, DEFAULT_APPEARANCE.brand.brandMarkText, 8),
+      faviconUrl: cleanAssetUrl(brand.faviconUrl),
+      brandIconUrl: cleanAssetUrl(brand.brandIconUrl),
+      heroImageUrl: cleanAssetUrl(brand.heroImageUrl),
+      footerNote: cleanText(brand.footerNote, '', 180)
+    },
+    hero: {
+      eyebrow: cleanText(hero.eyebrow, DEFAULT_APPEARANCE.hero.eyebrow, 80),
+      heading: cleanText(hero.heading, DEFAULT_APPEARANCE.hero.heading, 140),
+      subheading: cleanText(hero.subheading, DEFAULT_APPEARANCE.hero.subheading, 420)
+    },
+    theme: {
+      mode,
+      fontFamily,
+      customFontFamily: cleanText(theme.customFontFamily, '', 160).replace(/[;{}<>]/g, ''),
+      density,
+      radius,
+      colors,
+      cssVariables: Object.fromEntries(Object.entries(colors).map(([key, value]) => [CSS_COLOR_VARIABLES[key], value]).filter(([key]) => key))
+    }
+  };
+}
+
+function getAppearance(db) {
+  try {
+    return sanitizeAppearance(getSetting(db, 'appearance', DEFAULT_APPEARANCE));
+  } catch {
+    return sanitizeAppearance(DEFAULT_APPEARANCE);
+  }
+}
+
+function getThemePresets(db) {
+  const stored = getSetting(db, 'theme_presets', []);
+  const presets = Array.isArray(stored) ? stored : [];
+  return presets.map((preset) => {
+    try {
+      return {
+        id: slug(preset.id || preset.name || crypto.randomUUID()),
+        name: cleanText(preset.name, 'Untitled theme', 80),
+        description: cleanText(preset.description, '', 240),
+        appearance: sanitizeAppearance(preset.appearance || {}),
+        createdAt: preset.createdAt || new Date().toISOString(),
+        updatedAt: preset.updatedAt || preset.createdAt || new Date().toISOString()
+      };
+    } catch {
+      return null;
+    }
+  }).filter(Boolean);
 }
 
 
@@ -83,6 +198,7 @@ function fileSize(file) {
 }
 
 const SERVICE_ICON_MAX_BYTES = 5 * 1024 * 1024;
+const APP_ASSET_MAX_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIME_EXTENSIONS = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
@@ -94,9 +210,11 @@ function serviceIconDir(dataDir) {
   return path.join(dataDir, 'service-icons');
 }
 
+function appAssetDir(dataDir) {
+  return path.join(dataDir, 'app-assets');
+}
+
 function detectImageMime(buffer, contentType = '') {
-  const hinted = String(contentType || '').split(';')[0].trim().toLowerCase();
-  if (IMAGE_MIME_EXTENSIONS[hinted]) return hinted;
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buffer.length >= 6 && ['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii'))) return 'image/gif';
@@ -131,12 +249,8 @@ async function downloadServiceIcon(dataDir, value) {
   let parsed;
   try { parsed = new URL(String(value)); } catch { throw new Error('Icon URL is invalid'); }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Icon URL must use http or https');
-  const response = await fetch(parsed, { redirect: 'follow', headers: { 'User-Agent': 'home-lab-launcher' } });
-  if (!response.ok) throw new Error(`Could not download icon image: HTTP ${response.status}`);
-  const contentLength = Number(response.headers.get('content-length') || 0);
-  if (contentLength > SERVICE_ICON_MAX_BYTES) throw new Error('Icon image must be 5 MiB or smaller');
-  const buffer = Buffer.from(await response.arrayBuffer());
-  return saveServiceIconBuffer(dataDir, buffer, response.headers.get('content-type') || '');
+  const { buffer, contentType } = await downloadImageWithLimit(parsed, SERVICE_ICON_MAX_BYTES, 'Icon');
+  return saveServiceIconBuffer(dataDir, buffer, contentType);
 }
 
 function saveServiceIconDataUrl(dataDir, dataUrl) {
@@ -155,13 +269,82 @@ async function normalizeServiceIcon(dataDir, body, fallback = '🔗') {
   return icon.slice(0, 512);
 }
 
+function saveAppAssetBuffer(dataDir, buffer, contentType) {
+  if (!buffer.length) throw new Error('Asset image is empty');
+  if (buffer.length > APP_ASSET_MAX_BYTES) throw new Error('Asset image must be 5 MiB or smaller');
+  const mime = detectImageMime(buffer, contentType);
+  if (!mime) throw new Error('Asset image must be JPEG, PNG, GIF, or WebP');
+  const dir = appAssetDir(dataDir);
+  fs.mkdirSync(dir, { recursive: true });
+  const hash = crypto.createHash('sha256').update(buffer).digest('hex');
+  const filename = `${hash}.${IMAGE_MIME_EXTENSIONS[mime]}`;
+  const destination = path.join(dir, filename);
+  if (!fs.existsSync(destination)) fs.writeFileSync(destination, buffer);
+  return `/api/app-assets/${filename}`;
+}
+
+function saveAppAssetDataUrl(dataDir, dataUrl) {
+  const match = String(dataUrl || '').match(/^data:([^;,]+);base64,(.+)$/);
+  if (!match) throw new Error('Uploaded asset image is invalid');
+  const mime = match[1].toLowerCase();
+  if (!IMAGE_MIME_EXTENSIONS[mime]) throw new Error('Asset image must be JPEG, PNG, GIF, or WebP');
+  return saveAppAssetBuffer(dataDir, Buffer.from(match[2], 'base64'), mime);
+}
+
+async function downloadAppAsset(dataDir, value) {
+  let parsed;
+  try { parsed = new URL(String(value)); } catch { throw new Error('Asset URL is invalid'); }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Asset URL must use http or https');
+  const { buffer, contentType } = await downloadImageWithLimit(parsed, APP_ASSET_MAX_BYTES, 'Asset');
+  return saveAppAssetBuffer(dataDir, buffer, contentType);
+}
+
+async function downloadImageWithLimit(url, maxBytes, label) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10000);
+  try {
+    const response = await fetch(url, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'home-lab-launcher' } });
+    if (!response.ok) throw new Error(`Could not download ${label.toLowerCase()} image: HTTP ${response.status}`);
+    const contentLength = Number(response.headers.get('content-length') || 0);
+    if (contentLength > maxBytes) throw new Error(`${label} image must be 5 MiB or smaller`);
+    const chunks = [];
+    let total = 0;
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        total += value.byteLength;
+        if (total > maxBytes) {
+          controller.abort();
+          throw new Error(`${label} image must be 5 MiB or smaller`);
+        }
+        chunks.push(Buffer.from(value));
+      }
+      return { buffer: Buffer.concat(chunks, total), contentType: response.headers.get('content-type') || '' };
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length > maxBytes) throw new Error(`${label} image must be 5 MiB or smaller`);
+    return { buffer, contentType: response.headers.get('content-type') || '' };
+  } catch (error) {
+    if (error.name === 'AbortError') throw new Error(`${label} image download timed out`);
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function configWarnings(db, { dataDir, pluginDir }) {
   const settings = publicSettings(db);
   const warnings = [];
+  const nodeEnv = process.env.NODE_ENV || 'development';
+  const localPluginEnabled = nodeEnv !== 'production' || process.env.ENABLE_LOCAL_PLUGIN_INSTALL === 'true';
   if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.includes('change-this') || process.env.SESSION_SECRET.includes('dev-only')) warnings.push({ level: 'high', message: 'SESSION_SECRET is missing or still set to a default value.' });
   if (process.env.BOOTSTRAP_ADMIN_PASSWORD && ['change-me-immediately', 'change-me', 'password'].includes(process.env.BOOTSTRAP_ADMIN_PASSWORD)) warnings.push({ level: 'high', message: 'Bootstrap admin password still appears to be a default value.' });
-  if (settings.appBaseUrl && settings.appBaseUrl.startsWith('http://') && process.env.NODE_ENV === 'production') warnings.push({ level: 'medium', message: 'APP_BASE_URL uses HTTP in production. Use HTTPS behind a reverse proxy when possible.' });
-  if (!settings.appBaseUrl) warnings.push({ level: 'medium', message: 'APP_BASE_URL is not configured.' });
+  if (!process.env.APP_BASE_URL) warnings.push({ level: 'medium', message: 'APP_BASE_URL is not configured in the environment.' });
+  if (settings.appBaseUrl && settings.appBaseUrl.startsWith('http://') && nodeEnv === 'production') warnings.push({ level: 'medium', message: 'Production is configured over plain HTTP. Use HTTPS behind a reverse proxy when possible.' });
+  if (settings.publicReadEnabled) warnings.push({ level: 'low', message: 'Anonymous read-only access is enabled. Review this before exposing the launcher publicly.' });
+  if (localPluginEnabled) warnings.push({ level: nodeEnv === 'production' ? 'high' : 'low', message: 'Local plugin install is enabled. Plugins are trusted Admin-installed server-side code.' });
   if (!fs.existsSync(dataDir)) warnings.push({ level: 'high', message: `Data directory does not exist: ${dataDir}` });
   if (!fs.existsSync(pluginDir)) warnings.push({ level: 'low', message: `Plugin directory does not exist yet: ${pluginDir}` });
   return warnings;
@@ -250,6 +433,50 @@ function buildBackup(db) {
   };
 }
 
+
+function previewConfigBackup(db, backup) {
+  if (!backup || backup.format !== 'home-lab-launcher-config-v1') throw new Error('Unsupported backup format');
+  const settings = backup.settings && typeof backup.settings === 'object' ? backup.settings : {};
+  const services = Array.isArray(backup.services) ? backup.services : [];
+  const plugins = Array.isArray(backup.plugins) ? backup.plugins : [];
+  const users = Array.isArray(backup.users) ? backup.users : [];
+  const currentServiceIds = new Set(db.prepare('SELECT id FROM services').all().map((row) => row.id));
+  const incomingServiceIds = new Set();
+  let validServices = 0;
+  let invalidServices = 0;
+  let serviceConflicts = 0;
+  for (const service of services) {
+    const id = slug(service?.id || service?.name || '');
+    if (!service?.name || !service?.url || !validateUrl(service.url) || incomingServiceIds.has(id)) {
+      invalidServices += 1;
+      continue;
+    }
+    validServices += 1;
+    incomingServiceIds.add(id);
+    if (currentServiceIds.has(id)) serviceConflicts += 1;
+  }
+  return {
+    format: backup.format,
+    appVersion: backup.appVersion || null,
+    exportedAt: backup.exportedAt || null,
+    counts: {
+      settings: Object.keys(settings).length,
+      services: services.length,
+      validServices,
+      invalidServices,
+      serviceConflicts,
+      servicesToAdd: [...incomingServiceIds].filter((id) => !currentServiceIds.has(id)).length,
+      servicesToReplace: serviceConflicts,
+      currentServices: currentServiceIds.size,
+      plugins: plugins.length,
+      users: users.length
+    },
+    warnings: [
+      'Restore applies settings and services only; users, password hashes, sessions, and plugin code are not imported.',
+      services.length ? 'Current services will be replaced by valid services from the backup.' : 'Backup contains no services; existing services will be left unchanged.'
+    ].concat(invalidServices ? [`${invalidServices} invalid or duplicate service entries will be skipped.`] : [])
+  };
+}
 
 function safeJsonParse(value, fallback = {}) {
   try { return JSON.parse(value); } catch { return fallback; }
@@ -409,6 +636,10 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     res.json({ needsBootstrap: count === 0 });
   });
 
+  router.get('/healthz', (req, res) => {
+    res.json({ ok: true, version: packageJson.version, uptimeSeconds: Math.round(process.uptime()) });
+  });
+
   router.post('/bootstrap', express.json(), (req, res) => {
     const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
     if (count !== 0) return res.status(409).json({ error: 'Bootstrap already completed' });
@@ -460,7 +691,6 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   });
 
   router.get('/settings/public', (req, res) => {
-    if (!canRead(req, db)) return res.status(401).json({ error: 'Authentication required' });
     res.json(publicSettings(db));
   });
 
@@ -506,8 +736,155 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     for (const key of allowed) {
       if (Object.prototype.hasOwnProperty.call(req.body, key)) setSetting(db, key, req.body[key]);
     }
+    if (Object.prototype.hasOwnProperty.call(req.body, 'app_name')) {
+      const appName = cleanText(req.body.app_name, 'Home Lab Launcher', 80);
+      const appearance = getAppearance(db);
+      setSetting(db, 'appearance', sanitizeAppearance({
+        ...appearance,
+        brand: {
+          ...appearance.brand,
+          appName,
+          pageTitle: appName,
+          brandText: appName
+        }
+      }));
+    }
     logEvent(db, req, 'settings.updated', req.body);
     res.json({ ok: true });
+  });
+
+  router.get('/admin/appearance', requireRole('admin'), (req, res) => {
+    res.json({ appearance: getAppearance(db), presets: getThemePresets(db) });
+  });
+
+  router.put('/admin/appearance', requireRole('admin'), express.json({ limit: '1mb' }), (req, res) => {
+    try {
+      const appearance = sanitizeAppearance(req.body.appearance || req.body || {});
+      setSetting(db, 'appearance', appearance);
+      if (appearance.brand?.appName) setSetting(db, 'app_name', appearance.brand.appName);
+      logEvent(db, req, 'appearance.updated', { appName: appearance.brand.appName });
+      res.json({ appearance });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.post('/admin/appearance/reset', requireRole('admin'), (req, res) => {
+    const appName = getSetting(db, 'app_name', DEFAULT_APPEARANCE.brand.appName);
+    const appearance = sanitizeAppearance({ ...DEFAULT_APPEARANCE, brand: { ...DEFAULT_APPEARANCE.brand, appName, pageTitle: appName, brandText: appName } });
+    setSetting(db, 'appearance', appearance);
+    logEvent(db, req, 'appearance.reset');
+    res.json({ appearance });
+  });
+
+  router.post('/app-assets', requireRole('admin'), express.json({ limit: '7mb' }), async (req, res) => {
+    try {
+      let url = '';
+      if (req.body.assetData) url = saveAppAssetDataUrl(dataDir, req.body.assetData);
+      else if (req.body.url) url = await downloadAppAsset(dataDir, req.body.url);
+      else throw new Error('assetData or url is required');
+      logEvent(db, req, 'app_asset.created', { url });
+      res.status(201).json({ url });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.get('/admin/theme-presets', requireRole('admin'), (req, res) => {
+    res.json({ presets: getThemePresets(db) });
+  });
+
+  router.post('/admin/theme-presets', requireRole('admin'), express.json({ limit: '1mb' }), (req, res) => {
+    try {
+      const presets = getThemePresets(db);
+      const rootId = slug(req.body.id || req.body.name || 'theme');
+      let id = rootId;
+      let i = 2;
+      while (presets.some((item) => item.id === id)) id = `${rootId}-${i++}`;
+      const preset = {
+        id,
+        name: cleanText(req.body.name, 'Untitled theme', 80),
+        description: cleanText(req.body.description, '', 240),
+        appearance: sanitizeAppearance(req.body.appearance || getAppearance(db)),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      presets.push(preset);
+      setSetting(db, 'theme_presets', presets);
+      logEvent(db, req, 'theme_preset.created', { id: preset.id, name: preset.name });
+      res.status(201).json({ preset });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.patch('/admin/theme-presets/:id', requireRole('admin'), express.json({ limit: '1mb' }), (req, res) => {
+    try {
+      const presets = getThemePresets(db);
+      const index = presets.findIndex((preset) => preset.id === req.params.id);
+      if (index < 0) return res.status(404).json({ error: 'Preset not found' });
+      const next = { ...presets[index] };
+      if (Object.prototype.hasOwnProperty.call(req.body, 'name')) next.name = cleanText(req.body.name, next.name, 80);
+      if (Object.prototype.hasOwnProperty.call(req.body, 'description')) next.description = cleanText(req.body.description, next.description, 240);
+      if (Object.prototype.hasOwnProperty.call(req.body, 'appearance')) next.appearance = sanitizeAppearance(req.body.appearance);
+      next.updatedAt = new Date().toISOString();
+      presets[index] = next;
+      setSetting(db, 'theme_presets', presets);
+      logEvent(db, req, 'theme_preset.updated', { id: next.id });
+      res.json({ preset: next });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.post('/admin/theme-presets/:id/apply', requireRole('admin'), (req, res) => {
+    const preset = getThemePresets(db).find((item) => item.id === req.params.id);
+    if (!preset) return res.status(404).json({ error: 'Preset not found' });
+    setSetting(db, 'appearance', preset.appearance);
+    if (preset.appearance.brand?.appName) setSetting(db, 'app_name', preset.appearance.brand.appName);
+    logEvent(db, req, 'theme_preset.applied', { id: preset.id });
+    res.json({ appearance: preset.appearance });
+  });
+
+  router.delete('/admin/theme-presets/:id', requireRole('admin'), (req, res) => {
+    const before = getThemePresets(db);
+    const presets = before.filter((preset) => preset.id !== req.params.id);
+    if (presets.length === before.length) return res.status(404).json({ error: 'Preset not found' });
+    setSetting(db, 'theme_presets', presets);
+    logEvent(db, req, 'theme_preset.deleted', { id: req.params.id });
+    res.json({ ok: true });
+  });
+
+  router.get('/admin/theme-presets/:id/export', requireRole('admin'), (req, res) => {
+    const preset = getThemePresets(db).find((item) => item.id === req.params.id);
+    if (!preset) return res.status(404).json({ error: 'Preset not found' });
+    logEvent(db, req, 'theme_preset.exported', { id: preset.id });
+    res.json({ format: THEME_PRESET_FORMAT, name: preset.name, description: preset.description, appearance: preset.appearance });
+  });
+
+  router.post('/admin/theme-presets/import', requireRole('admin'), express.json({ limit: '1mb' }), (req, res) => {
+    try {
+      if (req.body.format !== THEME_PRESET_FORMAT) throw new Error('Unsupported theme preset format');
+      const preset = {
+        id: slug(req.body.name || 'theme'),
+        name: cleanText(req.body.name, 'Imported theme', 80),
+        description: cleanText(req.body.description, '', 240),
+        appearance: sanitizeAppearance(req.body.appearance || {}),
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      const presets = getThemePresets(db);
+      let id = slug(preset.name);
+      let i = 2;
+      while (presets.some((item) => item.id === id)) id = `${slug(preset.name)}-${i++}`;
+      preset.id = id;
+      presets.push(preset);
+      setSetting(db, 'theme_presets', presets);
+      logEvent(db, req, 'theme_preset.imported', { id: preset.id });
+      res.status(201).json({ preset });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
   });
 
   router.get('/admin/overview', requireRole('admin'), (req, res) => {
@@ -578,12 +955,21 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
 
   router.post('/admin/restore', requireRole('admin'), express.json({ limit: '5mb' }), async (req, res) => {
     try {
+      if (req.query.preview === 'true') return res.json({ preview: previewConfigBackup(db, req.body) });
       const result = applyConfigBackup(db, req.body);
       await pluginManager.reload();
       logEvent(db, req, 'backup.restored', result, 'warn');
       res.json({ ok: true, restored: result });
     } catch (error) {
       logEvent(db, req, 'backup.restore_failed', { error: error.message }, 'error');
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  router.post('/admin/restore/preview', requireRole('admin'), express.json({ limit: '5mb' }), (req, res) => {
+    try {
+      res.json({ preview: previewConfigBackup(db, req.body) });
+    } catch (error) {
       res.status(400).json({ error: error.message });
     }
   });
@@ -633,6 +1019,12 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     const filename = path.basename(req.params.filename || '');
     if (!/^[a-f0-9]{64}\.(jpg|png|gif|webp)$/.test(filename)) return res.status(404).end();
     res.sendFile(path.join(serviceIconDir(dataDir), filename));
+  });
+
+  router.get('/app-assets/:filename', (req, res) => {
+    const filename = path.basename(req.params.filename || '');
+    if (!/^[a-f0-9]{64}\.(jpg|png|gif|webp)$/.test(filename)) return res.status(404).end();
+    res.sendFile(path.join(appAssetDir(dataDir), filename));
   });
 
   router.get('/services', (req, res) => {
@@ -719,6 +1111,23 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     }
   });
 
+  router.post('/services/test-url', requireRole('admin', 'editor'), express.json(), async (req, res) => {
+    const target = String(req.body.url || '').trim();
+    if (!validateUrl(target)) return res.status(400).json({ error: 'URL must be http or https' });
+    const started = Date.now();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    try {
+      let response = await fetch(target, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
+      if (response.status === 405 || response.status === 403) response = await fetch(target, { method: 'GET', redirect: 'follow', signal: controller.signal });
+      res.json({ ok: response.status >= 200 && response.status < 400, status: healthStatusFrom(response.status), statusCode: response.status, responseMs: Date.now() - started, url: target });
+    } catch (error) {
+      res.json({ ok: false, status: 'down', error: error.name === 'AbortError' ? 'Request timed out' : error.message, responseMs: Date.now() - started, url: target });
+    } finally {
+      clearTimeout(timeout);
+    }
+  });
+
   router.post('/services/:id/check', requireRole('admin', 'editor'), async (req, res) => {
     const row = db.prepare(serviceSelectSql('WHERE s.id = ?')).get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Service not found' });
@@ -753,6 +1162,11 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     const services = Array.isArray(req.body.services) ? req.body.services : [];
     const mode = req.body.mode === 'replace' ? 'replace' : 'upsert';
     if (!services.length) return res.status(400).json({ error: 'No services supplied' });
+    const existingIds = new Set(db.prepare('SELECT id FROM services').all().map((row) => row.id));
+    const incomingIds = services.map((service) => slug(service.id || service.name));
+    const duplicateIncomingIds = incomingIds.filter((id, index) => incomingIds.indexOf(id) !== index);
+    if (duplicateIncomingIds.length) return res.status(400).json({ error: `Duplicate service IDs in import: ${[...new Set(duplicateIncomingIds)].join(', ')}` });
+    const conflicts = mode === 'replace' ? [] : incomingIds.filter((id) => existingIds.has(id));
     const upsert = db.prepare(`
       INSERT INTO services (id, name, icon, url, category, accent, description, tags_json, sort_order, featured, enabled, health_check_enabled, health_check_url, health_check_interval_minutes)
       VALUES (@id, @name, @icon, @url, @category, @accent, @description, @tags_json, @sort_order, @featured, @enabled, @health_check_enabled, @health_check_url, @health_check_interval_minutes)
@@ -781,8 +1195,9 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
       });
     });
     try { tx(); } catch (error) { return res.status(400).json({ error: error.message }); }
-    logEvent(db, req, 'services.imported', { count: services.length, mode });
-    res.json({ ok: true, count: services.length, mode });
+    const summary = { total: services.length, created: mode === 'replace' ? services.length : services.length - conflicts.length, updated: conflicts.length, conflicts };
+    logEvent(db, req, 'services.imported', { count: services.length, mode, summary });
+    res.json({ ok: true, count: services.length, mode, summary });
   });
   router.get('/users', requireRole('admin'), (req, res) => {
     const users = db.prepare('SELECT id, username, role, created_at AS createdAt FROM users ORDER BY username').all();
@@ -839,6 +1254,14 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     res.json({ ok: true });
   });
 
+  router.delete('/me/preferences/:key', requireAuth, (req, res) => {
+    const allowed = new Set(['favorites', 'launchpad']);
+    if (!allowed.has(req.params.key)) return res.status(400).json({ error: 'Unsupported preference key' });
+    const result = db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(req.session.user.id, req.params.key);
+    logEvent(db, req, 'profile.preferences_reset', { key: req.params.key, changed: result.changes });
+    res.json({ ok: true, changed: result.changes });
+  });
+
   router.get('/weather', async (req, res) => {
     if (!canRead(req, db)) return res.status(401).json({ error: 'Authentication required' });
     try {
@@ -848,10 +1271,11 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
       url.searchParams.set('latitude', cfg.latitude);
       url.searchParams.set('longitude', cfg.longitude);
       url.searchParams.set('current', 'temperature_2m,apparent_temperature,weather_code,is_day,wind_speed_10m');
-      url.searchParams.set('daily', 'temperature_2m_max,temperature_2m_min');
+      url.searchParams.set('hourly', 'temperature_2m,weather_code,precipitation_probability,is_day');
+      url.searchParams.set('daily', 'weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max');
       url.searchParams.set('temperature_unit', units);
       url.searchParams.set('wind_speed_unit', units === 'fahrenheit' ? 'mph' : 'kmh');
-      url.searchParams.set('forecast_days', '1');
+      url.searchParams.set('forecast_days', '7');
       url.searchParams.set('timezone', 'auto');
       const response = await fetch(url);
       if (!response.ok) throw new Error('weather lookup failed');
@@ -898,6 +1322,12 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     logEvent(db, req, 'weather.updated', cfg);
     res.json({ weather: cfg });
   });
+
+  function requirePluginTrustConfirmation(req, res) {
+    if (req.body?.trustConfirmed === true) return false;
+    res.status(400).json({ error: 'Plugin install/update requires explicit trust confirmation. Plugins are trusted code and can run server-side.' });
+    return true;
+  }
 
   router.get('/plugins', requireAuth, async (req, res) => {
     let updates = [];
@@ -949,6 +1379,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   });
 
   router.post('/plugins/install', requireRole('admin'), express.json(), async (req, res) => {
+    if (requirePluginTrustConfirmation(req, res)) return;
     try {
       const plugin = await pluginManager.installFromGithub(req.body.repoUrl, req.body.version);
       await pluginManager.reload();
@@ -962,6 +1393,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   });
 
   router.post('/plugins/install-local', requireRole('admin'), express.json(), async (req, res) => {
+    if (requirePluginTrustConfirmation(req, res)) return;
     try {
       const plugin = await pluginManager.installFromLocal(req.body.path);
       await pluginManager.reload();
@@ -975,6 +1407,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   });
 
   router.post('/plugins/:id/update', requireRole('admin'), express.json(), async (req, res) => {
+    if (requirePluginTrustConfirmation(req, res)) return;
     const previous = db.prepare('SELECT * FROM plugins WHERE id = ?').get(req.params.id);
     if (!previous) return res.status(404).json({ error: 'Plugin not found' });
     if (previous.source_type !== 'github') return res.status(400).json({ error: 'Only GitHub plugins can be updated through this flow' });

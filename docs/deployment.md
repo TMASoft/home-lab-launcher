@@ -166,8 +166,9 @@ docker compose ps
 ### Validate API health manually
 
 ```bash
-curl -fsS http://localhost:8080/api/auth/session
-curl -fsS http://localhost:8080/api/services
+curl -fsS http://localhost:8080/api/healthz
+curl -fsS http://localhost:8080/api/bootstrap-status
+curl -fsS http://localhost:8080/api/settings/public
 ```
 
 ### Management-plane checks
@@ -185,3 +186,13 @@ If you see a native module or GLIBC error, make sure `node_modules/` is not copi
 ```bash
 docker compose build --no-cache launcher
 ```
+
+## Public beta hardening notes
+
+Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings for these items.
+
+Remote service icons and branding images are fetched by the server for Admin/Editor actions with timeouts and size limits. Treat arbitrary remote URLs as trusted-operator inputs. SVG uploads are intentionally rejected for service and branding images.
+
+## Content Security Policy note
+
+The app sets a restrictive CSP and continues to allow `style-src 'unsafe-inline'` for beta because the vanilla UI applies saved theme variables and a few runtime preview styles directly. Script sources remain `self` only, object embedding is disabled, and frame ancestors are blocked.
