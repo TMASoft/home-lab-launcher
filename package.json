@@ -7,11 +7,12 @@
   "scripts": {
     "start": "node src/server/index.js",
     "dev": "NODE_ENV=development node --watch src/server/index.js",
-    "check": "node --check src/server/index.js && node --check src/server/db.js && node --check src/server/plugins.js && node --check src/server/routes.js && node --check src/server/session-store.js && node --check src/public/app.js",
+    "check": "node --check src/server/index.js && node --check src/server/db.js && node --check src/server/plugins.js && node --check src/server/routes.js && node --check src/server/server-fetch.js && node --check src/server/session-store.js && node --check src/public/app.js",
     "test": "node --test test/*.test.js",
     "test:api": "node --test test/api.test.js",
     "test:frontend": "node --test test/frontend-smoke.test.js",
-    "audit:ci": "npm audit --omit=dev --audit-level=high"
+    "audit:ci": "npm audit --omit=dev --audit-level=high",
+    "release:check": "sh scripts/release-check.sh"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -23,6 +24,6 @@
     "tar": "^7.4.3"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20 <23"
   }
 }

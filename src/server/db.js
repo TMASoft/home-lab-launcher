@@ -158,6 +158,13 @@ function setSetting(db, key, value) {
   `).run(key, JSON.stringify(value));
 }
 
+function envNumber(name, fallback = null) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function seed(db) {
   const serviceCount = db.prepare('SELECT COUNT(*) AS count FROM services').get().count;
   if (serviceCount === 0) {
@@ -174,11 +181,11 @@ function seed(db) {
   const defaults = {
     app_name: process.env.APP_NAME || 'Home Lab Launcher',
     app_base_url: process.env.APP_BASE_URL || 'http://localhost:8080',
-    public_read_enabled: String(process.env.PUBLIC_READ_ENABLED || 'true') !== 'false',
+    public_read_enabled: process.env.PUBLIC_READ_ENABLED === 'true',
     weather: {
-      label: process.env.WEATHER_LOCATION_LABEL || 'Bellows Falls, VT 05101',
-      latitude: Number(process.env.WEATHER_LATITUDE || 43.13341),
-      longitude: Number(process.env.WEATHER_LONGITUDE || -72.44398),
+      label: process.env.WEATHER_LOCATION_LABEL || '',
+      latitude: envNumber('WEATHER_LATITUDE'),
+      longitude: envNumber('WEATHER_LONGITUDE'),
       units: process.env.WEATHER_UNITS || 'fahrenheit',
       resolvedAt: null
     },

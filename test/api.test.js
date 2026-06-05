@@ -17,7 +17,7 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   assert.equal(publicSettings.publicReadEnabled, true);
 
   const admin = new Client(server.baseUrl);
-  const login = await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'change-me-immediately' } });
+  const login = await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
   assert.equal(login.user.role, 'admin');
   assert.ok(admin.csrfToken);
 
@@ -136,4 +136,34 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   });
   const fallbackSettings = await anon.request('/api/settings/public');
   assert.equal(fallbackSettings.appearance.brand.appName, 'Home Lab Launcher');
+});
+
+
+test('server-side private-network fetches can be restricted by role', async (t) => {
+  const server = startServer({ port: 19103, env: { SERVER_FETCH_PRIVATE_NETWORK_ACCESS: 'admin' } });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  await admin.request('/api/users', { method: 'POST', body: { username: 'editor', password: 'change-me-editor', role: 'editor' } });
+
+  const editor = new Client(server.baseUrl);
+  await editor.request('/api/auth/login', { method: 'POST', body: { username: 'editor', password: 'change-me-editor' } });
+
+  const adminUrlTest = await admin.request('/api/services/test-url', { method: 'POST', body: { url: `${server.baseUrl}/api/healthz` } });
+  assert.equal(adminUrlTest.status, 'up');
+
+  const editorUrlTest = await editor.request('/api/services/test-url', { method: 'POST', body: { url: `${server.baseUrl}/api/healthz` } });
+  assert.equal(editorUrlTest.ok, false);
+  assert.match(editorUrlTest.error, /private, loopback, link-local, or reserved network address/);
+
+  await assert.rejects(
+    () => editor.request('/api/services', { method: 'POST', body: { name: 'Blocked Icon', url: 'https://example.com', icon: `${server.baseUrl}/api/healthz` } }),
+    /private, loopback, link-local, or reserved network address/
+  );
+
+  const config = await admin.request('/api/admin/config');
+  assert.equal(config.config.serverFetch.privateNetworkAccess, 'admin');
+  assert.deepEqual(config.config.serverFetch.privateNetworkRoles, ['admin']);
 });

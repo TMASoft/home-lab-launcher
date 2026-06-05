@@ -6,6 +6,9 @@ const tar = require('tar');
 const { XMLParser } = require('fast-xml-parser');
 
 const LAUNCHER_PLUGIN_API_VERSION = 1;
+const MAX_PLUGIN_TARBALL_BYTES = 25 * 1024 * 1024;
+const MAX_PLUGIN_EXTRACTED_BYTES = 100 * 1024 * 1024;
+const MAX_PLUGIN_FILES = 2000;
 
 function parseGithubRepo(input) {
   const value = String(input || '').trim();
@@ -20,6 +23,40 @@ function safeJson(value, fallback = {}) {
 
 function hashBuffer(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+
+function strippedTarPath(entryPath, strip = 1) {
+  const parts = String(entryPath || '').split('/').filter(Boolean).slice(strip);
+  return parts.join('/');
+}
+
+function validateTarEntryPath(relativePath) {
+  if (!relativePath) return true;
+  if (path.isAbsolute(relativePath)) throw new Error('Plugin archive contains an absolute path');
+  const normalized = path.normalize(relativePath);
+  if (normalized === '..' || normalized.startsWith(`..${path.sep}`) || normalized.includes(`${path.sep}..${path.sep}`)) {
+    throw new Error('Plugin archive contains a parent-directory traversal path');
+  }
+  return true;
+}
+
+function createPluginTarSafetyFilter({ strip = 1 } = {}) {
+  let fileCount = 0;
+  let totalSize = 0;
+  return (entryPath, entry) => {
+    const relativePath = strippedTarPath(entryPath, strip);
+    validateTarEntryPath(relativePath);
+    if (!relativePath) return true;
+    fileCount += 1;
+    if (fileCount > MAX_PLUGIN_FILES) throw new Error(`Plugin archive contains more than ${MAX_PLUGIN_FILES} entries`);
+    const type = entry?.type || 'File';
+    if (['SymbolicLink', 'Link'].includes(type)) throw new Error('Plugin archive may not contain symbolic or hard links');
+    if (!['File', 'Directory'].includes(type)) throw new Error(`Plugin archive contains unsupported entry type: ${type}`);
+    totalSize += Number(entry?.size || 0);
+    if (totalSize > MAX_PLUGIN_EXTRACTED_BYTES) throw new Error(`Plugin archive expands beyond ${Math.round(MAX_PLUGIN_EXTRACTED_BYTES / 1024 / 1024)} MiB`);
+    return true;
+  };
 }
 
 function validateManifest(manifest) {
@@ -261,11 +298,11 @@ class PluginManager {
     fs.rmSync(destination, { recursive: true, force: true });
     fs.mkdirSync(destination, { recursive: true });
     const tarUrl = `https://api.github.com/repos/${owner}/${repo}/tarball/${encodeURIComponent(version)}`;
-    const tarball = await fetchBufferWithLimit(tarUrl, { maxBytes: 25 * 1024 * 1024, timeoutMs: 20000, headers: { 'User-Agent': 'home-lab-launcher' } });
+    const tarball = await fetchBufferWithLimit(tarUrl, { maxBytes: MAX_PLUGIN_TARBALL_BYTES, timeoutMs: 20000, headers: { 'User-Agent': 'home-lab-launcher' } });
     const installedHash = hashBuffer(tarball);
     const tmpFile = path.join(this.pluginDir, `${owner}-${repo}-${safeVersion}.tgz`);
     fs.writeFileSync(tmpFile, tarball);
-    await tar.x({ file: tmpFile, cwd: destination, strip: 1 });
+    await tar.x({ file: tmpFile, cwd: destination, strip: 1, filter: createPluginTarSafetyFilter({ strip: 1 }) });
     fs.rmSync(tmpFile, { force: true });
     const manifestPath = path.join(destination, 'plugin.json');
     if (!fs.existsSync(manifestPath)) throw new Error('Plugin is missing plugin.json');

@@ -6,6 +6,7 @@ const express = require('express');
 const packageJson = require('../../package.json');
 const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
 const { issueCsrfToken } = require('./security');
+const { guardedFetch, serverFetchConfig, parsePrivateNetworkAccess } = require('./server-fetch');
 
 function serviceFromRow(row) {
   return {
@@ -245,11 +246,11 @@ function saveServiceIconBuffer(dataDir, buffer, contentType) {
   return `/api/service-icons/${filename}`;
 }
 
-async function downloadServiceIcon(dataDir, value) {
+async function downloadServiceIcon(dataDir, value, actorRole = 'editor') {
   let parsed;
   try { parsed = new URL(String(value)); } catch { throw new Error('Icon URL is invalid'); }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Icon URL must use http or https');
-  const { buffer, contentType } = await downloadImageWithLimit(parsed, SERVICE_ICON_MAX_BYTES, 'Icon');
+  const { buffer, contentType } = await downloadImageWithLimit(parsed, SERVICE_ICON_MAX_BYTES, 'Icon', actorRole);
   return saveServiceIconBuffer(dataDir, buffer, contentType);
 }
 
@@ -265,7 +266,7 @@ async function normalizeServiceIcon(dataDir, body, fallback = '🔗') {
   if (body.iconImageData) return saveServiceIconDataUrl(dataDir, body.iconImageData);
   const icon = String(body.icon || fallback || '🔗').trim();
   if (!icon) return '🔗';
-  if (isHttpUrl(icon)) return downloadServiceIcon(dataDir, icon);
+  if (isHttpUrl(icon)) return downloadServiceIcon(dataDir, icon, body.actorRole || 'editor');
   return icon.slice(0, 512);
 }
 
@@ -291,19 +292,19 @@ function saveAppAssetDataUrl(dataDir, dataUrl) {
   return saveAppAssetBuffer(dataDir, Buffer.from(match[2], 'base64'), mime);
 }
 
-async function downloadAppAsset(dataDir, value) {
+async function downloadAppAsset(dataDir, value, actorRole = 'admin') {
   let parsed;
   try { parsed = new URL(String(value)); } catch { throw new Error('Asset URL is invalid'); }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('Asset URL must use http or https');
-  const { buffer, contentType } = await downloadImageWithLimit(parsed, APP_ASSET_MAX_BYTES, 'Asset');
+  const { buffer, contentType } = await downloadImageWithLimit(parsed, APP_ASSET_MAX_BYTES, 'Asset', actorRole);
   return saveAppAssetBuffer(dataDir, buffer, contentType);
 }
 
-async function downloadImageWithLimit(url, maxBytes, label) {
+async function downloadImageWithLimit(url, maxBytes, label, actorRole = 'editor') {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   try {
-    const response = await fetch(url, { redirect: 'follow', signal: controller.signal, headers: { 'User-Agent': 'home-lab-launcher' } });
+    const response = await guardedFetch(url, { signal: controller.signal, headers: { 'User-Agent': 'home-lab-launcher' } }, { actorRole, label });
     if (!response.ok) throw new Error(`Could not download ${label.toLowerCase()} image: HTTP ${response.status}`);
     const contentLength = Number(response.headers.get('content-length') || 0);
     if (contentLength > maxBytes) throw new Error(`${label} image must be 5 MiB or smaller`);
@@ -334,17 +335,30 @@ async function downloadImageWithLimit(url, maxBytes, label) {
   }
 }
 
+function parseTrustProxySetting() {
+  const raw = String(process.env.TRUST_PROXY ?? 'false').trim();
+  if (!raw || raw === 'false' || raw === '0' || raw === 'off') return { enabled: false, value: false };
+  if (raw === 'true' || raw === 'on') return { enabled: true, value: true };
+  if (/^\d+$/.test(raw)) return { enabled: Number(raw) > 0, value: Number(raw) };
+  return { enabled: true, value: raw };
+}
+
 function configWarnings(db, { dataDir, pluginDir }) {
   const settings = publicSettings(db);
   const warnings = [];
   const nodeEnv = process.env.NODE_ENV || 'development';
   const localPluginEnabled = nodeEnv !== 'production' || process.env.ENABLE_LOCAL_PLUGIN_INSTALL === 'true';
-  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET.includes('change-this') || process.env.SESSION_SECRET.includes('dev-only')) warnings.push({ level: 'high', message: 'SESSION_SECRET is missing or still set to a default value.' });
-  if (process.env.BOOTSTRAP_ADMIN_PASSWORD && ['change-me-immediately', 'change-me', 'password'].includes(process.env.BOOTSTRAP_ADMIN_PASSWORD)) warnings.push({ level: 'high', message: 'Bootstrap admin password still appears to be a default value.' });
+  const trustProxy = parseTrustProxySetting();
+  const sessionSecret = String(process.env.SESSION_SECRET || '').trim().toLowerCase();
+  if (sessionSecret.length < 32 || ['change-this', 'changeme', 'example', 'dev-only'].some((value) => sessionSecret.includes(value))) warnings.push({ level: 'high', message: 'SESSION_SECRET is missing, too short, or still set to a default/example value.' });
+  if (process.env.BOOTSTRAP_ADMIN_PASSWORD && ['admin', 'change-me-immediately', 'change-me', 'changeme', 'password', 'password123'].includes(String(process.env.BOOTSTRAP_ADMIN_PASSWORD).trim().toLowerCase())) warnings.push({ level: 'high', message: 'Bootstrap admin password still appears to be a default/example value.' });
   if (!process.env.APP_BASE_URL) warnings.push({ level: 'medium', message: 'APP_BASE_URL is not configured in the environment.' });
   if (settings.appBaseUrl && settings.appBaseUrl.startsWith('http://') && nodeEnv === 'production') warnings.push({ level: 'medium', message: 'Production is configured over plain HTTP. Use HTTPS behind a reverse proxy when possible.' });
+  if (settings.appBaseUrl && settings.appBaseUrl.startsWith('https://') && !trustProxy.enabled) warnings.push({ level: 'medium', message: 'APP_BASE_URL uses HTTPS but TRUST_PROXY is disabled. Set TRUST_PROXY=loopback or TRUST_PROXY=1 when TLS terminates at a reverse proxy.' });
   if (settings.publicReadEnabled) warnings.push({ level: 'low', message: 'Anonymous read-only access is enabled. Review this before exposing the launcher publicly.' });
   if (localPluginEnabled) warnings.push({ level: nodeEnv === 'production' ? 'high' : 'low', message: 'Local plugin install is enabled. Plugins are trusted Admin-installed server-side code.' });
+  const serverFetchAccess = parsePrivateNetworkAccess();
+  if (nodeEnv === 'production' && serverFetchAccess.roles.has('editor')) warnings.push({ level: 'low', message: 'Editors can trigger server-side fetches to private-network URLs. Set SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin or disabled for stricter shared deployments.' });
   if (!fs.existsSync(dataDir)) warnings.push({ level: 'high', message: `Data directory does not exist: ${dataDir}` });
   if (!fs.existsSync(pluginDir)) warnings.push({ level: 'low', message: `Plugin directory does not exist yet: ${pluginDir}` });
   return warnings;
@@ -380,8 +394,8 @@ async function checkServiceHealth(db, service) {
     const timeout = setTimeout(() => controller.abort(), 8000);
     let response;
     try {
-      response = await fetch(target, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
-      if (response.status === 405 || response.status === 403) response = await fetch(target, { method: 'GET', redirect: 'follow', signal: controller.signal });
+      response = await guardedFetch(target, { method: 'HEAD', signal: controller.signal }, { actorRole: 'editor', label: 'Health check URL' });
+      if (response.status === 405 || response.status === 403) response = await guardedFetch(target, { method: 'GET', signal: controller.signal }, { actorRole: 'editor', label: 'Health check URL' });
     } finally {
       clearTimeout(timeout);
     }
@@ -533,11 +547,13 @@ function effectiveConfig(db, req, { dataDir, pluginDir }) {
       requestProtocol: req.protocol,
       requestHost: req.get('host') || null,
       behindProxy: Boolean(req.get('x-forwarded-for') || req.get('x-forwarded-proto')),
-      forwardedProto: req.get('x-forwarded-proto') || null
+      forwardedProto: req.get('x-forwarded-proto') || null,
     },
+    proxy: { trustProxy: parseTrustProxySetting().value },
+    serverFetch: serverFetchConfig(),
     storage: { dataDir, pluginDir },
     security: {
-      sessionSecretConfigured: Boolean(process.env.SESSION_SECRET && !process.env.SESSION_SECRET.includes('change-this') && !process.env.SESSION_SECRET.includes('dev-only')),
+      sessionSecretConfigured: Boolean(process.env.SESSION_SECRET && String(process.env.SESSION_SECRET).trim().length >= 32 && !['change-this', 'changeme', 'example', 'dev-only'].some((value) => String(process.env.SESSION_SECRET).toLowerCase().includes(value))),
       cookieSecure: Boolean(process.env.APP_BASE_URL?.startsWith('https://')),
       publicReadEnabled: settings.publicReadEnabled,
       logRetentionDays: getSetting(db, 'log_retention_days', 90)
@@ -781,7 +797,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     try {
       let url = '';
       if (req.body.assetData) url = saveAppAssetDataUrl(dataDir, req.body.assetData);
-      else if (req.body.url) url = await downloadAppAsset(dataDir, req.body.url);
+      else if (req.body.url) url = await downloadAppAsset(dataDir, req.body.url, req.session.user.role);
       else throw new Error('assetData or url is required');
       logEvent(db, req, 'app_asset.created', { url });
       res.status(201).json({ url });
@@ -1040,7 +1056,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
       const id = body.id && !db.prepare('SELECT 1 FROM services WHERE id = ?').get(slug(body.id)) ? slug(body.id) : uniqueServiceId(db, body.id || body.name);
       if (!body.name || !body.url) return res.status(400).json({ error: 'name and url are required' });
       if (!validateUrl(body.url)) return res.status(400).json({ error: 'Service URL must be http or https' });
-      const icon = await normalizeServiceIcon(dataDir, body);
+      const icon = await normalizeServiceIcon(dataDir, { ...body, actorRole: req.session.user.role });
       db.prepare(`
         INSERT INTO services (id, name, icon, url, category, accent, description, tags_json, sort_order, featured, enabled, health_check_enabled, health_check_url, health_check_interval_minutes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -1100,7 +1116,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
       const current = serviceFromRow(existing);
       const next = { ...current, ...req.body };
       if (!validateUrl(next.url)) return res.status(400).json({ error: 'Service URL must be http or https' });
-      const icon = await normalizeServiceIcon(dataDir, { ...req.body, icon: Object.prototype.hasOwnProperty.call(req.body, 'icon') ? req.body.icon : current.icon }, current.icon);
+      const icon = await normalizeServiceIcon(dataDir, { ...req.body, actorRole: req.session.user.role, icon: Object.prototype.hasOwnProperty.call(req.body, 'icon') ? req.body.icon : current.icon }, current.icon);
       db.prepare(`
         UPDATE services SET name=?, icon=?, url=?, category=?, accent=?, description=?, tags_json=?, sort_order=?, featured=?, enabled=?, health_check_enabled=?, health_check_url=?, health_check_interval_minutes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
       `).run(String(next.name), icon, String(next.url), String(next.category || 'general'), String(next.accent || '#4de7ff'), String(next.description || ''), JSON.stringify(normalizeTags(next.tags)), Number(next.sortOrder || 0), next.featured ? 1 : 0, next.enabled === false ? 0 : 1, next.healthCheckEnabled ? 1 : 0, String(next.healthCheckUrl || ''), Number(next.healthCheckIntervalMinutes || 15), req.params.id);
@@ -1118,8 +1134,8 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      let response = await fetch(target, { method: 'HEAD', redirect: 'follow', signal: controller.signal });
-      if (response.status === 405 || response.status === 403) response = await fetch(target, { method: 'GET', redirect: 'follow', signal: controller.signal });
+      let response = await guardedFetch(target, { method: 'HEAD', signal: controller.signal }, { actorRole: req.session.user.role, label: 'URL' });
+      if (response.status === 405 || response.status === 403) response = await guardedFetch(target, { method: 'GET', signal: controller.signal }, { actorRole: req.session.user.role, label: 'URL' });
       res.json({ ok: response.status >= 200 && response.status < 400, status: healthStatusFrom(response.status), statusCode: response.status, responseMs: Date.now() - started, url: target });
     } catch (error) {
       res.json({ ok: false, status: 'down', error: error.name === 'AbortError' ? 'Request timed out' : error.message, responseMs: Date.now() - started, url: target });
@@ -1266,6 +1282,9 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     if (!canRead(req, db)) return res.status(401).json({ error: 'Authentication required' });
     try {
       const cfg = getSetting(db, 'weather', {});
+      if (!Number.isFinite(Number(cfg.latitude)) || !Number.isFinite(Number(cfg.longitude))) {
+        return res.status(400).json({ error: 'Weather location is not configured' });
+      }
       const units = cfg.units === 'celsius' ? 'celsius' : 'fahrenheit';
       const url = new URL('https://api.open-meteo.com/v1/forecast');
       url.searchParams.set('latitude', cfg.latitude);

@@ -7,7 +7,7 @@ function tempDir() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'hll-test-'));
 }
 
-function startServer({ port = 19080 } = {}) {
+function startServer({ port = 19080, env: envOverrides = {} } = {}) {
   const dataDir = tempDir();
   const env = {
     ...process.env,
@@ -16,11 +16,12 @@ function startServer({ port = 19080 } = {}) {
     HOST: '127.0.0.1',
     DATA_DIR: dataDir,
     PLUGIN_DIR: path.join(dataDir, 'plugins'),
-    SESSION_SECRET: 'test-session-secret-change-me',
+    SESSION_SECRET: 'test-session-secret-for-home-lab-launcher-tests',
     BOOTSTRAP_ADMIN_USERNAME: 'admin',
-    BOOTSTRAP_ADMIN_PASSWORD: 'change-me-immediately',
+    BOOTSTRAP_ADMIN_PASSWORD: 'test-admin-password-please-change',
     APP_BASE_URL: `http://127.0.0.1:${port}`,
-    PUBLIC_READ_ENABLED: 'true'
+    PUBLIC_READ_ENABLED: 'true',
+    ...envOverrides
   };
   const child = spawn(process.execPath, ['src/server/index.js'], {
     cwd: path.resolve(__dirname, '..'),

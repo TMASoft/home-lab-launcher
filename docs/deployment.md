@@ -2,25 +2,60 @@
 
 Home Lab Launcher is designed to run anywhere Docker Compose can run. It can be exposed directly over HTTP for private LAN use or placed behind a reverse proxy for HTTPS.
 
+## Prerequisites
+
+- Docker Engine installed and running.
+- Docker Compose v2 available as `docker compose`.
+- A writable application directory containing the project source and `.env` file.
+
+On some Ubuntu installs, Compose v2 is packaged as `docker-compose-v2` rather than `docker-compose-plugin`:
+
+```bash
+sudo apt-get update
+sudo apt-get install docker-compose-v2
+```
+
+Verify before deploying:
+
+```bash
+docker --version
+docker compose version
+```
+
 ## Docker Compose quick start
+
+Replace `OWNER` with the GitHub owner that published the package.
 
 ```bash
 cp .env.example .env
 # edit .env
-docker compose up --build -d
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose up -d --no-build
+docker compose ps
 ```
+
+For development from a source checkout, use `docker compose up --build -d` instead.
 
 The default Compose file:
 
-- builds the local app image,
+- can use a published image through `APP_IMAGE` or build the local app image for source checkouts,
 - stores runtime data in the `launcher-data` volume,
-- exposes `HOST_PORT` on the host, defaulting to `8080`, and
+- exposes `HOST_PORT` on `HOST_BIND_IP`, defaulting to `0.0.0.0:8080`, and
 - keeps the container listening on port `8080` internally.
+
+Minimum production-minded values:
 
 ```env
 HOST_PORT=8080
 APP_BASE_URL=http://localhost:8080
 SESSION_SECRET=replace-with-a-long-random-string
+PUBLIC_READ_ENABLED=false
+```
+
+Generate a session secret with a password manager or a command such as:
+
+```bash
+openssl rand -hex 48
 ```
 
 ## Data persistence
@@ -38,9 +73,11 @@ That volume contains:
 - installed plugin code, and
 - plugin-created data.
 
-Back up this volume if the launcher is important to your environment.
+Back up this volume if the launcher is important to your environment. Do not delete the `launcher-data` volume unless you intentionally want to reset all data. See `docs/examples/backup-restore.md` for Docker volume backup and restore snippets.
 
-## HTTP-only deployment
+## Deployment patterns
+
+### Direct HTTP on a private LAN
 
 For a private LAN, HTTP may be acceptable:
 
@@ -49,11 +86,7 @@ HOST_PORT=8080
 APP_BASE_URL=http://192.168.1.50:8080
 ```
 
-Then run:
-
-```bash
-docker compose up --build -d
-```
+Then run the published image or build from source as shown in the quick start.
 
 Open:
 
@@ -61,7 +94,29 @@ Open:
 http://192.168.1.50:8080
 ```
 
-## Nginx reverse proxy with a user-provided certificate
+### Loopback-only behind a reverse proxy
+
+When Nginx, Caddy, Traefik, or another reverse proxy runs on the same host, publish the launcher only on loopback and set `APP_BASE_URL` to the browser-facing HTTPS URL:
+
+```env
+HOST_BIND_IP=127.0.0.1
+HOST_PORT=8080
+TRUST_PROXY=loopback
+SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin-editor
+APP_BASE_URL=https://launcher.example.test
+```
+
+The proxy should forward to:
+
+```text
+http://127.0.0.1:8080
+```
+
+`TRUST_PROXY` controls whether Express trusts `X-Forwarded-*` headers. Keep it `false` when exposing the app directly. Use `TRUST_PROXY=loopback` for a same-host reverse proxy, `TRUST_PROXY=1` for a single trusted proxy hop, or an explicit Express trust-proxy subnet string for advanced multi-proxy deployments.
+
+`HOST` normally remains unset or `0.0.0.0` so the app can receive traffic from Docker networking. Only set `HOST=127.0.0.1` when you intentionally run the container with host networking or run the Node app natively and want the process itself bound to loopback. The optional override in `docs/examples/compose.loopback.yml` encodes the loopback published-port setting for same-host reverse proxies.
+
+### Nginx reverse proxy with a user-provided certificate
 
 Use this when you already have a certificate from an internal CA, public CA, or another certificate process.
 
@@ -86,6 +141,8 @@ server {
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto https;
+    proxy_read_timeout 3600;
+    proxy_send_timeout 3600;
   }
 }
 ```
@@ -93,10 +150,12 @@ server {
 Set:
 
 ```env
+HOST_BIND_IP=127.0.0.1
+TRUST_PROXY=loopback
 APP_BASE_URL=https://launcher.example.test
 ```
 
-## Caddy with automatic ACME certificates
+### Caddy with automatic ACME certificates
 
 If your domain and network can satisfy ACME challenges, Caddy is the simplest HTTPS option:
 
@@ -109,10 +168,12 @@ launcher.example.com {
 Set:
 
 ```env
+HOST_BIND_IP=127.0.0.1
+TRUST_PROXY=loopback
 APP_BASE_URL=https://launcher.example.com
 ```
 
-## Private/internal certificate deployments
+### Private/internal certificate deployments
 
 For internal-only domains, use your preferred CA workflow, then proxy to the app with Nginx, Caddy, Traefik, or another reverse proxy.
 
@@ -122,20 +183,45 @@ The launcher itself does not need to know certificate paths. It only needs `APP_
 
 There are two supported approaches.
 
+### Browser bootstrap, recommended
+
+Leave both bootstrap values empty or remove them from `.env`:
+
+```env
+BOOTSTRAP_ADMIN_USERNAME=
+BOOTSTRAP_ADMIN_PASSWORD=
+```
+
+On first page load, the UI prompts you to create the first Admin. This avoids storing an initial password in the project directory.
+
 ### Environment bootstrap
 
-Set these before the first app start:
+Set these before the first app start when you need non-interactive setup:
 
 ```env
 BOOTSTRAP_ADMIN_USERNAME=admin
 BOOTSTRAP_ADMIN_PASSWORD=replace-this-password
 ```
 
-The app creates the Admin if the users table is empty.
+The app creates the Admin if the users table is empty. Change the password after first login and remove bootstrap credentials from `.env` once setup is complete.
 
-### Browser bootstrap
+## Validation checks
 
-Leave both values empty. On first page load, the UI prompts you to create the first Admin.
+Before putting a reverse proxy or DNS in front of the app, verify the local container:
+
+```bash
+docker compose ps
+curl -fsS http://localhost:8080/api/healthz
+curl -fsS http://localhost:8080/api/bootstrap-status
+```
+
+After configuring HTTPS, verify the browser-facing URL:
+
+```bash
+curl -k -fsS https://launcher.example.test/api/healthz
+```
+
+Open the UI in a browser and complete first-admin setup if `/api/bootstrap-status` reports `needsBootstrap: true`.
 
 ## Upgrades
 
@@ -143,13 +229,38 @@ For now, update by pulling new source and rebuilding:
 
 ```bash
 docker compose down
-docker compose build --no-cache
-docker compose up -d
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.1 docker compose pull launcher
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.1 docker compose up -d --no-build
+
+# Or, for source checkouts:
+# docker compose build --pull
+# docker compose up -d
 ```
 
 Do not delete the `launcher-data` volume unless you intentionally want to reset all data.
 
 ## Troubleshooting
+
+### Compose v2 is missing
+
+If `docker compose version` fails, install the Compose v2 package for your distribution. On Ubuntu, try `docker-compose-v2` if `docker-compose-plugin` is unavailable.
+
+### Port already in use
+
+If startup fails because `8080` is already in use, either stop the conflicting service or change `HOST_PORT`:
+
+```env
+HOST_PORT=9090
+APP_BASE_URL=http://localhost:9090
+```
+
+### Reverse proxy redirects or cookies look wrong
+
+Confirm `APP_BASE_URL` is the exact URL users open, including `https://` when TLS terminates at the proxy. Set `TRUST_PROXY` only for trusted proxy hops, and keep `Host`, `X-Forwarded-For`, and `X-Forwarded-Proto` in your proxy config.
+
+### Docker/LXC port publishing limitations
+
+Some constrained LXC or nested Docker environments cannot create normal published ports. Prefer a standard Docker host when possible. If you intentionally use host networking as a workaround, set `HOST=127.0.0.1`, keep the app behind a local reverse proxy, and document that override outside the public Compose file.
 
 ### Container logs
 
@@ -191,7 +302,9 @@ docker compose build --no-cache launcher
 
 Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings for these items.
 
-Remote service icons and branding images are fetched by the server for Admin/Editor actions with timeouts and size limits. Treat arbitrary remote URLs as trusted-operator inputs. SVG uploads are intentionally rejected for service and branding images.
+Remote service icons, branding images, URL tests, and service health checks are fetched by the server. This is useful in home labs because operators often monitor private dashboards, but it is also an SSRF boundary: a user who can trigger these fetches can ask the launcher host to contact network locations the user may not be able to reach directly.
+
+`SERVER_FETCH_PRIVATE_NETWORK_ACCESS` controls who may target private, loopback, link-local, carrier-grade NAT, documentation, multicast, or reserved IP ranges after DNS resolution. The default `admin-editor` preserves normal home-lab behavior. Use `admin` when Editors should manage cards but not probe internal networks, and use `disabled` for public demos or other deployments where arbitrary internal-network fetches are not acceptable. Redirect targets are checked before following them. Image downloads still have timeouts and 5 MiB limits, and SVG uploads/downloads are intentionally rejected for service and branding images. Trusted plugins are outside this SSRF boundary because plugins are Admin-installed server-side code.
 
 ## Content Security Policy note
 

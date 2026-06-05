@@ -6,12 +6,11 @@ Home Lab Launcher is early/pre-1.0 software. Back up your data volume before upg
 
 ```bash
 docker compose down
-docker compose pull || true
-docker compose build --pull
-docker compose up -d
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:vX.Y.Z docker compose pull launcher
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:vX.Y.Z docker compose up -d --no-build
 ```
 
-If you run from a published image in the future, replace the build step with an image pull.
+For source checkouts, use `docker compose build --pull && docker compose up -d` instead.
 
 ## Before upgrading
 
@@ -32,5 +31,5 @@ If you run from a published image in the future, replace the build step with an 
 1. Download a config backup from **Admin → Backups**.
 2. Click **Preview restore** with the backup file if you want to validate counts before relying on it.
 3. Back up the Docker volume or SQLite database.
-4. Run `npm run check`, `npm test`, and `npm audit --omit=dev --audit-level=high` after updating source.
-5. Rebuild/restart with `docker compose up --build -d`, then check `/api/healthz` and container logs.
+4. For source checkouts, run `npm run release:check`, `npm run check`, `npm test`, and `npm audit --omit=dev --audit-level=high` after updating source.
+5. Restart with the tagged image or rebuild source, then check `/api/healthz` and container logs.

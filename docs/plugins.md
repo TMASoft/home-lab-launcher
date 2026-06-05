@@ -24,8 +24,9 @@ Current behavior:
 - GitHub releases/tags are supported for normal installs.
 - Versions are manually selected and pinned.
 - Installed tarball SHA-256 hashes are stored and shown in the Admin console.
+- GitHub plugin archives are extracted with path, entry-count, expanded-size, and symlink/hardlink safety checks.
 - The Admin console reports lifecycle state: installed, enabled, disabled, failed, and update available.
-- Updates are manual, show release notes when GitHub provides them, and roll back automatically if the updated plugin fails to load.
+- Updates are manual, show release notes when GitHub provides them, preserve existing plugin config, and roll back automatically if the updated plugin fails to load.
 - Local filesystem installs are supported for development when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`.
 - Plugins are enabled/disabled/reloaded from the Admin console.
 - Plugins are not sandboxed.
@@ -128,7 +129,7 @@ The `context` object currently includes:
 | `manifest` | Parsed plugin manifest. |
 | `launcherApiVersion` | Current launcher plugin API version. |
 | `db` | Shared `better-sqlite3` database connection. |
-| `fetch` | Runtime `fetch` function. |
+| `fetch` | Runtime `fetch` function. Plugins are trusted server-side code; this raw fetch is not restricted by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`. |
 | `XMLParser` | `fast-xml-parser` XML parser constructor. |
 | `publicScriptUrl` | URL for the plugin frontend script, if present. |
 | `createRouter()` | Returns an Express router. |
@@ -181,7 +182,7 @@ During development, start the launcher with `NODE_ENV=development` and install a
 
 For Docker Compose development, set `ENABLE_LOCAL_PLUGIN_INSTALL=true`, set `LOCAL_PLUGIN_HOST_DIR` to the host directory containing plugin projects, and use the mounted container path in the UI. Example: host `./local-plugins` is mounted as `/app/local-plugins`, so install `/app/local-plugins/news`. Host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
 
-In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTALL=true` is explicitly set.
+In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTALL=true` is explicitly set. Do not enable local plugin installs for normal production users; it is a development escape hatch for trusted operators.
 
 ## Publishing a plugin
 
