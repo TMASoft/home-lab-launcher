@@ -14,6 +14,8 @@ Run this before cutting a public beta release.
    - Review public read-only access.
    - Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` or `disabled` for shared/public demos; keep `admin-editor` only when Editors are trusted to probe private network URLs.
    - Disable local plugin installs in production unless intentionally needed.
+   - Treat uploaded branding/service images as public assets; remove any sensitive images.
+   - For plugin installs/updates, prefer release checksums from trusted release notes when available.
 3. Quality gates.
    - `npm run release:check`
    - `npm run check`
@@ -35,3 +37,4 @@ Run this before cutting a public beta release.
 6. Plugin trust check.
    - Confirm plugin install/update flows require explicit trusted-code acknowledgement.
    - Confirm local plugin install is disabled in production unless explicitly enabled.
+   - Confirm Editor plugin config writes cannot change Admin-only manifest fields.

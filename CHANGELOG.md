@@ -8,6 +8,7 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ### Changed
 
+- Hardened plugin installs with optional SHA-256 verification, manifest-scoped config writes, and clearer public asset/rate-limit documentation.
 - Added an explicit SSRF boundary for arbitrary server-side service/icon/asset fetches, including configurable private-network access by role.
 - Production startup now fails closed when `SESSION_SECRET` is missing or an example value, and bootstrap admin passwords reject known defaults.
 - Browser first-admin setup, private anonymous-read defaults, and neutral weather defaults are now the documented release baseline.

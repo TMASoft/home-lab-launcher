@@ -263,7 +263,7 @@ Plugins are trusted Admin-installed code. The Admin console shows lifecycle stat
 - static frontend assets, and
 - dashboard sections.
 
-The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
+The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install and may paste an expected SHA-256 checksum from a trusted release note; when provided, the downloaded archive must match before extraction. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Plugin config fields are scoped by the manifest: Admins can edit all fields, Editors can edit only `scope: "editor"` or `scope: "user"` fields, and Admin-only values are preserved when Editors save config. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
 
 See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
 
@@ -308,14 +308,15 @@ docker compose logs -f launcher
 - Change `SESSION_SECRET` before deployment.
 - Change or remove the bootstrap password after first login.
 - CSRF protection is enabled for mutating API routes after login.
-- Failed logins are rate-limited and audited.
+- Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
 - Security headers are set by the application; still use HTTPS for real deployments.
 - Keep `TRUST_PROXY=false` for direct exposure. Set `TRUST_PROXY=loopback` or `TRUST_PROXY=1` only when a trusted reverse proxy supplies forwarded headers.
 - Users can revoke other active sessions from their profile.
 - Admins can export logs, set retention, prune old audit events, and review management-plane notices.
-- Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement.
+- Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement and supports optional SHA-256 checksum verification for GitHub archives.
 - Remote service/branding image fetches, URL tests, and service health checks are server-side fetches. By default, Admins and Editors may target private, loopback, link-local, and reserved addresses for home-lab use. Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` in shared deployments, or `disabled` for internet-exposed demos where no operator should use the launcher as an internal-network HTTP client.
 - The SSRF guard resolves each requested host before fetching and re-checks redirect targets. It blocks private-network destinations for roles not allowed by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`, uses timeouts and size limits for image downloads, and rejects SVG assets. This is a defense-in-depth boundary, not a browser sandbox; trusted plugins still run server-side code and can make their own network requests.
+- Branding assets and service icons are intentionally public from `/api/app-assets/` and `/api/service-icons/` so login, anonymous-disabled, and browser chrome views can still render configured imagery. Do not upload secret or sensitive images.
 - Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
 - Put the launcher behind HTTPS if credentials traverse an untrusted network.
 

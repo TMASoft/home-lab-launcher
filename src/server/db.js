@@ -121,6 +121,12 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_app_logs_created_at ON app_logs(created_at);
 
+    CREATE TABLE IF NOT EXISTS login_throttle (
+      key TEXT PRIMARY KEY,
+      count INTEGER NOT NULL DEFAULT 0,
+      reset_at INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS service_health (
       service_id TEXT PRIMARY KEY,
       status TEXT NOT NULL DEFAULT 'unknown',

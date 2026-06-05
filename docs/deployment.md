@@ -306,6 +306,15 @@ Remote service icons, branding images, URL tests, and service health checks are 
 
 `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` controls who may target private, loopback, link-local, carrier-grade NAT, documentation, multicast, or reserved IP ranges after DNS resolution. The default `admin-editor` preserves normal home-lab behavior. Use `admin` when Editors should manage cards but not probe internal networks, and use `disabled` for public demos or other deployments where arbitrary internal-network fetches are not acceptable. Redirect targets are checked before following them. Image downloads still have timeouts and 5 MiB limits, and SVG uploads/downloads are intentionally rejected for service and branding images. Trusted plugins are outside this SSRF boundary because plugins are Admin-installed server-side code.
 
+
+### Public assets and login-required portals
+
+Uploaded branding assets and service icons are intentionally served from `/api/app-assets/:filename` and `/api/service-icons/:filename` even when anonymous read-only access is disabled. This lets the login page, browser favicon, and already-rendered portal chrome display configured imagery without granting access to services or settings. Treat uploaded images as public web assets and do not store secrets, private screenshots, certificates, or sensitive diagrams there.
+
+### Login throttling
+
+Failed login attempts are tracked in SQLite by client IP and username for a 15-minute window, so counters survive process restarts and are shared by app workers using the same database. This is an application safety net, not a replacement for reverse-proxy rate limits, fail2ban, or WAF controls when the launcher is exposed beyond a private LAN.
+
 ## Content Security Policy note
 
 The app sets a restrictive CSP and continues to allow `style-src 'unsafe-inline'` for beta because the vanilla UI applies saved theme variables and a few runtime preview styles directly. Script sources remain `self` only, object embedding is disabled, and frame ancestors are blocked.

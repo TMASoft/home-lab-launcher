@@ -23,7 +23,7 @@ Current behavior:
 
 - GitHub releases/tags are supported for normal installs.
 - Versions are manually selected and pinned.
-- Installed tarball SHA-256 hashes are stored and shown in the Admin console.
+- Installed tarball SHA-256 hashes are stored and shown in the Admin console. Admins may also provide an expected SHA-256 checksum during install/update; mismatches fail before extraction.
 - GitHub plugin archives are extracted with path, entry-count, expanded-size, and symlink/hardlink safety checks.
 - The Admin console reports lifecycle state: installed, enabled, disabled, failed, and update available.
 - Updates are manual, show release notes when GitHub provides them, preserve existing plugin config, and roll back automatically if the updated plugin fails to load.
@@ -59,7 +59,8 @@ Every plugin must include `plugin.json` at the repository root.
   "frontend": "public/plugin.js",
   "permissions": ["routes", "storage", "jobs", "dashboard-section"],
   "configSchema": {
-    "sectionTitle": { "type": "string", "default": "Latest headlines" }
+    "sectionTitle": { "type": "string", "default": "Latest headlines", "scope": "editor" },
+    "apiToken": { "type": "string", "scope": "admin" }
   }
 }
 ```
@@ -75,7 +76,17 @@ Every plugin must include `plugin.json` at the repository root.
 | `backend` | Optional | CommonJS module exporting `register(context)`. |
 | `frontend` | Optional | Browser script loaded when the plugin exposes dashboard sections. |
 | `permissions` | Optional | Human-readable declared capabilities. |
-| `configSchema` | Optional | Configuration fields rendered in the Admin console. Supported types: `string`, `number`, `boolean`, and `enum`. |
+| `configSchema` | Optional | Configuration fields rendered in the Admin console. Supported types: `string`, `number`, `boolean`, and `enum`. Each field may declare `scope`: `admin` (default), `editor`, or `user`. |
+
+## Configuration scopes
+
+Plugin config is stored as one JSON object per plugin, but write access is field-scoped by the manifest:
+
+- `scope: "admin"` or omitted: Admin-only. Use for credentials, endpoint URLs that affect trust, destructive behavior, and anything that changes server-side authority.
+- `scope: "editor"`: Editor-safe operational settings. Editors may save these fields, and Admin-only fields already stored in the plugin config are preserved.
+- `scope: "user"`: User-preference-safe fields. The current generic plugin config API allows Admins and Editors to save them; future per-user plugin preference APIs should use this scope for Basic User preferences.
+
+Non-Admin requests cannot create arbitrary config keys outside `configSchema`. Admins may still write unknown keys for migration and emergency recovery, but published plugins should declare every configurable field and scope explicitly.
 
 ## Backend entrypoint
 

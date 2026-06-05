@@ -7,6 +7,7 @@ const packageJson = require('../../package.json');
 const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
 const { issueCsrfToken } = require('./security');
 const { guardedFetch, serverFetchConfig, parsePrivateNetworkAccess } = require('./server-fetch');
+const { applyPluginConfigUpdate } = require('./plugins');
 
 function serviceFromRow(row) {
   return {
@@ -604,7 +605,6 @@ function canRead(req, db) {
 }
 
 
-const loginAttempts = new Map();
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 5;
 
@@ -612,26 +612,27 @@ function loginKey(req, username) {
   return `${req.ip || 'unknown'}:${String(username || '').toLowerCase()}`;
 }
 
-function isLoginLimited(req, username) {
-  const key = loginKey(req, username);
-  const item = loginAttempts.get(key);
-  if (!item) return false;
-  if (Date.now() > item.resetAt) {
-    loginAttempts.delete(key);
-    return false;
-  }
-  return item.count >= LOGIN_MAX_FAILURES;
+function pruneExpiredLoginFailures(db) {
+  db.prepare('DELETE FROM login_throttle WHERE reset_at <= ?').run(Date.now());
 }
 
-function recordLoginFailure(req, username) {
-  const key = loginKey(req, username);
-  const item = loginAttempts.get(key) || { count: 0, resetAt: Date.now() + LOGIN_WINDOW_MS };
-  item.count += 1;
-  loginAttempts.set(key, item);
+function isLoginLimited(db, req, username) {
+  pruneExpiredLoginFailures(db);
+  const item = db.prepare('SELECT count, reset_at AS resetAt FROM login_throttle WHERE key = ?').get(loginKey(req, username));
+  return Boolean(item && item.count >= LOGIN_MAX_FAILURES);
 }
 
-function clearLoginFailures(req, username) {
-  loginAttempts.delete(loginKey(req, username));
+function recordLoginFailure(db, req, username) {
+  pruneExpiredLoginFailures(db);
+  const key = loginKey(req, username);
+  const resetAt = Date.now() + LOGIN_WINDOW_MS;
+  const item = db.prepare('SELECT count, reset_at AS resetAt FROM login_throttle WHERE key = ?').get(key);
+  if (!item) db.prepare('INSERT INTO login_throttle (key, count, reset_at) VALUES (?, 1, ?)').run(key, resetAt);
+  else db.prepare('UPDATE login_throttle SET count = ?, reset_at = ? WHERE key = ?').run(Number(item.count || 0) + 1, item.resetAt > Date.now() ? item.resetAt : resetAt, key);
+}
+
+function clearLoginFailures(db, req, username) {
+  db.prepare('DELETE FROM login_throttle WHERE key = ?').run(loginKey(req, username));
 }
 
 function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
@@ -674,17 +675,17 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   router.post('/auth/login', express.json(), (req, res) => {
     const username = String(req.body.username || '').trim();
     const password = String(req.body.password || '');
-    if (isLoginLimited(req, username)) {
+    if (isLoginLimited(db, req, username)) {
       logEvent(db, req, 'auth.login_rate_limited', { username }, 'warn');
       return res.status(429).json({ error: 'Too many failed login attempts. Try again later.' });
     }
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
-      recordLoginFailure(req, username);
+      recordLoginFailure(db, req, username);
       logEvent(db, req, 'auth.login_failed', { username }, 'warn');
       return res.status(401).json({ error: 'Invalid username or password' });
     }
-    clearLoginFailures(req, username);
+    clearLoginFailures(db, req, username);
     req.session.regenerate((err) => {
       if (err) return res.status(500).json({ error: 'Could not create session' });
       req.session.user = { id: user.id, username: user.username, role: user.role };
@@ -1400,7 +1401,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   router.post('/plugins/install', requireRole('admin'), express.json(), async (req, res) => {
     if (requirePluginTrustConfirmation(req, res)) return;
     try {
-      const plugin = await pluginManager.installFromGithub(req.body.repoUrl, req.body.version);
+      const plugin = await pluginManager.installFromGithub(req.body.repoUrl, req.body.version, { expectedSha256: req.body.expectedSha256 });
       await pluginManager.reload();
       const failed = pluginManager.health().failures.find((item) => item.pluginId === plugin.id);
       if (failed) return res.status(400).json({ error: `Plugin installed but failed to load: ${failed.message}`, plugin });
@@ -1431,7 +1432,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
     if (!previous) return res.status(404).json({ error: 'Plugin not found' });
     if (previous.source_type !== 'github') return res.status(400).json({ error: 'Only GitHub plugins can be updated through this flow' });
     try {
-      const plugin = await pluginManager.installFromGithub(previous.source_url, req.body.version || previous.version);
+      const plugin = await pluginManager.installFromGithub(previous.source_url, req.body.version || previous.version, { expectedSha256: req.body.expectedSha256 });
       await pluginManager.reload();
       const failed = pluginManager.health().failures.find((item) => item.pluginId === plugin.id);
       if (failed) {
@@ -1464,9 +1465,17 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir }) {
   router.put('/plugins/:id/config', requireRole('admin', 'editor'), express.json(), (req, res) => {
     const row = db.prepare('SELECT * FROM plugins WHERE id = ?').get(req.params.id);
     if (!row) return res.status(404).json({ error: 'Plugin not found' });
-    db.prepare('UPDATE plugins SET config_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(JSON.stringify(req.body.config || {}), req.params.id);
-    logEvent(db, req, 'plugin.config_updated', { id: req.params.id });
-    res.json({ ok: true });
+    try {
+      const manifest = safeJsonParse(row.manifest_json, {});
+      const existing = safeJsonParse(row.config_json, {});
+      const result = applyPluginConfigUpdate(manifest, existing, req.body.config || {}, req.session.user.role);
+      if (result.allowed.length === 0 && result.rejected.length > 0) return res.status(403).json({ error: 'No submitted plugin config fields are writable by this role', rejected: result.rejected });
+      db.prepare('UPDATE plugins SET config_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(JSON.stringify(result.config), req.params.id);
+      logEvent(db, req, 'plugin.config_updated', { id: req.params.id, fields: result.allowed, rejectedFields: result.rejected });
+      res.json({ ok: true, updatedFields: result.allowed, rejectedFields: result.rejected });
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
   });
 
   router.delete('/plugins/:id', requireRole('admin'), async (req, res) => {

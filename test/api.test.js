@@ -115,6 +115,7 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   assert.ok(pluginHealth.plugins);
   assert.ok(pluginHealth.warnings.some((warning) => warning.message.includes('public access') || warning.message.includes('Anonymous read-only')));
   await assert.rejects(() => admin.request('/api/plugins/install', { method: 'POST', body: { repoUrl: 'owner/repo', version: 'v1.0.0' } }), /trust confirmation/);
+  await assert.rejects(() => admin.request('/api/plugins/install', { method: 'POST', body: { repoUrl: 'owner/repo', version: 'v1.0.0', expectedSha256: 'not-a-sha', trustConfirmed: true } }), /64 hexadecimal characters/);
 
   const logs = await admin.request('/api/admin/logs?limit=10');
   assert.ok(Array.isArray(logs.logs));
@@ -166,4 +167,44 @@ test('server-side private-network fetches can be restricted by role', async (t) 
   const config = await admin.request('/api/admin/config');
   assert.equal(config.config.serverFetch.privateNetworkAccess, 'admin');
   assert.deepEqual(config.config.serverFetch.privateNetworkRoles, ['admin']);
+});
+
+
+test('plugin config scopes preserve admin-only fields from editor updates', async (t) => {
+  const server = startServer({ port: 19104 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  await admin.request('/api/users', { method: 'POST', body: { username: 'editor', password: 'change-me-editor', role: 'editor' } });
+
+  const pluginDir = require('node:path').join(server.dataDir, 'local-plugin');
+  require('node:fs').mkdirSync(pluginDir, { recursive: true });
+  require('node:fs').writeFileSync(require('node:path').join(pluginDir, 'plugin.json'), JSON.stringify({
+    id: 'scoped-config',
+    name: 'Scoped Config',
+    version: 'local',
+    launcherApiVersion: 1,
+    configSchema: {
+      adminSecret: { type: 'string', label: 'Admin secret', scope: 'admin' },
+      refreshMinutes: { type: 'number', label: 'Refresh minutes', scope: 'editor' },
+      compactMode: { type: 'boolean', label: 'Compact mode', scope: 'user' }
+    }
+  }));
+
+  await admin.request('/api/plugins/install-local', { method: 'POST', body: { path: pluginDir, trustConfirmed: true } });
+  await admin.request('/api/plugins/scoped-config/config', { method: 'PUT', body: { config: { adminSecret: 'keep-me', refreshMinutes: 15, compactMode: false } } });
+
+  const editor = new Client(server.baseUrl);
+  await editor.request('/api/auth/login', { method: 'POST', body: { username: 'editor', password: 'change-me-editor' } });
+  const update = await editor.request('/api/plugins/scoped-config/config', { method: 'PUT', body: { config: { adminSecret: 'stolen', refreshMinutes: 30, compactMode: true, unknown: 'ignored' } } });
+  assert.deepEqual(update.updatedFields.sort(), ['compactMode', 'refreshMinutes']);
+  assert.deepEqual(update.rejectedFields.sort(), ['adminSecret', 'unknown']);
+
+  const plugins = await admin.request('/api/plugins');
+  const plugin = plugins.plugins.find((item) => item.id === 'scoped-config');
+  assert.equal(plugin.config.adminSecret, 'keep-me');
+  assert.equal(plugin.config.refreshMinutes, 30);
+  assert.equal(plugin.config.compactMode, true);
 });

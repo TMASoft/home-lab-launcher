@@ -599,9 +599,11 @@ function renderConfigFields(plugin) {
   if (!entries.length) return '<p>No configurable settings exposed by this plugin.</p>';
   return entries.map(([key, spec]) => {
     const value = plugin.config?.[key] ?? spec.default ?? '';
-    if (spec.type === 'boolean') return `<label class="check-line"><input data-plugin-config-key="${escapeHtml(key)}" type="checkbox" ${value ? 'checked' : ''}> ${escapeHtml(spec.label || key)}</label>`;
+    const scope = spec.scope || spec.access || spec.role || 'admin';
+    const hint = `<small>Scope: ${escapeHtml(scope)}</small>`;
+    if (spec.type === 'boolean') return `<label class="check-line"><input data-plugin-config-key="${escapeHtml(key)}" type="checkbox" ${value ? 'checked' : ''}> ${escapeHtml(spec.label || key)}</label>${hint}`;
     if (Array.isArray(spec.enum)) return `<div class="field"><label>${escapeHtml(spec.label || key)}</label><select data-plugin-config-key="${escapeHtml(key)}">${spec.enum.map((item) => `<option value="${escapeHtml(item)}" ${String(value) === String(item) ? 'selected' : ''}>${escapeHtml(item)}</option>`).join('')}</select></div>`;
-    return `<div class="field"><label>${escapeHtml(spec.label || key)}</label><input data-plugin-config-key="${escapeHtml(key)}" type="${spec.type === 'number' ? 'number' : 'text'}" value="${escapeHtml(value)}"><small>${escapeHtml(spec.description || '')}</small></div>`;
+    return `<div class="field"><label>${escapeHtml(spec.label || key)}</label><input data-plugin-config-key="${escapeHtml(key)}" type="${spec.type === 'number' ? 'number' : 'text'}" value="${escapeHtml(value)}"><small>${escapeHtml(spec.description || '')} Scope: ${escapeHtml(scope)}</small></div>`;
   }).join('');
 }
 function adminPluginsHtml() {
@@ -612,7 +614,7 @@ function adminPluginsHtml() {
     return `<div class="plugin-row plugin-row-expanded" data-plugin-row="${escapeHtml(p.id)}"><div><strong>${escapeHtml(p.name)}</strong><br><small>${escapeHtml(p.sourceType)} · ${escapeHtml(p.sourceUrl)} · ${escapeHtml(p.version)} · ${escapeHtml(p.lifecycle || (p.enabled ? 'enabled' : 'disabled'))}</small><div class="service-meta">${compat}${update}<span class="status-badge">hash ${escapeHtml((p.installedHash || 'none').slice(0, 12))}</span></div><div class="tags">${permissions}</div>${p.lastError ? `<code>${escapeHtml(p.lastError)}</code>` : ''}</div><div class="service-row-actions"><button class="ghost" data-plugin-toggle="${escapeHtml(p.id)}" data-enabled="${p.enabled}" type="button">${p.enabled ? 'Disable' : 'Enable'}</button><button class="ghost" data-plugin-logs="${escapeHtml(p.id)}" type="button">Logs</button>${p.sourceType === 'github' ? `<button class="ghost" data-plugin-update="${escapeHtml(p.id)}" data-source="${escapeHtml(p.sourceUrl)}" type="button">Discover update</button>` : `<button class="ghost" data-plugin-reload-local="${escapeHtml(p.id)}" type="button">Reload</button>`}<button class="ghost danger" data-plugin-delete="${escapeHtml(p.id)}" type="button">Remove</button></div><div class="plugin-config"><h4>Configuration</h4><div class="form-grid" data-plugin-config="${escapeHtml(p.id)}">${renderConfigFields(p)}<button class="ghost" data-plugin-save-config="${escapeHtml(p.id)}" type="button">Save plugin config</button></div></div></div>`;
   }).join('') || '<p>No plugins installed.</p>';
   return `<div class="settings-card"><div class="inline-between"><h3>Plugin manager</h3><button class="ghost" id="plugins-reload" type="button">Reload plugins</button></div><div class="callout warning"><strong>Trusted code boundary</strong><p>Plugins are trusted code and can run server-side. Install or update plugins only from authors and commits you trust.</p><label class="check-line"><input id="plugin-trust-confirm" type="checkbox"> I understand plugins can run server-side code.</label></div>${rows}
-    <h3>Install from GitHub</h3><div class="field"><label>Repository URL</label><input id="plugin-repo" placeholder="https://github.com/owner/repo"></div><div class="inline-controls"><button class="ghost" id="plugin-discover" type="button">Discover versions</button><select id="plugin-version"></select><button class="primary" id="plugin-install" type="button">Install selected version</button></div><div id="plugin-release-notes" class="plugin-release-notes"></div>
+    <h3>Install from GitHub</h3><div class="field"><label>Repository URL</label><input id="plugin-repo" placeholder="https://github.com/owner/repo"></div><div class="field"><label>Expected SHA-256 checksum (optional)</label><input id="plugin-expected-sha256" placeholder="64 hex characters from a trusted release note"><small>When provided, installation fails unless the downloaded archive matches exactly.</small></div><div class="inline-controls"><button class="ghost" id="plugin-discover" type="button">Discover versions</button><select id="plugin-version"></select><button class="primary" id="plugin-install" type="button">Install selected version</button></div><div id="plugin-release-notes" class="plugin-release-notes"></div>
     <h3>Local development plugin</h3><p id="local-plugin-help">Loading local plugin status…</p><div class="inline-controls"><input id="plugin-local-path" placeholder="/app/local-plugins/news"><button class="ghost" id="plugin-install-local" type="button">Install local plugin</button></div></div>`;
 }
 
@@ -917,7 +919,7 @@ function bindPluginHandlers(content) {
     const latest = data.versions[0];
     if (!latest) return toast('No versions found');
     openModal(`<h2>Update ${escapeHtml(button.dataset.pluginUpdate)}</h2><p><strong>Latest:</strong> ${escapeHtml(latest.version)} (${escapeHtml(latest.type)})</p><pre class="release-notes">${escapeHtml((latest.body || 'No release notes available.').slice(0, 4000))}</pre><button class="primary" id="confirm-plugin-update" type="button">Update to ${escapeHtml(latest.version)}</button>`);
-    $('confirm-plugin-update').onclick = async () => { await api(`/api/plugins/${button.dataset.pluginUpdate}/update`, { method: 'POST', body: JSON.stringify({ version: latest.version, trustConfirmed: true }) }); closeModal(); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin updated'); };
+    $('confirm-plugin-update').onclick = async () => { const expectedSha256 = prompt('Optional expected SHA-256 checksum for this archive. Leave blank to skip verification.', '') || ''; await api(`/api/plugins/${button.dataset.pluginUpdate}/update`, { method: 'POST', body: JSON.stringify({ version: latest.version, expectedSha256, trustConfirmed: true }) }); closeModal(); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin updated'); };
   }));
   content.querySelectorAll('[data-plugin-reload-local]').forEach((button) => button.addEventListener('click', async () => { await api('/api/plugins/reload', { method: 'POST' }); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Local plugin reloaded'); }));
   content.querySelectorAll('[data-plugin-toggle]').forEach((button) => button.addEventListener('click', async () => {
@@ -941,7 +943,7 @@ function bindPluginHandlers(content) {
   });
   $('plugin-install')?.addEventListener('click', async () => {
     if (!$('plugin-trust-confirm')?.checked) return toast('Confirm the plugin trust boundary before installing');
-    await api('/api/plugins/install', { method: 'POST', body: JSON.stringify({ repoUrl: formValue('plugin-repo'), version: $('plugin-version').value, trustConfirmed: true }) });
+    await api('/api/plugins/install', { method: 'POST', body: JSON.stringify({ repoUrl: formValue('plugin-repo'), version: $('plugin-version').value, expectedSha256: formValue('plugin-expected-sha256'), trustConfirmed: true }) });
     await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin installed');
   });
   api('/api/plugin-sources/local/status').then((status) => {
