@@ -48,16 +48,16 @@
     <section id="admin-panel" class="section admin-console" hidden>
       <div class="section-head"><div><h2>Admin console</h2><p>Manage application settings, users, services, plugins, weather, and audit logs.</p></div><button class="primary" id="admin-refresh-button" type="button">Refresh admin data</button></div>
       <div class="admin-layout">
-        <aside class="admin-tabs" aria-label="Admin sections">
-          <button class="admin-tab" data-admin-tab="overview" type="button">Overview</button>
-          <button class="admin-tab" data-admin-tab="settings" type="button">Settings</button>
-          <button class="admin-tab" data-admin-tab="appearance" type="button">Appearance</button>
-          <button class="admin-tab" data-admin-tab="services" type="button">Services</button>
-          <button class="admin-tab" data-admin-tab="users" type="button">Users</button>
-          <button class="admin-tab" data-admin-tab="security" type="button">Security</button>
-          <button class="admin-tab" data-admin-tab="backups" type="button">Backups</button>
-          <button class="admin-tab" data-admin-tab="plugins" type="button">Plugins</button>
-          <button class="admin-tab" data-admin-tab="logs" type="button">Logs</button>
+        <aside class="admin-tabs" role="tablist" aria-label="Admin sections">
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="overview" type="button">Overview</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="settings" type="button">Settings</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="appearance" type="button">Appearance</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="services" type="button">Services</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="users" type="button">Users</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="security" type="button">Security</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="backups" type="button">Backups</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="plugins" type="button">Plugins</button>
+          <button class="admin-tab" role="tab" aria-controls="admin-content" aria-selected="false" tabindex="-1" data-admin-tab="logs" type="button">Logs</button>
         </aside>
         <div class="admin-content" id="admin-content">Loading admin console…</div>
       </div>
@@ -68,6 +68,8 @@
 
   <dialog id="modal"><form method="dialog" class="modal-card"><button class="close" value="cancel" aria-label="Close">×</button><div id="modal-content"></div></form></dialog>
   <div class="toast" id="toast" role="status"></div>
+  <script src="/core.js"></script>
+  <script src="/admin.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>

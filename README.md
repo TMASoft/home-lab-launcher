@@ -39,6 +39,8 @@ The UI intentionally hides empty dynamic/plugin sections for regular and anonymo
 
 This beta is intended for self-hosters who can manage a Docker Compose service and review security warnings before exposing it beyond a private LAN. After first login, open **Admin → Overview** and complete the beta readiness checklist.
 
+Home Lab Launcher is distributed as a Docker/GHCR application, not as an npm package. `package.json` remains marked `"private": true`; use npm scripts only for local development, validation, and CI.
+
 ## Quick start
 
 ### 1. Clone and configure
@@ -253,6 +255,10 @@ Supported deployment styles:
 
 See [docs/deployment.md](docs/deployment.md) for examples.
 
+## API reference
+
+Core API routes and plugin-management endpoints are documented in [docs/api.md](docs/api.md). Plugin extension points, manifest fields, config scopes, and trust requirements are documented in [docs/plugins.md](docs/plugins.md).
+
 ## Plugin system
 
 Plugins are trusted Admin-installed code. The Admin console shows lifecycle state, compatibility, permissions, installed hash, config schema fields, logs, update discovery, and release-note previews. A plugin can add:
@@ -281,6 +287,8 @@ It implements an optional RSS/news dashboard section with feed management, folde
 
 Native development should use an active Node.js LTS release supported by `better-sqlite3` and the Docker image. This beta supports Node.js 20 and 22; newer current/non-LTS releases may not have compatible native SQLite bindings yet.
 
+`better-sqlite3` may compile a native binding during `npm install`. Install the usual native build prerequisites first: a C/C++ compiler toolchain, Python 3, `make`, and SQLite development headers/libraries from your OS package manager.
+
 ```bash
 npm install
 npm run check
@@ -299,9 +307,17 @@ docker compose up --build
 # Validate release hygiene before publishing
 npm run release:check
 
+# Reset local development SQLite/plugin data under ./data
+npm run dev:reset
+
+# Seed neutral demo data for screenshots and UI checks
+npm run dev:seed
+
 # Inspect logs
 docker compose logs -f launcher
 ```
+
+The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the ignored `./data` directory in the repository. `dev:reset` refuses to delete a `DATA_DIR` outside the repository unless you intentionally run `node scripts/reset-dev-data.js --force`.
 
 ## Security notes
 

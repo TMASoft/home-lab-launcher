@@ -3,11 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "description": "Configurable home lab portal/launcher with roles, weather, and plugins.",
+  "license": "MIT",
+  "author": "TMASoft",
+  "homepage": "https://github.com/TMASoft/home-lab-launcher#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TMASoft/home-lab-launcher.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TMASoft/home-lab-launcher/issues"
+  },
   "main": "src/server/index.js",
   "scripts": {
     "start": "node src/server/index.js",
     "dev": "NODE_ENV=development node --watch src/server/index.js",
-    "check": "node --check src/server/index.js && node --check src/server/db.js && node --check src/server/plugins.js && node --check src/server/routes.js && node --check src/server/server-fetch.js && node --check src/server/session-store.js && node --check src/public/app.js",
+    "dev:reset": "node scripts/reset-dev-data.js",
+    "dev:seed": "node scripts/seed-demo-data.js",
+    "check": "find src test scripts -name \"*.js\" -print0 | xargs -0 -n1 node --check",
     "test": "node --test test/*.test.js",
     "test:api": "node --test test/api.test.js",
     "test:frontend": "node --test test/frontend-smoke.test.js",

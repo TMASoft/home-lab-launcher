@@ -282,6 +282,12 @@ curl -fsS http://localhost:8080/api/bootstrap-status
 curl -fsS http://localhost:8080/api/settings/public
 ```
 
+### Database migrations and scheduled jobs
+
+Startup applies forward-only SQLite schema migrations before seeding defaults. Applied migration IDs are recorded in the `schema_migrations` table and mirrored to SQLite `PRAGMA user_version`, so upgrades can be inspected from a database export or the SQLite CLI. Back up the `launcher-data` volume before downgrading or manually editing the database.
+
+The built-in service-health checker is registered as a lifecycle-managed scheduled job. Admins can inspect core scheduled jobs, plugin scheduled jobs, last run state, and next run times from **Admin → Security/Health** or `/api/admin/health`. On process shutdown, core scheduled jobs are stopped before the HTTP server exits.
+
 ### Management-plane checks
 
 Admins can inspect health, warnings, effective configuration, reverse-proxy/HTTPS status, storage size, active sessions, plugin health, scheduled jobs, logs, backups, and service-management tools from the Admin console. The same data is exposed through authenticated APIs such as `/api/admin/health`, `/api/admin/config`, `/api/admin/notices`, `/api/admin/logs`, and `/api/admin/backup`. Admins can also export the SQLite database with `/api/admin/database/export`, export logs with `/api/admin/logs/export`, and restore settings/services from a configuration backup with `/api/admin/restore`.

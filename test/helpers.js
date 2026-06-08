@@ -83,4 +83,4 @@ class Client {
   }
 }
 
-module.exports = { startServer, Client };
+module.exports = { startServer, Client, tempDir };

@@ -9,6 +9,7 @@ const { registerCoreRoutes } = require('./routes');
 const { PluginManager } = require('./plugins');
 const { securityHeaders, csrfProtection } = require('./security');
 const { parsePrivateNetworkAccess } = require('./server-fetch');
+const { Scheduler } = require('./scheduler');
 
 
 const UNSAFE_SESSION_SECRET_PATTERNS = [
@@ -93,7 +94,8 @@ app.use(session({
 app.use(csrfProtection);
 
 const pluginManager = new PluginManager({ app, db, pluginDir });
-registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir });
+const scheduler = new Scheduler();
+registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, scheduler });
 
 pluginManager.reload().catch((error) => {
   console.error('Plugin reload failed:', error);
@@ -118,8 +120,15 @@ function startupWarnings() {
   return warnings;
 }
 
-app.listen(port, host, () => {
+const server = app.listen(port, host, () => {
   console.log(`Home Lab Launcher listening on http://${host}:${port}`);
   console.log(`Trust proxy setting: ${JSON.stringify(trustProxy)}`);
   for (const warning of startupWarnings()) console.warn(`[beta-readiness] ${warning}`);
 });
+
+function shutdown() {
+  scheduler.stopAll();
+  server.close(() => process.exit(0));
+}
+process.on('SIGTERM', shutdown);
+process.on('SIGINT', shutdown);
