@@ -159,6 +159,14 @@ const MIGRATIONS = [
         );
       `);
     }
+  },
+  {
+    id: 4,
+    name: 'totp-authentication',
+    up(db) {
+      addColumnIfMissing(db, 'users', 'totp_secret', 'TEXT');
+      addColumnIfMissing(db, 'users', 'totp_enabled', 'INTEGER NOT NULL DEFAULT 0');
+    }
   }
 ];
 
