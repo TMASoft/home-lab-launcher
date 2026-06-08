@@ -1,9 +1,9 @@
 const { getSetting, setSetting } = require('./db');
 const { guardedFetch } = require('./server-fetch');
 
-const HEIMDALL_CONTENTS_URL = 'https://api.github.com/repos/linuxserver/Heimdall-Apps/contents';
-const HEIMDALL_RAW_PREFIX = 'https://raw.githubusercontent.com/linuxserver/Heimdall-Apps/master/';
-const HEIMDALL_RAW_RE = /^https:\/\/raw\.githubusercontent\.com\/linuxserver\/Heimdall-Apps\/master\//;
+const HEIMDALL_CONTENTS_URL = process.env.HEIMDALL_CONTENTS_URL || 'https://api.github.com/repos/linuxserver/Heimdall-Apps/contents';
+const HEIMDALL_RAW_PREFIX = process.env.HEIMDALL_RAW_PREFIX || 'https://raw.githubusercontent.com/linuxserver/Heimdall-Apps/master/';
+const HEIMDALL_RAW_RE = new RegExp('^' + HEIMDALL_RAW_PREFIX.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
 const COOLDOWN_MS = 60_000;
 
 function slugify(value) {
@@ -15,11 +15,25 @@ function slugify(value) {
  * Fails gracefully on network errors (air-gapped fallback).
  */
 async function syncHeimdallPresets(db) {
+  const startedAt = new Date().toISOString();
+  const updateStatus = (status, synced = 0, error = null) => {
+    setSetting(db, 'preset_catalog_sync_status', {
+      status,
+      startedAt,
+      completedAt: status === 'running' ? null : new Date().toISOString(),
+      synced,
+      error
+    });
+  };
+
   const remoteEnabled = getSetting(db, 'enable_remote_presets', true);
   if (!remoteEnabled) {
     console.log('[preset-catalog] Remote presets disabled, skipping sync.');
+    updateStatus('idle', 0, 'Remote presets disabled');
     return { synced: 0, skipped: true };
   }
+
+  updateStatus('running');
 
   let entries;
   try {
@@ -37,11 +51,13 @@ async function syncHeimdallPresets(db) {
     }
   } catch (error) {
     console.warn('[preset-catalog] Could not reach GitHub API, preserving existing presets:', error.message);
+    updateStatus('failed', 0, error.message);
     return { synced: 0, error: error.message };
   }
 
   if (!Array.isArray(entries)) {
     console.warn('[preset-catalog] Unexpected GitHub API response, skipping.');
+    updateStatus('failed', 0, 'Unexpected response format');
     return { synced: 0, error: 'Unexpected response format' };
   }
 
@@ -102,6 +118,7 @@ async function syncHeimdallPresets(db) {
 
   setSetting(db, 'last_preset_crawled_at', Date.now());
   console.log(`[preset-catalog] Heimdall sync complete: ${synced} presets updated.`);
+  updateStatus('succeeded', synced);
   return { synced };
 }
 

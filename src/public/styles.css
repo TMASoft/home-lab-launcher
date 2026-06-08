@@ -1254,3 +1254,9 @@ tr:hover td { background: rgba(255,255,255,.018); }
 .preset-badge-heimdall { background: rgba(255, 174, 0, .16); color: #ffae00; }
 .preset-empty { padding: .75rem 1rem; color: var(--muted); font-size: .88rem; }
 button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Preset catalog sync status */
+.sync-status-text { font-size: .88rem; font-weight: 500; display: inline-flex; align-items: center; }
+.sync-status-text.running { color: var(--primary); }
+.sync-status-text.success { color: var(--success); }
+.sync-status-text.danger { color: var(--danger); }

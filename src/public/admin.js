@@ -52,14 +52,37 @@ function formatBytes(bytes) {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KiB`;
   return `${(n / 1024 / 1024).toFixed(1)} MiB`;
 }
+function getSyncStatusMessage(pc) {
+  const status = pc.syncStatus;
+  if (!status || !status.status || status.status === 'idle') return '';
+  const timeStr = status.completedAt ? new Date(status.completedAt).toLocaleString() : '';
+  const startStr = status.startedAt ? new Date(status.startedAt).toLocaleString() : '';
+  if (status.status === 'running') {
+    return `<span class="sync-status-text running">Syncing since ${escapeHtml(startStr)}...</span>`;
+  }
+  if (status.status === 'succeeded') {
+    return `<span class="sync-status-text success">Catalog sync completed: ${status.synced} presets updated (at ${escapeHtml(timeStr)})</span>`;
+  }
+  if (status.status === 'failed') {
+    return `<span class="sync-status-text danger">Catalog sync failed: ${escapeHtml(status.error || 'unknown error')} (at ${escapeHtml(timeStr)})</span>`;
+  }
+  return '';
+}
 function adminSettingsHtml() {
   const s = state.settings || {};
   const pc = state.admin.presetCatalog || {};
+  const syncStatusHtml = getSyncStatusMessage(pc);
+  const isSyncing = pc.syncStatus?.status === 'running';
+  const isCooldown = pc.cooldownRemaining > 0;
+  const isButtonDisabled = isSyncing || isCooldown;
+  const updateBtnText = isCooldown ? `Update Catalog (${pc.cooldownRemaining}s)` : 'Update Catalog';
+  const updateBtnDisabled = isButtonDisabled ? 'disabled' : '';
+
   return `<div class="admin-stack">
     <div class="settings-card"><h3>General</h3><div class="form-grid"><div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"><small>Used for secure cookies, proxy checks, and beta readiness warnings.</small></div></div></div></div>
     <div class="settings-card"><h3>Weather</h3><div class="form-grid"><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="ZIP code or city"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div><div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div><div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div></div></div>
     <div class="settings-card"><h3>Access</h3><label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label><p>Review this before exposing the launcher outside your LAN.</p><button class="primary" id="admin-save-settings" type="button">Save settings</button></div>
-    <div class="settings-card"><h3>Service preset catalog</h3><p>The preset catalog provides quick access to pre-configured service definitions when adding new services. Native presets are bundled with Home Lab Launcher. Heimdall presets are synced from the <a href="https://github.com/linuxserver/Heimdall-Apps" target="_blank" rel="noopener noreferrer">linuxserver/Heimdall-Apps</a> repository.</p><div class="stats-row">${statCard('Native presets', pc.counts?.local ?? '—')}${statCard('Heimdall presets', pc.counts?.heimdall ?? '—')}${statCard('Total presets', pc.counts?.total ?? '—')}</div><label class="check-line"><input id="admin-remote-presets" type="checkbox" ${pc.enableRemotePresets !== false ? 'checked' : ''}> Enable remote Heimdall presets</label><small>When disabled, only bundled native presets are available and the catalog will not sync from GitHub.</small><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="catalog-update" type="button">Update Catalog</button><span id="catalog-update-status" class="test-result"></span></div><button class="primary" id="save-preset-settings" type="button" style="margin-top: 10px;">Save preset settings</button></div>
+    <div class="settings-card"><h3>Service preset catalog</h3><p>The preset catalog provides quick access to pre-configured service definitions when adding new services. Native presets are bundled with Home Lab Launcher. Heimdall presets are synced from the <a href="https://github.com/linuxserver/Heimdall-Apps" target="_blank" rel="noopener noreferrer">linuxserver/Heimdall-Apps</a> repository.</p><div class="stats-row">${statCard('Native presets', pc.counts?.local ?? '—')}${statCard('Heimdall presets', pc.counts?.heimdall ?? '—')}${statCard('Total presets', pc.counts?.total ?? '—')}</div><label class="check-line"><input id="admin-remote-presets" type="checkbox" ${pc.enableRemotePresets !== false ? 'checked' : ''}> Enable remote Heimdall presets</label><small>When disabled, only bundled native presets are available and the catalog will not sync from GitHub.</small><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="catalog-update" type="button" ${updateBtnDisabled}>${updateBtnText}</button><span id="catalog-update-status" class="test-result">${syncStatusHtml}</span></div><button class="primary" id="save-preset-settings" type="button" style="margin-top: 10px;">Save preset settings</button></div>
   </div>`;
 }
 
@@ -325,33 +348,91 @@ function bindSettingsHandlers() {
     await loadAdminData();
     toast('Preset settings saved');
   });
+
+  const pc = state.admin.presetCatalog || {};
+  if (pc.cooldownRemaining > 0 && !catalogCooldownTimer) {
+    startCatalogCooldown(pc.cooldownRemaining);
+  }
+  if (pc.syncStatus?.status === 'running' && !catalogSyncPollInterval) {
+    startSyncStatusPolling();
+  }
+
   $('catalog-update')?.addEventListener('click', async () => {
-    const btn = $('catalog-update');
     const status = $('catalog-update-status');
     try {
       await api('/api/admin/presets/update', { method: 'POST' });
-      status.textContent = 'Sync started';
-      status.className = 'test-result success';
-      btn.disabled = true;
-      let remaining = 60;
-      btn.textContent = `Update Catalog (${remaining}s)`;
-      const countdown = setInterval(() => {
-        remaining -= 1;
-        if (remaining <= 0) {
-          clearInterval(countdown);
-          btn.disabled = false;
-          btn.textContent = 'Update Catalog';
-          status.textContent = '';
-          loadAdminData();
-        } else {
-          btn.textContent = `Update Catalog (${remaining}s)`;
-        }
-      }, 1000);
+      status.innerHTML = `<span class="sync-status-text running">Sync started...</span>`;
+      
+      // Start cooldown countdown (60s)
+      startCatalogCooldown(60);
+      
+      // Start status polling
+      startSyncStatusPolling();
     } catch (error) {
-      status.textContent = error.message;
-      status.className = 'test-result danger';
+      status.innerHTML = `<span class="sync-status-text danger">${escapeHtml(error.message)}</span>`;
     }
   });
+}
+
+let catalogCooldownTimer = null;
+let catalogSyncPollInterval = null;
+
+function startCatalogCooldown(remaining) {
+  if (catalogCooldownTimer) clearInterval(catalogCooldownTimer);
+  const btn = $('catalog-update');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = `Update Catalog (${remaining}s)`;
+
+  let time = remaining;
+  catalogCooldownTimer = setInterval(() => {
+    time -= 1;
+    if (time <= 0) {
+      clearInterval(catalogCooldownTimer);
+      catalogCooldownTimer = null;
+      // Only enable if sync is not running
+      const currentSyncStatus = state.admin.presetCatalog?.syncStatus?.status;
+      if (currentSyncStatus !== 'running') {
+        const updateBtn = $('catalog-update');
+        if (updateBtn) updateBtn.disabled = false;
+      }
+      const updateBtn = $('catalog-update');
+      if (updateBtn) updateBtn.textContent = 'Update Catalog';
+    } else {
+      const updateBtn = $('catalog-update');
+      if (updateBtn) updateBtn.textContent = `Update Catalog (${time}s)`;
+    }
+  }, 1000);
+}
+
+function startSyncStatusPolling() {
+  if (catalogSyncPollInterval) clearInterval(catalogSyncPollInterval);
+  const btn = $('catalog-update');
+  if (btn) btn.disabled = true;
+
+  catalogSyncPollInterval = setInterval(async () => {
+    try {
+      const data = await api('/api/admin/presets/settings');
+      state.admin.presetCatalog = data;
+      const status = data.syncStatus || {};
+
+      const statusEl = $('catalog-update-status');
+      if (statusEl) {
+        statusEl.innerHTML = getSyncStatusMessage(data);
+      }
+
+      if (status.status !== 'running') {
+        clearInterval(catalogSyncPollInterval);
+        catalogSyncPollInterval = null;
+
+        // Reload data and re-render the admin console
+        await Promise.all([loadSettings(), loadWeather(), loadAdminData()]);
+        render();
+      }
+    } catch (err) {
+      console.error('Error polling preset catalog sync status:', err);
+    }
+  }, 2000);
 }
 
 
