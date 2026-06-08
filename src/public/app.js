@@ -541,8 +541,10 @@ function showLoginModal() {
 }
 function showBootstrapModal() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const bytes = new Uint8Array(20);
+  window.crypto.getRandomValues(bytes);
   let generatedSecret = '';
-  for (let i = 0; i < 16; i++) generatedSecret += alphabet[Math.floor(Math.random() * 32)];
+  for (let i = 0; i < bytes.length; i++) generatedSecret += alphabet[bytes[i] % 32];
   const formattedSecret = generatedSecret.match(/.{1,4}/g).join(' ');
   openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
   $('boot-enable-totp').addEventListener('change', (e) => { $('boot-totp-setup').hidden = !e.target.checked; });

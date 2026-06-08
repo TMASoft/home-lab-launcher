@@ -20,7 +20,7 @@ Home Lab Launcher is a small Docker-first web app for turning a home server, lab
 - **Trusted plugin system** — install pinned plugin versions from GitHub releases/tags, review permissions/compatibility, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
 - **HTTP or HTTPS** — run directly over HTTP or place behind Nginx, Caddy, Traefik, or another reverse proxy.
 - **Portable by default** — no baked-in domain names or home-lab-specific assumptions.
-- **Security foundations** — CSRF protection, login throttling, secure headers, session revocation, audit logging, log retention, and admin notices.
+- **Security foundations** — CSRF protection, login throttling, optional TOTP 2FA, secure headers, session revocation, audit logging, log retention, and admin notices.
 
 ## Screens and capabilities
 
@@ -65,7 +65,7 @@ APP_BASE_URL=http://localhost:8080
 
 Choose one first-admin setup path:
 
-- **Browser setup, recommended for most installs:** leave `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` empty or remove them from `.env`; the first page load prompts you to create the Admin account.
+- **Browser setup, recommended for most installs:** leave `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` empty or remove them from `.env`; the first page load prompts you to create the Admin account and can enable TOTP 2FA immediately.
 - **Environment bootstrap:** set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` before the first start when you need non-interactive setup. Change or remove the bootstrap password after first login.
 
 ### 2. Start with Docker Compose
@@ -204,13 +204,13 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 - **Settings** — app name, base URL, public read-only access, and weather settings.
 - **Appearance** — branding, hero content, app assets, color/font/density controls, live preview, default restore, and theme preset import/export.
 - **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
-- **Users** — create users, change roles, reset passwords, and delete users.
+- **Users** — create users, change roles, reset passwords, reset user 2FA, and delete users.
 - **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.
 - **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record the desired scheduled backup location.
 - **Plugins** — discover GitHub versions, install pinned plugin releases/tags, enable/disable, and remove plugins.
 - **Logs** — filtered audit log entries for login, settings, user, service, weather, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
 
-Users access profile actions from the username dropdown in the header. The profile menu includes password changes, active session review, session revocation, and logout.
+Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout.
 
 ## Configuration
 
@@ -321,6 +321,7 @@ The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the i
 
 - Change `SESSION_SECRET` before deployment.
 - Change or remove the bootstrap password after first login.
+- Enable TOTP 2FA from the first-admin setup or the profile menu when the deployment is reachable beyond a trusted private LAN. TOTP secrets are stored in the application database; include the SQLite database in backup planning and protect database backups accordingly.
 - CSRF protection is enabled for mutating API routes after login.
 - Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
 - Security headers are set by the application; still use HTTPS for real deployments.

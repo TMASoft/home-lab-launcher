@@ -4,7 +4,7 @@ const totp = require('../src/server/totp');
 
 test('TOTP helpers - generateSecret generates valid Base32 secret', () => {
   const secret = totp.generateSecret();
-  assert.equal(secret.length, 10);
+  assert.equal(secret.length, 20);
   assert.ok(/^[A-Z2-7]+$/.test(secret));
 });
 
@@ -42,18 +42,21 @@ test('TOTP helpers - verifyTOTP validates correct tokens and rejects invalid one
   const futureOtp = totp.generateHOTP(secretBuffer, currentCounter + 1);
 
   // 1. Current OTP is verified
-  assert.ok(totp.verifyTOTP(secret, currentOtp));
-  assert.ok(totp.verifyTOTP(secret, String(currentOtp)));
+  const currentToken = totp.formatToken(currentOtp);
+  assert.ok(totp.verifyTOTP(secret, currentToken));
+  assert.ok(totp.verifyTOTP(secret, `${currentToken.slice(0, 3)} ${currentToken.slice(3)}`));
 
   // 2. Past and future OTPs within drift window are verified
-  assert.ok(totp.verifyTOTP(secret, pastOtp, 1));
-  assert.ok(totp.verifyTOTP(secret, futureOtp, 1));
+  assert.ok(totp.verifyTOTP(secret, totp.formatToken(pastOtp), 1));
+  assert.ok(totp.verifyTOTP(secret, totp.formatToken(futureOtp), 1));
 
   // 3. Stale OTP outside window is rejected
   const staleOtp = totp.generateHOTP(secretBuffer, currentCounter - 2);
-  assert.ok(!totp.verifyTOTP(secret, staleOtp, 1)); // Default window is 1
+  assert.ok(!totp.verifyTOTP(secret, totp.formatToken(staleOtp), 1)); // Default window is 1
 
   // 4. Invalid secret or invalid code formatting is rejected
   assert.ok(!totp.verifyTOTP(secret, 'abc123'));
+  assert.ok(!totp.verifyTOTP(secret, `${currentToken}abc`));
+  assert.ok(!totp.verifyTOTP(secret, currentToken.slice(1)));
   assert.ok(!totp.verifyTOTP('INVALIDSECRET123', currentOtp));
 });

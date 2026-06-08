@@ -35,19 +35,22 @@ function generateHOTP(secretBuffer, counter) {
   return code % 1000000;
 }
 
+function formatToken(value) {
+  return String(value).padStart(6, '0');
+}
+
 function verifyTOTP(secretBase32, token, window = 1) {
   try {
     if (!secretBase32) return false;
     const secretBuffer = decodeBase32(secretBase32);
     const epoch = Math.floor(Date.now() / 1000);
     const currentCounter = Math.floor(epoch / 30);
-    // Support string with space or standard 6 digit numeric code
-    const tokenNum = parseInt(String(token).replace(/\s+/g, ''), 10);
-    if (isNaN(tokenNum)) return false;
+    const cleanToken = String(token).replace(/\s+/g, '');
+    if (!/^\d{6}$/.test(cleanToken)) return false;
 
     for (let i = -window; i <= window; i++) {
       const computed = generateHOTP(secretBuffer, currentCounter + i);
-      if (computed === tokenNum) {
+      if (formatToken(computed) === cleanToken) {
         return true;
       }
     }
@@ -59,7 +62,7 @@ function verifyTOTP(secretBase32, token, window = 1) {
 
 function generateSecret() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  const bytes = crypto.randomBytes(10); // 80 bits of entropy
+  const bytes = crypto.randomBytes(20); // 100 bits of entropy as 20 Base32 chars
   let secret = '';
   for (let i = 0; i < bytes.length; i++) {
     secret += alphabet[bytes[i] % 32];
@@ -69,6 +72,7 @@ function generateSecret() {
 
 module.exports = {
   decodeBase32,
+  formatToken,
   generateHOTP,
   verifyTOTP,
   generateSecret
