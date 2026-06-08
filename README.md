@@ -5,7 +5,7 @@
 Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple—service cards and weather—but is designed to grow through installable plugins such as RSS/news, status widgets, inventory panels, or custom household dashboards.
 
 ![Status](https://img.shields.io/badge/status-public%20beta%20prep-ffd166?style=flat-square)
-![Node](https://img.shields.io/badge/node-%3E%3D20-79f2c0?style=flat-square)
+![Node](https://img.shields.io/badge/node-20%20%7C%2022-79f2c0?style=flat-square)
 ![SQLite](https://img.shields.io/badge/storage-SQLite-4de7ff?style=flat-square)
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
 
@@ -39,6 +39,8 @@ The UI intentionally hides empty dynamic/plugin sections for regular and anonymo
 
 This beta is intended for self-hosters who can manage a Docker Compose service and review security warnings before exposing it beyond a private LAN. After first login, open **Admin → Overview** and complete the beta readiness checklist.
 
+Home Lab Launcher is distributed as a Docker/GHCR application, not as an npm package. `package.json` remains marked `"private": true`; use npm scripts only for local development, validation, and CI.
+
 ## Quick start
 
 ### 1. Clone and configure
@@ -49,21 +51,40 @@ cd home-lab-launcher
 cp .env.example .env
 ```
 
-Edit `.env` before first start:
+Edit `.env` before first start. At minimum, set a strong session secret and make `APP_BASE_URL` match the URL users will open in a browser:
+
+```bash
+# One portable way to generate a secret on most Linux/macOS hosts:
+openssl rand -hex 48
+```
 
 ```env
 SESSION_SECRET=replace-with-a-long-random-string
-BOOTSTRAP_ADMIN_USERNAME=admin
-BOOTSTRAP_ADMIN_PASSWORD=replace-this-password
 APP_BASE_URL=http://localhost:8080
 ```
 
-> If you omit `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD`, the first browser load will show a first-admin setup flow.
+Choose one first-admin setup path:
+
+- **Browser setup, recommended for most installs:** leave `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` empty or remove them from `.env`; the first page load prompts you to create the Admin account.
+- **Environment bootstrap:** set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` before the first start when you need non-interactive setup. Change or remove the bootstrap password after first login.
 
 ### 2. Start with Docker Compose
 
+For a tagged public release, prefer the published image and skip a local build:
+
+Replace `OWNER` with the GitHub owner that published the package.
+
+```bash
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose up -d --no-build
+docker compose ps
+```
+
+When developing from a source checkout, build locally instead:
+
 ```bash
 docker compose up --build -d
+docker compose ps
 ```
 
 Open:
@@ -72,20 +93,40 @@ Open:
 http://localhost:8080
 ```
 
-To use a different host port, set `HOST_PORT` in `.env`:
+Validate the anonymous health endpoint:
+
+```bash
+curl -fsS http://localhost:8080/api/healthz
+curl -fsS http://localhost:8080/api/bootstrap-status
+```
+
+`/api/healthz` returns only `{ ok, version, uptimeSeconds }`. `/api/bootstrap-status` reports whether first-admin setup is still needed.
+
+### 3. Optional port and reverse-proxy binding
+
+The container listens on port `8080` internally. To use a different host port, set `HOST_PORT` and update `APP_BASE_URL`:
 
 ```env
 HOST_PORT=9090
 APP_BASE_URL=http://localhost:9090
 ```
 
-The container still listens on port `8080` internally. Validate the anonymous health endpoint with `curl -fsS http://localhost:8080/api/healthz`; it returns only `{ ok, version, uptimeSeconds }`.
+When the launcher sits behind Nginx, Caddy, Traefik, or another reverse proxy on the same host, bind the published port to loopback only:
+
+```env
+HOST_BIND_IP=127.0.0.1
+HOST_PORT=8080
+TRUST_PROXY=loopback
+APP_BASE_URL=https://launcher.example.test
+```
+
+`HOST` controls the interface the Node process listens on inside the container and normally stays at `0.0.0.0`. In constrained Docker/LXC environments where normal port publishing is unavailable and you intentionally use host networking, set `HOST=127.0.0.1` so the app listens on loopback only.
 
 ## Launchpad personalization and health
 
 The launchpad supports card, compact grouped, and list views. Logged-in users can save their layout preference, reorder favorites, and hide categories. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled.
 
-Editors and Admins can enable HTTP health checks per service, optionally override the health-check URL, set the check interval, and trigger manual checks. Cards show the latest status, last-check timing, response time, and error details where available.
+Editors and Admins can enable HTTP health checks per service, optionally override the health-check URL, set the check interval, and trigger manual checks. Cards show the latest status, last-check timing, response time, and error details where available. These checks are server-side fetches; see the SSRF notes below before granting Editor access in shared or internet-exposed deployments.
 
 ## Service icons
 
@@ -180,22 +221,26 @@ Most runtime settings are environment variables on first boot, then editable in 
 | Variable | Purpose | Default/example |
 | --- | --- | --- |
 | `HOST_PORT` | Host port published by Docker Compose | `8080` |
+| `HOST_BIND_IP` | Host interface for the published Docker port; use `127.0.0.1` behind a local reverse proxy | `0.0.0.0` |
+| `HOST` | Interface the Node process listens on inside the container/native process | `0.0.0.0` |
+| `TRUST_PROXY` | Express reverse-proxy trust setting. Keep `false` for direct exposure; use `loopback` or `1` behind a trusted same-host/single reverse proxy | `false` |
 | `PORT` | App port inside the container or native Node process | `8080` |
 | `APP_NAME` | Initial displayed application name | `Home Lab Launcher` |
-| `APP_BASE_URL` | External URL users open in a browser | `http://localhost:8080` |
-| `SESSION_SECRET` | Required session signing secret | Change this |
+| `APP_BASE_URL` | External URL users open in a browser; set this to the reverse-proxy HTTPS URL when proxied | `http://localhost:8080` |
+| `SESSION_SECRET` | Required session signing secret; generate a long random value before deployment | Change this |
 | `DATA_DIR` | SQLite/session/plugin data directory | `/app/data` in Docker |
 | `PLUGIN_DIR` | Installed plugin directory | `/app/data/plugins` |
-| `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username | `admin` |
-| `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password | Change this |
-| `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `true` |
-| `WEATHER_LOCATION_LABEL` | Initial weather label | `Bellows Falls, VT 05101` |
-| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | Initial weather coordinates | `43.13341`, `-72.44398` |
+| `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username; omit for browser first-admin setup | empty |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password; omit for browser first-admin setup | empty |
+| `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `false` |
+| `WEATHER_LOCATION_LABEL` | Initial weather label; leave empty until configured in Admin settings | empty |
+| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | Initial weather coordinates; leave empty until configured in Admin settings | empty |
 | `WEATHER_UNITS` | `fahrenheit` or `celsius` | `fahrenheit` |
 | `LOG_RETENTION_DAYS` | Initial audit-log retention window | `90` |
 | `SCHEDULED_BACKUP_LOCATION` | Optional operator note for desired backup destination | empty |
+| `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` | Which roles may make arbitrary server-side fetches to private, loopback, link-local, or reserved addresses through service health checks and remote image downloads. Use `admin-editor`, `admin`, or `disabled` | `admin-editor` |
 
-Runtime data is stored in SQLite in the Docker volume `launcher-data` unless you override `DATA_DIR`.
+Runtime data is stored in SQLite in the Docker volume `launcher-data` unless you override `DATA_DIR`. Keep `.env`, database files, plugin installs, and private certificates out of Git.
 
 ## HTTPS and domains
 
@@ -210,6 +255,10 @@ Supported deployment styles:
 
 See [docs/deployment.md](docs/deployment.md) for examples.
 
+## API reference
+
+Core API routes and plugin-management endpoints are documented in [docs/api.md](docs/api.md). Plugin extension points, manifest fields, config scopes, and trust requirements are documented in [docs/plugins.md](docs/plugins.md).
+
 ## Plugin system
 
 Plugins are trusted Admin-installed code. The Admin console shows lifecycle state, compatibility, permissions, installed hash, config schema fields, logs, update discovery, and release-note previews. A plugin can add:
@@ -220,7 +269,7 @@ Plugins are trusted Admin-installed code. The Admin console shows lifecycle stat
 - static frontend assets, and
 - dashboard sections.
 
-The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
+The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install and may paste an expected SHA-256 checksum from a trusted release note; when provided, the downloaded archive must match before extraction. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Plugin config fields are scoped by the manifest: Admins can edit all fields, Editors can edit only `scope: "editor"` or `scope: "user"` fields, and Admin-only values are preserved when Editors save config. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
 
 See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
 
@@ -236,7 +285,9 @@ It implements an optional RSS/news dashboard section with feed management, folde
 
 ## Development
 
-Native development requires Node.js 20+.
+Native development should use an active Node.js LTS release supported by `better-sqlite3` and the Docker image. This beta supports Node.js 20 and 22; newer current/non-LTS releases may not have compatible native SQLite bindings yet.
+
+`better-sqlite3` may compile a native binding during `npm install`. Install the usual native build prerequisites first: a C/C++ compiler toolchain, Python 3, `make`, and SQLite development headers/libraries from your OS package manager.
 
 ```bash
 npm install
@@ -250,24 +301,38 @@ Useful commands:
 # Validate JavaScript syntax
 npm run check
 
-# Build and run with Docker
+# Build and run with Docker from source
 docker compose up --build
+
+# Validate release hygiene before publishing
+npm run release:check
+
+# Reset local development SQLite/plugin data under ./data
+npm run dev:reset
+
+# Seed neutral demo data for screenshots and UI checks
+npm run dev:seed
 
 # Inspect logs
 docker compose logs -f launcher
 ```
+
+The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the ignored `./data` directory in the repository. `dev:reset` refuses to delete a `DATA_DIR` outside the repository unless you intentionally run `node scripts/reset-dev-data.js --force`.
 
 ## Security notes
 
 - Change `SESSION_SECRET` before deployment.
 - Change or remove the bootstrap password after first login.
 - CSRF protection is enabled for mutating API routes after login.
-- Failed logins are rate-limited and audited.
+- Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
 - Security headers are set by the application; still use HTTPS for real deployments.
+- Keep `TRUST_PROXY=false` for direct exposure. Set `TRUST_PROXY=loopback` or `TRUST_PROXY=1` only when a trusted reverse proxy supplies forwarded headers.
 - Users can revoke other active sessions from their profile.
 - Admins can export logs, set retention, prune old audit events, and review management-plane notices.
-- Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement.
-- Remote service/branding image fetches are initiated by trusted Editors/Admins, use timeouts and size limits, and reject SVG assets.
+- Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement and supports optional SHA-256 checksum verification for GitHub archives.
+- Remote service/branding image fetches, URL tests, and service health checks are server-side fetches. By default, Admins and Editors may target private, loopback, link-local, and reserved addresses for home-lab use. Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` in shared deployments, or `disabled` for internet-exposed demos where no operator should use the launcher as an internal-network HTTP client.
+- The SSRF guard resolves each requested host before fetching and re-checks redirect targets. It blocks private-network destinations for roles not allowed by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`, uses timeouts and size limits for image downloads, and rejects SVG assets. This is a defense-in-depth boundary, not a browser sandbox; trusted plugins still run server-side code and can make their own network requests.
+- Branding assets and service icons are intentionally public from `/api/app-assets/` and `/api/service-icons/` so login, anonymous-disabled, and browser chrome views can still render configured imagery. Do not upload secret or sensitive images.
 - Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
 - Put the launcher behind HTTPS if credentials traverse an untrusted network.
 

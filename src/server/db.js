@@ -52,92 +52,134 @@ function openDb(dataDir) {
   return db;
 }
 
+const MIGRATIONS = [
+  {
+    id: 1,
+    name: 'initial-core-schema',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS users (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL CHECK(role IN ('admin', 'editor', 'user')),
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS services (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          icon TEXT NOT NULL DEFAULT '🔗',
+          url TEXT NOT NULL,
+          category TEXT NOT NULL DEFAULT 'general',
+          accent TEXT NOT NULL DEFAULT '#4de7ff',
+          description TEXT NOT NULL DEFAULT '',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          featured INTEGER NOT NULL DEFAULT 0,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS user_preferences (
+          user_id INTEGER NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT NOT NULL,
+          PRIMARY KEY (user_id, key),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS plugins (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          source_url TEXT NOT NULL,
+          source_type TEXT NOT NULL DEFAULT 'github',
+          version TEXT NOT NULL,
+          install_path TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          manifest_json TEXT NOT NULL,
+          config_json TEXT NOT NULL DEFAULT '{}',
+          installed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS app_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          level TEXT NOT NULL DEFAULT 'info',
+          action TEXT NOT NULL,
+          actor_user_id INTEGER,
+          actor_username TEXT,
+          ip TEXT,
+          details_json TEXT NOT NULL DEFAULT '{}',
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_app_logs_created_at ON app_logs(created_at);
+
+        CREATE TABLE IF NOT EXISTS login_throttle (
+          key TEXT PRIMARY KEY,
+          count INTEGER NOT NULL DEFAULT 0,
+          reset_at INTEGER NOT NULL
+        );
+      `);
+    }
+  },
+  {
+    id: 2,
+    name: 'plugin-install-metadata',
+    up(db) {
+      addColumnIfMissing(db, 'plugins', 'installed_hash', 'TEXT');
+      addColumnIfMissing(db, 'plugins', 'lifecycle', "TEXT NOT NULL DEFAULT 'installed'");
+      addColumnIfMissing(db, 'plugins', 'last_error', 'TEXT');
+    }
+  },
+  {
+    id: 3,
+    name: 'service-health-checks',
+    up(db) {
+      addColumnIfMissing(db, 'services', 'health_check_enabled', 'INTEGER NOT NULL DEFAULT 0');
+      addColumnIfMissing(db, 'services', 'health_check_url', 'TEXT');
+      addColumnIfMissing(db, 'services', 'health_check_interval_minutes', 'INTEGER NOT NULL DEFAULT 15');
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS service_health (
+          service_id TEXT PRIMARY KEY,
+          status TEXT NOT NULL DEFAULT 'unknown',
+          status_code INTEGER,
+          response_ms INTEGER,
+          checked_at TEXT,
+          next_check_at TEXT,
+          error TEXT,
+          FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+        );
+      `);
+    }
+  }
+];
+
 function migrate(db) {
   db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin', 'editor', 'user')),
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS settings (
-      key TEXT PRIMARY KEY,
-      value TEXT NOT NULL
-    );
-
-    CREATE TABLE IF NOT EXISTS services (
-      id TEXT PRIMARY KEY,
+    CREATE TABLE IF NOT EXISTS schema_migrations (
+      id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
-      icon TEXT NOT NULL DEFAULT '🔗',
-      url TEXT NOT NULL,
-      category TEXT NOT NULL DEFAULT 'general',
-      accent TEXT NOT NULL DEFAULT '#4de7ff',
-      description TEXT NOT NULL DEFAULT '',
-      tags_json TEXT NOT NULL DEFAULT '[]',
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      featured INTEGER NOT NULL DEFAULT 0,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      health_check_enabled INTEGER NOT NULL DEFAULT 0,
-      health_check_url TEXT,
-      health_check_interval_minutes INTEGER NOT NULL DEFAULT 15,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS user_preferences (
-      user_id INTEGER NOT NULL,
-      key TEXT NOT NULL,
-      value TEXT NOT NULL,
-      PRIMARY KEY (user_id, key),
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-    );
-
-    CREATE TABLE IF NOT EXISTS plugins (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      source_url TEXT NOT NULL,
-      source_type TEXT NOT NULL DEFAULT 'github',
-      version TEXT NOT NULL,
-      install_path TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      manifest_json TEXT NOT NULL,
-      config_json TEXT NOT NULL DEFAULT '{}',
-      installed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS app_logs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      level TEXT NOT NULL DEFAULT 'info',
-      action TEXT NOT NULL,
-      actor_user_id INTEGER,
-      actor_username TEXT,
-      ip TEXT,
-      details_json TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-    );
-    CREATE INDEX IF NOT EXISTS idx_app_logs_created_at ON app_logs(created_at);
-
-    CREATE TABLE IF NOT EXISTS service_health (
-      service_id TEXT PRIMARY KEY,
-      status TEXT NOT NULL DEFAULT 'unknown',
-      status_code INTEGER,
-      response_ms INTEGER,
-      checked_at TEXT,
-      next_check_at TEXT,
-      error TEXT,
-      FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+      applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  addColumnIfMissing(db, 'plugins', 'installed_hash', 'TEXT');
-  addColumnIfMissing(db, 'plugins', 'lifecycle', "TEXT NOT NULL DEFAULT 'installed'");
-  addColumnIfMissing(db, 'plugins', 'last_error', 'TEXT');
-  addColumnIfMissing(db, 'services', 'health_check_enabled', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(db, 'services', 'health_check_url', 'TEXT');
-  addColumnIfMissing(db, 'services', 'health_check_interval_minutes', 'INTEGER NOT NULL DEFAULT 15');
+  const applied = new Set(db.prepare('SELECT id FROM schema_migrations').all().map((row) => row.id));
+  const tx = db.transaction(() => {
+    for (const migration of MIGRATIONS) {
+      if (applied.has(migration.id)) continue;
+      migration.up(db);
+      db.prepare('INSERT INTO schema_migrations (id, name) VALUES (?, ?)').run(migration.id, migration.name);
+      db.pragma(`user_version = ${migration.id}`);
+    }
+  });
+  tx();
 }
 
 function addColumnIfMissing(db, table, column, definition) {
@@ -158,6 +200,13 @@ function setSetting(db, key, value) {
   `).run(key, JSON.stringify(value));
 }
 
+function envNumber(name, fallback = null) {
+  const raw = process.env[name];
+  if (raw === undefined || raw === '') return fallback;
+  const value = Number(raw);
+  return Number.isFinite(value) ? value : fallback;
+}
+
 function seed(db) {
   const serviceCount = db.prepare('SELECT COUNT(*) AS count FROM services').get().count;
   if (serviceCount === 0) {
@@ -174,11 +223,11 @@ function seed(db) {
   const defaults = {
     app_name: process.env.APP_NAME || 'Home Lab Launcher',
     app_base_url: process.env.APP_BASE_URL || 'http://localhost:8080',
-    public_read_enabled: String(process.env.PUBLIC_READ_ENABLED || 'true') !== 'false',
+    public_read_enabled: process.env.PUBLIC_READ_ENABLED === 'true',
     weather: {
-      label: process.env.WEATHER_LOCATION_LABEL || 'Bellows Falls, VT 05101',
-      latitude: Number(process.env.WEATHER_LATITUDE || 43.13341),
-      longitude: Number(process.env.WEATHER_LONGITUDE || -72.44398),
+      label: process.env.WEATHER_LOCATION_LABEL || '',
+      latitude: envNumber('WEATHER_LATITUDE'),
+      longitude: envNumber('WEATHER_LONGITUDE'),
       units: process.env.WEATHER_UNITS || 'fahrenheit',
       resolvedAt: null
     },

@@ -1,0 +1,6 @@
+# Optional override for same-host reverse proxy deployments.
+# Usage: docker compose -f docker-compose.yml -f docs/examples/compose.loopback.yml up -d
+services:
+  launcher:
+    ports:
+      - "127.0.0.1:${HOST_PORT:-8080}:8080"

@@ -6,6 +6,9 @@ const tar = require('tar');
 const { XMLParser } = require('fast-xml-parser');
 
 const LAUNCHER_PLUGIN_API_VERSION = 1;
+const MAX_PLUGIN_TARBALL_BYTES = 25 * 1024 * 1024;
+const MAX_PLUGIN_EXTRACTED_BYTES = 100 * 1024 * 1024;
+const MAX_PLUGIN_FILES = 2000;
 
 function parseGithubRepo(input) {
   const value = String(input || '').trim();
@@ -20,6 +23,108 @@ function safeJson(value, fallback = {}) {
 
 function hashBuffer(buffer) {
   return crypto.createHash('sha256').update(buffer).digest('hex');
+}
+
+function normalizeSha256(value) {
+  const hash = String(value || '').trim().toLowerCase();
+  if (!hash) return '';
+  if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Expected SHA-256 checksum must be 64 hexadecimal characters');
+  return hash;
+}
+
+function verifyExpectedSha256(buffer, expectedSha256) {
+  const expected = normalizeSha256(expectedSha256);
+  if (!expected) return hashBuffer(buffer);
+  const actual = hashBuffer(buffer);
+  if (actual !== expected) throw new Error(`Plugin archive SHA-256 mismatch: expected ${expected}, got ${actual}`);
+  return actual;
+}
+
+function configFieldScope(spec = {}) {
+  const scope = String(spec.scope || spec.access || spec.role || 'admin').trim().toLowerCase();
+  if (['editor', 'editor-safe'].includes(scope)) return 'editor';
+  if (['user', 'user-preference', 'preference'].includes(scope)) return 'user';
+  return 'admin';
+}
+
+function canRoleWriteConfigScope(role, scope) {
+  if (role === 'admin') return true;
+  if (role === 'editor') return scope === 'editor' || scope === 'user';
+  if (role === 'user') return scope === 'user';
+  return false;
+}
+
+function coerceConfigValue(key, spec = {}, value) {
+  if (value === undefined) return undefined;
+  const type = spec.type || (Array.isArray(spec.enum) ? 'enum' : 'string');
+  if (Array.isArray(spec.enum)) {
+    const allowed = spec.enum.map(String);
+    const stringValue = String(value);
+    if (!allowed.includes(stringValue)) throw new Error(`Invalid value for plugin config field ${key}`);
+    return stringValue;
+  }
+  if (type === 'boolean') return Boolean(value);
+  if (type === 'number') {
+    const number = Number(value);
+    if (!Number.isFinite(number)) throw new Error(`Invalid number for plugin config field ${key}`);
+    return number;
+  }
+  return String(value ?? '');
+}
+
+function applyPluginConfigUpdate(manifest, existingConfig, incomingConfig, actorRole) {
+  const schema = manifest?.configSchema && typeof manifest.configSchema === 'object' ? manifest.configSchema : {};
+  const incoming = incomingConfig && typeof incomingConfig === 'object' && !Array.isArray(incomingConfig) ? incomingConfig : {};
+  const next = { ...(existingConfig && typeof existingConfig === 'object' && !Array.isArray(existingConfig) ? existingConfig : {}) };
+  const allowed = [];
+  const rejected = [];
+  for (const [key, value] of Object.entries(incoming)) {
+    const spec = schema[key];
+    if (!spec) {
+      if (actorRole === 'admin') { next[key] = value; allowed.push(key); }
+      else rejected.push(key);
+      continue;
+    }
+    const scope = configFieldScope(spec);
+    if (!canRoleWriteConfigScope(actorRole, scope)) { rejected.push(key); continue; }
+    next[key] = coerceConfigValue(key, spec, value);
+    allowed.push(key);
+  }
+  return { config: next, allowed, rejected };
+}
+
+
+function strippedTarPath(entryPath, strip = 1) {
+  const parts = String(entryPath || '').split('/').filter(Boolean).slice(strip);
+  return parts.join('/');
+}
+
+function validateTarEntryPath(relativePath) {
+  if (!relativePath) return true;
+  if (path.isAbsolute(relativePath)) throw new Error('Plugin archive contains an absolute path');
+  const normalized = path.normalize(relativePath);
+  if (normalized === '..' || normalized.startsWith(`..${path.sep}`) || normalized.includes(`${path.sep}..${path.sep}`)) {
+    throw new Error('Plugin archive contains a parent-directory traversal path');
+  }
+  return true;
+}
+
+function createPluginTarSafetyFilter({ strip = 1 } = {}) {
+  let fileCount = 0;
+  let totalSize = 0;
+  return (entryPath, entry) => {
+    const relativePath = strippedTarPath(entryPath, strip);
+    validateTarEntryPath(relativePath);
+    if (!relativePath) return true;
+    fileCount += 1;
+    if (fileCount > MAX_PLUGIN_FILES) throw new Error(`Plugin archive contains more than ${MAX_PLUGIN_FILES} entries`);
+    const type = entry?.type || 'File';
+    if (['SymbolicLink', 'Link'].includes(type)) throw new Error('Plugin archive may not contain symbolic or hard links');
+    if (!['File', 'Directory'].includes(type)) throw new Error(`Plugin archive contains unsupported entry type: ${type}`);
+    totalSize += Number(entry?.size || 0);
+    if (totalSize > MAX_PLUGIN_EXTRACTED_BYTES) throw new Error(`Plugin archive expands beyond ${Math.round(MAX_PLUGIN_EXTRACTED_BYTES / 1024 / 1024)} MiB`);
+    return true;
+  };
 }
 
 function validateManifest(manifest) {
@@ -253,19 +358,20 @@ class PluginManager {
     return updates;
   }
 
-  async installFromGithub(repoUrl, version) {
+  async installFromGithub(repoUrl, version, { expectedSha256 = '' } = {}) {
     if (!version) throw new Error('A version/tag is required');
+    const normalizedExpectedSha256 = normalizeSha256(expectedSha256);
     const { owner, repo } = parseGithubRepo(repoUrl);
     const safeVersion = String(version).replace(/[^a-zA-Z0-9_.-]/g, '_');
     const destination = path.join(this.pluginDir, `${owner}-${repo}-${safeVersion}`);
     fs.rmSync(destination, { recursive: true, force: true });
     fs.mkdirSync(destination, { recursive: true });
     const tarUrl = `https://api.github.com/repos/${owner}/${repo}/tarball/${encodeURIComponent(version)}`;
-    const tarball = await fetchBufferWithLimit(tarUrl, { maxBytes: 25 * 1024 * 1024, timeoutMs: 20000, headers: { 'User-Agent': 'home-lab-launcher' } });
-    const installedHash = hashBuffer(tarball);
+    const tarball = await fetchBufferWithLimit(tarUrl, { maxBytes: MAX_PLUGIN_TARBALL_BYTES, timeoutMs: 20000, headers: { 'User-Agent': 'home-lab-launcher' } });
+    const installedHash = verifyExpectedSha256(tarball, normalizedExpectedSha256);
     const tmpFile = path.join(this.pluginDir, `${owner}-${repo}-${safeVersion}.tgz`);
     fs.writeFileSync(tmpFile, tarball);
-    await tar.x({ file: tmpFile, cwd: destination, strip: 1 });
+    await tar.x({ file: tmpFile, cwd: destination, strip: 1, filter: createPluginTarSafetyFilter({ strip: 1 }) });
     fs.rmSync(tmpFile, { force: true });
     const manifestPath = path.join(destination, 'plugin.json');
     if (!fs.existsSync(manifestPath)) throw new Error('Plugin is missing plugin.json');
@@ -316,4 +422,4 @@ class PluginManager {
   }
 }
 
-module.exports = { PluginManager, parseGithubRepo, LAUNCHER_PLUGIN_API_VERSION, validateManifest };
+module.exports = { PluginManager, parseGithubRepo, LAUNCHER_PLUGIN_API_VERSION, validateManifest, applyPluginConfigUpdate, configFieldScope };

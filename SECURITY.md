@@ -19,5 +19,6 @@ Include:
 ## Security assumptions
 
 - Plugins are trusted code and are not sandboxed.
+- Service health checks, URL tests, and remote image downloads are server-side fetches. Restrict private-network fetches with `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` when Editors are not trusted to probe internal URLs.
 - The app should be served over HTTPS whenever credentials cross an untrusted network.
 - `.env`, SQLite databases, private certificates, and plugin runtime data must not be committed.

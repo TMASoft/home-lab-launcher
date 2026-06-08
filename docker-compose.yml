@@ -1,5 +1,6 @@
 services:
   launcher:
+    image: ${APP_IMAGE:-home-lab-launcher:local}
     build: .
     container_name: home-lab-launcher
     restart: unless-stopped
@@ -8,15 +9,28 @@ services:
         required: false
     environment:
       PORT: 8080
+      HOST: ${HOST:-0.0.0.0}
+      TRUST_PROXY: ${TRUST_PROXY:-false}
+      SERVER_FETCH_PRIVATE_NETWORK_ACCESS: ${SERVER_FETCH_PRIVATE_NETWORK_ACCESS:-admin-editor}
       APP_NAME: ${APP_NAME:-Home Lab Launcher}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:${HOST_PORT:-8080}}
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env before starting}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      PUBLIC_READ_ENABLED: ${PUBLIC_READ_ENABLED:-false}
+      WEATHER_LOCATION_LABEL: ${WEATHER_LOCATION_LABEL:-}
+      WEATHER_LATITUDE: ${WEATHER_LATITUDE:-}
+      WEATHER_LONGITUDE: ${WEATHER_LONGITUDE:-}
+      WEATHER_UNITS: ${WEATHER_UNITS:-fahrenheit}
+      LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}
+      SCHEDULED_BACKUP_LOCATION: ${SCHEDULED_BACKUP_LOCATION:-}
       DATA_DIR: /app/data
       PLUGIN_DIR: /app/data/plugins
       ENABLE_LOCAL_PLUGIN_INSTALL: ${ENABLE_LOCAL_PLUGIN_INSTALL:-false}
       LOCAL_PLUGIN_HOST_DIR: ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}
       LOCAL_PLUGIN_CONTAINER_DIR: ${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}
     ports:
-      - "${HOST_PORT:-8080}:8080"
+      - "${HOST_BIND_IP:-0.0.0.0}:${HOST_PORT:-8080}:8080"
     volumes:
       - launcher-data:/app/data
       - ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}:${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}:ro

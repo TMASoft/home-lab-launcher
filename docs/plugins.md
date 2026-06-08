@@ -4,6 +4,8 @@ Plugins let Home Lab Launcher add optional dynamic sections without baking every
 
 > **Security model:** plugins are trusted Admin-installed code. They run in the launcher process with application privileges, can create routes, run scheduled jobs, access the launcher database, and make server-side network requests. Do not install or update plugins from sources you do not trust. The Admin UI requires explicit acknowledgement of this trust boundary before install/update.
 
+Core plugin-management API routes are listed in [api.md](api.md#plugin-management-api). This guide covers the trusted plugin extension API and manifest contract.
+
 ## What plugins can do
 
 A plugin can provide:
@@ -23,9 +25,10 @@ Current behavior:
 
 - GitHub releases/tags are supported for normal installs.
 - Versions are manually selected and pinned.
-- Installed tarball SHA-256 hashes are stored and shown in the Admin console.
+- Installed tarball SHA-256 hashes are stored and shown in the Admin console. Admins may also provide an expected SHA-256 checksum during install/update; mismatches fail before extraction.
+- GitHub plugin archives are extracted with path, entry-count, expanded-size, and symlink/hardlink safety checks.
 - The Admin console reports lifecycle state: installed, enabled, disabled, failed, and update available.
-- Updates are manual, show release notes when GitHub provides them, and roll back automatically if the updated plugin fails to load.
+- Updates are manual, show release notes when GitHub provides them, preserve existing plugin config, and roll back automatically if the updated plugin fails to load.
 - Local filesystem installs are supported for development when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`.
 - Plugins are enabled/disabled/reloaded from the Admin console.
 - Plugins are not sandboxed.
@@ -58,7 +61,8 @@ Every plugin must include `plugin.json` at the repository root.
   "frontend": "public/plugin.js",
   "permissions": ["routes", "storage", "jobs", "dashboard-section"],
   "configSchema": {
-    "sectionTitle": { "type": "string", "default": "Latest headlines" }
+    "sectionTitle": { "type": "string", "default": "Latest headlines", "scope": "editor" },
+    "apiToken": { "type": "string", "scope": "admin" }
   }
 }
 ```
@@ -74,7 +78,17 @@ Every plugin must include `plugin.json` at the repository root.
 | `backend` | Optional | CommonJS module exporting `register(context)`. |
 | `frontend` | Optional | Browser script loaded when the plugin exposes dashboard sections. |
 | `permissions` | Optional | Human-readable declared capabilities. |
-| `configSchema` | Optional | Configuration fields rendered in the Admin console. Supported types: `string`, `number`, `boolean`, and `enum`. |
+| `configSchema` | Optional | Configuration fields rendered in the Admin console. Supported types: `string`, `number`, `boolean`, and `enum`. Each field may declare `scope`: `admin` (default), `editor`, or `user`. |
+
+## Configuration scopes
+
+Plugin config is stored as one JSON object per plugin, but write access is field-scoped by the manifest:
+
+- `scope: "admin"` or omitted: Admin-only. Use for credentials, endpoint URLs that affect trust, destructive behavior, and anything that changes server-side authority.
+- `scope: "editor"`: Editor-safe operational settings. Editors may save these fields, and Admin-only fields already stored in the plugin config are preserved.
+- `scope: "user"`: User-preference-safe fields. The current generic plugin config API allows Admins and Editors to save them; future per-user plugin preference APIs should use this scope for Basic User preferences.
+
+Non-Admin requests cannot create arbitrary config keys outside `configSchema`. Admins may still write unknown keys for migration and emergency recovery, but published plugins should declare every configurable field and scope explicitly.
 
 ## Backend entrypoint
 
@@ -118,6 +132,17 @@ For the example above, `GET /items` becomes:
 GET /api/plugins/example/items
 ```
 
+## API response convention
+
+Core and plugin APIs should keep responses predictable for frontend and plugin authors:
+
+- Successful commands that do not need a resource body return `{ "ok": true }`, optionally with additional fields such as `count` or `updatedFields`.
+- Resource reads and writes return a named resource envelope such as `{ "service": { ... } }`, `{ "plugins": [ ... ] }`, or `{ "config": { ... } }`.
+- Errors return HTTP 4xx/5xx with `{ "error": "human-readable message" }`; routes may include extra machine-readable details beside `error` when useful, but should not replace that field before a stable v1 API is designed.
+- Mutating requests after login must include the CSRF token returned by `/api/auth/login` or `/api/auth/session`.
+
+Use the shared server helpers in `src/server/api-response.js` for new core routes so the current convention remains consistent.
+
 ## Backend context
 
 The `context` object currently includes:
@@ -128,7 +153,7 @@ The `context` object currently includes:
 | `manifest` | Parsed plugin manifest. |
 | `launcherApiVersion` | Current launcher plugin API version. |
 | `db` | Shared `better-sqlite3` database connection. |
-| `fetch` | Runtime `fetch` function. |
+| `fetch` | Runtime `fetch` function. Plugins are trusted server-side code; this raw fetch is not restricted by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`. |
 | `XMLParser` | `fast-xml-parser` XML parser constructor. |
 | `publicScriptUrl` | URL for the plugin frontend script, if present. |
 | `createRouter()` | Returns an Express router. |
@@ -181,7 +206,7 @@ During development, start the launcher with `NODE_ENV=development` and install a
 
 For Docker Compose development, set `ENABLE_LOCAL_PLUGIN_INSTALL=true`, set `LOCAL_PLUGIN_HOST_DIR` to the host directory containing plugin projects, and use the mounted container path in the UI. Example: host `./local-plugins` is mounted as `/app/local-plugins`, so install `/app/local-plugins/news`. Host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
 
-In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTALL=true` is explicitly set.
+In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTALL=true` is explicitly set. Do not enable local plugin installs for normal production users; it is a development escape hatch for trusted operators.
 
 ## Publishing a plugin
 

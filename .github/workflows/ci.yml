@@ -9,6 +9,10 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version: ['20', '22']
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -16,11 +20,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node-version }}
           cache: npm
 
-      - name: Install dependencies
+      - name: Install dependencies from lockfile
         run: npm ci
+
+      - name: Release file hygiene check
+        run: npm run release:check
 
       - name: Syntax check
         run: npm run check
@@ -31,5 +38,40 @@ jobs:
       - name: Dependency audit
         run: npm run audit:ci
 
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Compose config
+        env:
+          SESSION_SECRET: ci-session-secret-for-compose-validation-only
+          HOST_PORT: '18080'
+          PUBLIC_READ_ENABLED: 'false'
+        run: docker compose config
+
       - name: Docker build
         run: docker build -t home-lab-launcher:ci .
+
+      - name: Container startup smoke test
+        env:
+          SESSION_SECRET: ci-session-secret-for-container-smoke-test-only
+          HOST_PORT: '18080'
+          HOST_BIND_IP: 127.0.0.1
+          APP_BASE_URL: http://127.0.0.1:18080
+          PUBLIC_READ_ENABLED: 'false'
+        run: |
+          docker compose up -d --build
+          for i in {1..60}; do
+            if curl -fsS http://127.0.0.1:18080/api/healthz; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker compose logs
+          exit 1
+
+      - name: Stop containers
+        if: always()
+        run: docker compose down -v

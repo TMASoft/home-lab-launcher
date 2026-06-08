@@ -27,6 +27,7 @@ plugins/
 
 # Local-only planning / workspace notes
 ROADMAP.md
+AGENTS.md
 
 # Build/cache output
 coverage/

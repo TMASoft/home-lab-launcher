@@ -1,6 +1,6 @@
 # Screenshots
 
-Add release screenshots or GIFs here before publishing a formal public release.
+Add release screenshots or GIFs here before publishing a formal public release. Use the neutral demo data from `npm run dev:seed`; do not capture maintainer-specific hostnames, private service URLs, tokens, local paths, or personal weather locations.
 
 Recommended beta captures/placeholders:
 
@@ -10,3 +10,5 @@ Recommended beta captures/placeholders:
 - `admin-overview.png` — Admin Overview beta readiness checklist and warnings.
 - `mobile-view.png` — mobile launchpad/admin tabs responsive pass.
 - `plugin-trust.png` — plugin manager trusted-code acknowledgement.
+
+Static Firefox `--screenshot` captures the app too early in this environment and only records loading skeletons. Use a wait-capable browser automation tool, such as Playwright or an equivalent CI artifact workflow, for final release assets.
