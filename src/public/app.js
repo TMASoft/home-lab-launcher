@@ -47,7 +47,7 @@ async function loadPluginSections() {
 }
 async function loadAdminData() {
   if (!isAdmin()) return;
-  const [overview, health, config, notices, users, plugins, logs, appearance] = await Promise.all([
+  const [overview, health, config, notices, users, plugins, logs, appearance, presetCatalog] = await Promise.all([
     api('/api/admin/overview'),
     api('/api/admin/health'),
     api('/api/admin/config'),
@@ -55,7 +55,8 @@ async function loadAdminData() {
     api('/api/users'),
     api('/api/plugins'),
     api('/api/admin/logs?limit=100'),
-    api('/api/admin/appearance')
+    api('/api/admin/appearance'),
+    api('/api/admin/presets/settings').catch(() => ({}))
   ]);
   state.admin.overview = overview;
   state.admin.health = health;
@@ -66,8 +67,10 @@ async function loadAdminData() {
   state.admin.logs = logs.logs;
   state.admin.appearance = appearance.appearance;
   state.admin.presets = appearance.presets || [];
+  state.admin.presetCatalog = presetCatalog;
   renderAdminConsole();
 }
+
 async function loadWeather() {
   const card = $('weather-card');
   try {
@@ -484,7 +487,16 @@ document.querySelectorAll('.admin-tab').forEach((tab) => {
 
 const iconChoices = ['🔗','🏠','📈','📶','🎬','🧰','🖥️','☁️','🔒','📦','🧪','📰'];
 const colorChoices = ['#8fd3ff','#8ee6b0','#ffd27a','#ff8f9d','#b99cff','#6da8ff','#4de7ff','#94a3b8'];
-function serviceForm(s = {}) { return `<h2>${s.id ? 'Edit' : 'Add'} service</h2><div class="form-grid"><div class="row"><div class="field"><label>Name</label><input id="svc-name" value="${escapeHtml(s.name || '')}"></div><div class="field"><label>Icon</label><input id="svc-icon" value="${escapeHtml(s.icon || '🔗')}" placeholder="Emoji or https://... image URL"><small>Use an emoji, paste an image URL, or choose a local JPEG, PNG, GIF, or WebP. Remote/local images are stored by the launcher.</small><div class="choice-row">${iconChoices.map((icon) => `<button class="ghost choice-btn" type="button" data-icon-choice="${escapeHtml(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div></div><div class="field"><label>Local icon image</label><input id="svc-icon-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><small>Animated GIFs/WebP and transparent images are preserved. Maximum size: 5 MiB.</small></div><div class="field"><label>URL</label><input id="svc-url" value="${escapeHtml(s.url || '')}"></div><div class="field"><label>Description</label><textarea id="svc-description">${escapeHtml(s.description || '')}</textarea></div><div class="row"><div class="field"><label>Category</label><input id="svc-category" value="${escapeHtml(s.category || 'general')}"></div><div class="field"><label>Accent color</label><input id="svc-accent" type="color" value="${escapeHtml(s.accent || '#8fd3ff')}"><div class="choice-row">${colorChoices.map((color) => `<button class="color-choice" type="button" data-color-choice="${escapeHtml(color)}" style="--swatch:${escapeHtml(color)}" aria-label="Use ${escapeHtml(color)}"></button>`).join('')}</div></div></div><div class="field"><label>Tags, comma-separated</label><input id="svc-tags" value="${escapeHtml((s.tags || []).join(', '))}"></div><div class="row"><div class="field"><label>Sort order</label><input id="svc-sort" type="number" value="${escapeHtml(s.sortOrder || 0)}"></div><div class="field"><label>Health interval minutes</label><input id="svc-health-interval" type="number" min="1" value="${escapeHtml(s.healthCheckIntervalMinutes || 15)}"></div></div><label class="check-line"><input id="svc-health-enabled" type="checkbox" ${s.healthCheckEnabled ? 'checked' : ''}> Enable HTTP health checks</label><div class="field"><label>Health check URL</label><input id="svc-health-url" value="${escapeHtml(s.healthCheckUrl || '')}" placeholder="Defaults to service URL"><small>Leave blank to check the main service URL. Checks run in the background and can also be triggered manually.</small></div><div class="inline-controls"><button class="ghost" id="test-service-url" type="button">Test URL</button><span id="service-url-test-result" class="test-result"></span></div><div class="row"><label><input id="svc-featured" type="checkbox" ${s.featured ? 'checked' : ''}> Featured</label><label><input id="svc-enabled" type="checkbox" ${s.enabled !== false ? 'checked' : ''}> Enabled</label></div><button class="primary" id="save-service" type="button">Save service</button></div>`; }
+function presetSearchHtml() {
+  return `<div class="field preset-search-field"><label>Search presets</label><input id="preset-search" placeholder="Type Plex, Pi-hole, Home Assistant…" autocomplete="off"><div id="preset-results" class="preset-results" hidden></div><small>Search the service preset catalog to auto-fill the form. You can also fill in everything manually below.</small></div>`;
+}
+function presetResultHtml(p) {
+  const badge = p.source === 'heimdall'
+    ? '<span class="preset-badge preset-badge-heimdall" title="From Heimdall community catalog">⛏ Heimdall</span>'
+    : '<span class="preset-badge preset-badge-native" title="Bundled with Home Lab Launcher">★ Native</span>';
+  return `<button class="preset-result" type="button" data-preset-id="${escapeHtml(p.id)}"><span class="preset-result-name">${escapeHtml(p.name)}</span>${badge}<span class="preset-result-desc">${escapeHtml(p.description || p.category || '')}</span></button>`;
+}
+function serviceForm(s = {}) { return `<h2>${s.id ? 'Edit' : 'Add'} service</h2><div class="form-grid">${!s.id && canEditServices() ? presetSearchHtml() : ''}<div class="row"><div class="field"><label>Name</label><input id="svc-name" value="${escapeHtml(s.name || '')}"></div><div class="field"><label>Icon</label><input id="svc-icon" value="${escapeHtml(s.icon || '🔗')}" placeholder="Emoji or https://... image URL"><small>Use an emoji, paste an image URL, or choose a local JPEG, PNG, GIF, or WebP. Remote/local images are stored by the launcher.</small><div class="choice-row">${iconChoices.map((icon) => `<button class="ghost choice-btn" type="button" data-icon-choice="${escapeHtml(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div></div><div class="field"><label>Local icon image</label><input id="svc-icon-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><small>Animated GIFs/WebP and transparent images are preserved. Maximum size: 5 MiB.</small></div><div class="field"><label>URL</label><input id="svc-url" value="${escapeHtml(s.url || '')}"></div><div class="field"><label>Description</label><textarea id="svc-description">${escapeHtml(s.description || '')}</textarea></div><div class="row"><div class="field"><label>Category</label><input id="svc-category" value="${escapeHtml(s.category || 'general')}"></div><div class="field"><label>Accent color</label><input id="svc-accent" type="color" value="${escapeHtml(s.accent || '#8fd3ff')}"><div class="choice-row">${colorChoices.map((color) => `<button class="color-choice" type="button" data-color-choice="${escapeHtml(color)}" style="--swatch:${escapeHtml(color)}" aria-label="Use ${escapeHtml(color)}"></button>`).join('')}</div></div></div><div class="field"><label>Tags, comma-separated</label><input id="svc-tags" value="${escapeHtml((s.tags || []).join(', '))}"></div><div class="row"><div class="field"><label>Sort order</label><input id="svc-sort" type="number" value="${escapeHtml(s.sortOrder || 0)}"></div><div class="field"><label>Health interval minutes</label><input id="svc-health-interval" type="number" min="1" value="${escapeHtml(s.healthCheckIntervalMinutes || 15)}"></div></div><label class="check-line"><input id="svc-health-enabled" type="checkbox" ${s.healthCheckEnabled ? 'checked' : ''}> Enable HTTP health checks</label><div class="field"><label>Health check URL</label><input id="svc-health-url" value="${escapeHtml(s.healthCheckUrl || '')}" placeholder="Defaults to service URL"><small>Leave blank to check the main service URL. Checks run in the background and can also be triggered manually.</small></div><div class="inline-controls"><button class="ghost" id="test-service-url" type="button">Test URL</button><span id="service-url-test-result" class="test-result"></span></div><div class="row"><label><input id="svc-featured" type="checkbox" ${s.featured ? 'checked' : ''}> Featured</label><label><input id="svc-enabled" type="checkbox" ${s.enabled !== false ? 'checked' : ''}> Enabled</label></div><button class="primary" id="save-service" type="button">Save service</button></div>`; }
 async function readServiceForm() {
   const file = $('svc-icon-file')?.files?.[0];
   const payload = { name: formValue('svc-name'), icon: formValue('svc-icon') || '🔗', url: formValue('svc-url'), description: formValue('svc-description'), category: formValue('svc-category') || 'general', accent: $('svc-accent').value, tags: formValue('svc-tags'), sortOrder: Number(formValue('svc-sort') || 0), featured: $('svc-featured').checked, enabled: $('svc-enabled').checked, healthCheckEnabled: $('svc-health-enabled').checked, healthCheckUrl: formValue('svc-health-url'), healthCheckIntervalMinutes: Number(formValue('svc-health-interval') || 15) };
@@ -495,10 +507,53 @@ async function readServiceForm() {
   }
   return payload;
 }
+function bindPresetSearch() {
+  const input = $('preset-search');
+  const resultsEl = $('preset-results');
+  if (!input || !resultsEl) return;
+  let debounceTimer = null;
+  let lastResults = [];
+  resultsEl.addEventListener('click', (event) => {
+    const btn = event.target.closest('[data-preset-id]');
+    if (!btn) return;
+    const preset = lastResults.find((p) => p.id === btn.dataset.presetId);
+    if (preset) applyPresetToForm(preset);
+    resultsEl.hidden = true;
+    input.value = '';
+  });
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const query = input.value.trim();
+    if (query.length < 2) { resultsEl.hidden = true; resultsEl.innerHTML = ''; lastResults = []; return; }
+    debounceTimer = setTimeout(async () => {
+      try {
+        const data = await api(`/api/admin/presets/search?q=${encodeURIComponent(query)}`);
+        lastResults = data.presets || [];
+        if (!lastResults.length) { resultsEl.innerHTML = '<div class="preset-empty">No matching presets found</div>'; resultsEl.hidden = false; return; }
+        resultsEl.innerHTML = lastResults.map(presetResultHtml).join('');
+        resultsEl.hidden = false;
+      } catch { resultsEl.hidden = true; }
+    }, 250);
+  });
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.preset-search-field')) resultsEl.hidden = true;
+  });
+}
+function applyPresetToForm(preset) {
+  $('svc-name').value = preset.name;
+  $('svc-description').value = preset.description || '';
+  $('svc-category').value = preset.category || 'general';
+  $('svc-accent').value = preset.accent || '#8fd3ff';
+  $('svc-url').value = preset.website || '';
+  if (preset.iconUrl) $('svc-icon').value = preset.iconUrl;
+  toast(`Preset "${preset.name}" applied — update the URL to your local address`);
+}
+
 function showServiceModal(s) {
   openModal(serviceForm(s));
   modalContent.querySelectorAll('[data-icon-choice]').forEach((button) => button.addEventListener('click', () => { $('svc-icon').value = button.dataset.iconChoice; }));
   modalContent.querySelectorAll('[data-color-choice]').forEach((button) => button.addEventListener('click', () => { $('svc-accent').value = button.dataset.colorChoice; }));
+  if (!s) bindPresetSearch();
   $('test-service-url').onclick = async () => {
     const target = formValue('svc-health-url') || formValue('svc-url');
     const result = $('service-url-test-result');
@@ -514,6 +569,7 @@ function showServiceModal(s) {
   };
   $('save-service').onclick = async () => { try { const body = await readServiceForm(); await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) }); closeModal(); await loadServices(); if (isAdmin()) await loadAdminData(); renderServices(); toast('Service saved'); } catch (error) { toast(error.message); } };
 }
+
 
 function showLoginModal() {
   openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label>2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);

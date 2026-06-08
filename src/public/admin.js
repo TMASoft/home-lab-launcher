@@ -54,12 +54,15 @@ function formatBytes(bytes) {
 }
 function adminSettingsHtml() {
   const s = state.settings || {};
+  const pc = state.admin.presetCatalog || {};
   return `<div class="admin-stack">
     <div class="settings-card"><h3>General</h3><div class="form-grid"><div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"><small>Used for secure cookies, proxy checks, and beta readiness warnings.</small></div></div></div></div>
     <div class="settings-card"><h3>Weather</h3><div class="form-grid"><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="ZIP code or city"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div><div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div><div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div></div></div>
     <div class="settings-card"><h3>Access</h3><label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label><p>Review this before exposing the launcher outside your LAN.</p><button class="primary" id="admin-save-settings" type="button">Save settings</button></div>
+    <div class="settings-card"><h3>Service preset catalog</h3><p>The preset catalog provides quick access to pre-configured service definitions when adding new services. Native presets are bundled with Home Lab Launcher. Heimdall presets are synced from the <a href="https://github.com/linuxserver/Heimdall-Apps" target="_blank" rel="noopener noreferrer">linuxserver/Heimdall-Apps</a> repository.</p><div class="stats-row">${statCard('Native presets', pc.counts?.local ?? '—')}${statCard('Heimdall presets', pc.counts?.heimdall ?? '—')}${statCard('Total presets', pc.counts?.total ?? '—')}</div><label class="check-line"><input id="admin-remote-presets" type="checkbox" ${pc.enableRemotePresets !== false ? 'checked' : ''}> Enable remote Heimdall presets</label><small>When disabled, only bundled native presets are available and the catalog will not sync from GitHub.</small><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="catalog-update" type="button">Update Catalog</button><span id="catalog-update-status" class="test-result"></span></div><button class="primary" id="save-preset-settings" type="button" style="margin-top: 10px;">Save preset settings</button></div>
   </div>`;
 }
+
 
 const themeColorFields = [
   ['background', 'Background'], ['surface', 'Surface'], ['surface2', 'Secondary surface'], ['text', 'Text'], ['mutedText', 'Muted text'], ['border', 'Border'], ['primary', 'Primary/accent'], ['success', 'Success'], ['warning', 'Warning'], ['danger', 'Danger']
@@ -317,7 +320,40 @@ function bindSettingsHandlers() {
     await Promise.all([loadSettings(), loadWeather(), loadAdminData()]);
     render(); toast('Settings saved');
   });
+  $('save-preset-settings')?.addEventListener('click', async () => {
+    await api('/api/admin/presets/settings', { method: 'PUT', body: JSON.stringify({ enableRemotePresets: $('admin-remote-presets').checked }) });
+    await loadAdminData();
+    toast('Preset settings saved');
+  });
+  $('catalog-update')?.addEventListener('click', async () => {
+    const btn = $('catalog-update');
+    const status = $('catalog-update-status');
+    try {
+      await api('/api/admin/presets/update', { method: 'POST' });
+      status.textContent = 'Sync started';
+      status.className = 'test-result success';
+      btn.disabled = true;
+      let remaining = 60;
+      btn.textContent = `Update Catalog (${remaining}s)`;
+      const countdown = setInterval(() => {
+        remaining -= 1;
+        if (remaining <= 0) {
+          clearInterval(countdown);
+          btn.disabled = false;
+          btn.textContent = 'Update Catalog';
+          status.textContent = '';
+          loadAdminData();
+        } else {
+          btn.textContent = `Update Catalog (${remaining}s)`;
+        }
+      }, 1000);
+    } catch (error) {
+      status.textContent = error.message;
+      status.className = 'test-result danger';
+    }
+  });
 }
+
 
 function readAppearanceForm() {
   const colors = {};

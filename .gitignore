@@ -26,7 +26,7 @@ plugins/
 *.pfx
 
 # Local-only planning / workspace notes
-ROADMAP.md
+dev/
 AGENTS.md
 
 # Build/cache output

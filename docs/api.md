@@ -124,6 +124,16 @@ Admin-only routes.
 | `GET` | `/api/weather/search` | Admin | Search geocoding candidates for Admin weather setup. |
 | `PUT` | `/api/weather/settings` | Admin | Save weather label, coordinates, and units. |
 
+## Preset catalog
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/admin/presets/search` | Admin or Editor | Search cached local and remote presets by name, description, or category. |
+| `POST` | `/api/admin/presets/import` | Admin or Editor | Import a preset by ID, downloading and caching its icon, and creating a new service. |
+| `POST` | `/api/admin/presets/update` | Admin | Trigger an asynchronous manual catalog update crawl with a 60-second cooldown rate-limit. |
+| `GET` | `/api/admin/presets/settings` | Admin | Read preset catalog settings, statistics, and sync cooldown state. |
+| `PUT` | `/api/admin/presets/settings` | Admin | Update preset catalog settings, such as enabling or disabling remote presets. |
+
 ## Plugin management API
 
 Plugin installation and lifecycle management is Admin-only unless noted. Plugin config writes are available to Admins and Editors, but manifest field scopes decide which fields Editors may change.
