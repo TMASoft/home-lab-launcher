@@ -24,13 +24,13 @@ docker compose version
 
 ## Docker Compose quick start
 
-Replace `OWNER` with the GitHub owner that published the package.
+The official release image is published to GHCR as `ghcr.io/TMASoft/home-lab-launcher`.
 
 ```bash
 cp .env.example .env
 # edit .env
-APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.1.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.1.0 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -114,7 +114,7 @@ http://127.0.0.1:8080
 
 `TRUST_PROXY` controls whether Express trusts `X-Forwarded-*` headers. Keep it `false` when exposing the app directly. Use `TRUST_PROXY=loopback` for a same-host reverse proxy, `TRUST_PROXY=1` for a single trusted proxy hop, or an explicit Express trust-proxy subnet string for advanced multi-proxy deployments.
 
-`HOST` normally remains unset or `0.0.0.0` so the app can receive traffic from Docker networking. Only set `HOST=127.0.0.1` when you intentionally run the container with host networking or run the Node app natively and want the process itself bound to loopback. The optional override in `docs/examples/compose.loopback.yml` encodes the loopback published-port setting for same-host reverse proxies.
+`HOST` normally remains unset or `0.0.0.0` so the app can receive traffic from Docker bridge networking, which is the supported default. Only set `HOST=127.0.0.1` when you intentionally run the container with host networking or run the Node app natively and want the process itself bound to loopback. The optional override in `docs/examples/compose.loopback.yml` encodes the loopback published-port setting for same-host reverse proxies.
 
 ### Nginx reverse proxy with a user-provided certificate
 
@@ -225,12 +225,12 @@ Open the UI in a browser and complete first-admin setup if `/api/bootstrap-statu
 
 ## Upgrades
 
-For now, update by pulling new source and rebuilding:
+For image-based installs, update by pulling the next tagged GHCR image:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.1 docker compose pull launcher
-APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.1 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.1.1 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.1.1 docker compose up -d --no-build
 
 # Or, for source checkouts:
 # docker compose build --pull
@@ -260,7 +260,7 @@ Confirm `APP_BASE_URL` is the exact URL users open, including `https://` when TL
 
 ### Docker/LXC port publishing limitations
 
-Some constrained LXC or nested Docker environments cannot create normal published ports. Prefer a standard Docker host when possible. If you intentionally use host networking as a workaround, set `HOST=127.0.0.1`, keep the app behind a local reverse proxy, and document that override outside the public Compose file.
+Some constrained LXC or nested Docker environments cannot create normal published ports. The supported default is standard Docker bridge networking on a host that can publish ports. If you intentionally use host networking as a local fallback, set `HOST=127.0.0.1`, keep the app behind a same-host reverse proxy, leave `HOST_BIND_IP`/`ports` out of that override as appropriate for your runtime, and document the override outside the public Compose file. Do not expose host-networked `HOST=0.0.0.0` deployments to untrusted networks.
 
 ### Container logs
 
@@ -306,7 +306,7 @@ docker compose build --no-cache launcher
 
 ## Public beta hardening notes
 
-Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings for these items.
+Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, leave weather unset until the operator chooses a location, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings and documentation links for these items.
 
 Remote service icons, branding images, URL tests, and service health checks are fetched by the server. This is useful in home labs because operators often monitor private dashboards, but it is also an SSRF boundary: a user who can trigger these fetches can ask the launcher host to contact network locations the user may not be able to reach directly.
 

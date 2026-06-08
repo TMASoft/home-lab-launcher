@@ -19,7 +19,7 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
     fs.readFileSync(path.join(__dirname, '..', 'src/public/admin.js'), 'utf8'),
     fs.readFileSync(path.join(__dirname, '..', 'src/public/app.js'), 'utf8')
   ].join('\n');
-  for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'renderWeatherForecasts(', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url']) {
+  for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'renderWeatherForecasts(', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url']) {
     assert.ok(js.includes(token), `missing ${token}`);
   }
   const accessibilityTokens = [
@@ -39,7 +39,7 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
 
 test('frontend styles include reduced-motion and mobile layout safeguards', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'src/public/styles.css'), 'utf8');
-  for (const token of ['@media (prefers-reduced-motion: reduce)', 'animation: none !important', 'transition: none !important', '@media (max-width: 720px)', '.grid { grid-template-columns: 1fr; }', '.admin-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }']) {
+  for (const token of ['@media (prefers-reduced-motion: reduce)', 'animation: none !important', 'transition: none !important', '@media (max-width: 720px)', '.grid { grid-template-columns: 1fr; }', '.admin-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); }', '.checklist-link']) {
     assert.ok(css.includes(token), `missing CSS quality token ${token}`);
   }
 });
