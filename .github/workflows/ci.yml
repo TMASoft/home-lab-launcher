@@ -74,4 +74,10 @@ jobs:
 
       - name: Stop containers
         if: always()
+        env:
+          SESSION_SECRET: ci-session-secret-for-compose-cleanup-only
+          HOST_PORT: '18080'
+          HOST_BIND_IP: 127.0.0.1
+          APP_BASE_URL: http://127.0.0.1:18080
+          PUBLIC_READ_ENABLED: 'false'
         run: docker compose down -v
