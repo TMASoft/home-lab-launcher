@@ -86,10 +86,18 @@ function registerPresetRoutes(router, deps) {
     const presetCount = db.prepare('SELECT COUNT(*) AS count FROM preset_cache').get().count;
     const localCount = db.prepare("SELECT COUNT(*) AS count FROM preset_cache WHERE source = 'local'").get().count;
     const heimdallCount = db.prepare("SELECT COUNT(*) AS count FROM preset_cache WHERE source = 'heimdall'").get().count;
+    const syncStatus = getSetting(db, 'preset_catalog_sync_status', {
+      status: 'idle',
+      startedAt: null,
+      completedAt: null,
+      synced: 0,
+      error: null
+    });
     res.json({
       enableRemotePresets,
       lastCrawledAt,
       cooldownRemaining,
+      syncStatus,
       counts: { total: presetCount, local: localCount, heimdall: heimdallCount }
     });
   });
