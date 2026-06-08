@@ -8,6 +8,7 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ### Changed
 
+- Added Service Preset Catalog with offline local top-50 popular presets and remote Heimdall Apps catalog synchronization, including auto-fill service creation, brand color and icon downloads (with SSRF protection), manual catalog update trigger with 60-second rate-limiting, and clear source badge visual indicators.
 - Added optional TOTP 2FA for first-admin browser setup and user profiles, including Admin 2FA reset support, strict six-digit code validation, and stronger generated Base32 secrets.
 - Added public-release package metadata while keeping Docker/GHCR as the documented distribution path, local development reset/demo seed scripts, and a core API reference.
 - Expanded API coverage for anonymous/private read modes, Basic User preferences, Editor vs Admin permissions, CSRF enforcement across mutating routes, backup restore validation, and migration upgrades.

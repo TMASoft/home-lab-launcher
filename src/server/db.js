@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const Database = require('better-sqlite3');
 const bcrypt = require('bcryptjs');
+const LOCAL_PRESETS = require('./presets.json');
 
 const DEFAULT_SERVICES = [
   { id: 'ha', name: 'Home Assistant', icon: '🏠', url: 'https://ha.example.local:8123', category: 'core', accent: '#4de7ff', description: 'Primary home automation dashboard.', tags: ['automation', 'home', 'core'], sort_order: 10, featured: 1, enabled: 1 },
@@ -167,6 +168,26 @@ const MIGRATIONS = [
       addColumnIfMissing(db, 'users', 'totp_secret', 'TEXT');
       addColumnIfMissing(db, 'users', 'totp_enabled', 'INTEGER NOT NULL DEFAULT 0');
     }
+  },
+  {
+    id: 5,
+    name: 'preset-catalog',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS preset_cache (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          website TEXT,
+          description TEXT,
+          category TEXT NOT NULL DEFAULT 'general',
+          accent TEXT NOT NULL DEFAULT '#4de7ff',
+          icon_url TEXT,
+          source TEXT NOT NULL,
+          cached_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+        CREATE INDEX IF NOT EXISTS idx_preset_cache_name ON preset_cache(name);
+      `);
+    }
   }
 ];
 
@@ -259,11 +280,37 @@ function seed(db) {
   }
   if (getSetting(db, 'theme_presets', undefined) === undefined) setSetting(db, 'theme_presets', []);
 
+  seedPresets(db);
+
   const userCount = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
   if (userCount === 0 && process.env.BOOTSTRAP_ADMIN_USERNAME && process.env.BOOTSTRAP_ADMIN_PASSWORD) {
     const hash = bcrypt.hashSync(process.env.BOOTSTRAP_ADMIN_PASSWORD, 12);
     db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(process.env.BOOTSTRAP_ADMIN_USERNAME, hash, 'admin');
   }
+}
+
+function seedPresets(db) {
+  const localCount = db.prepare("SELECT COUNT(*) AS count FROM preset_cache WHERE source = 'local'").get().count;
+  if (localCount > 0) return;
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO preset_cache (id, name, website, description, category, accent, icon_url, source)
+    VALUES (@id, @name, @website, @description, @category, @accent, @icon_url, @source)
+  `);
+  const tx = db.transaction(() => {
+    for (const preset of LOCAL_PRESETS) {
+      stmt.run({
+        id: preset.id,
+        name: preset.name,
+        website: preset.website || '',
+        description: preset.description || '',
+        category: preset.category || 'general',
+        accent: preset.accent || '#4de7ff',
+        icon_url: preset.icon || null,
+        source: 'local'
+      });
+    }
+  });
+  tx();
 }
 
 module.exports = { openDb, getSetting, setSetting, DEFAULT_APPEARANCE };

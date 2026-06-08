@@ -13,6 +13,8 @@ const { registerServiceRoutes } = require('./route-modules/services');
 const { registerUserRoutes } = require('./route-modules/users');
 const { registerWeatherRoutes } = require('./route-modules/weather');
 const { registerPluginRoutes } = require('./route-modules/plugins');
+const { registerPresetRoutes } = require('./route-modules/presets');
+const { startPresetCatalogScheduler } = require('./preset-catalog');
 
 function serviceFromRow(row) {
   return {
@@ -678,6 +680,10 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   registerWeatherRoutes(router, { db, requireRole, canRead, logEvent, weatherSettingsPayload });
 
   registerPluginRoutes(router, { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload });
+
+  registerPresetRoutes(router, { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch });
+
+  startPresetCatalogScheduler(db, scheduler);
 
   app.use('/api', router);
   return { requireAuth, requireRole };
