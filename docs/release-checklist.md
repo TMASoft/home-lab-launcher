@@ -20,6 +20,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 - Confirm Docker Compose v2 is available with `docker compose version`.
 - Set a strong `SESSION_SECRET`.
 - Prefer browser first-admin setup, or remove environment bootstrap credentials after first login.
+- Enable or explicitly defer TOTP 2FA for Admin accounts before shared/public exposure.
 - Set `APP_BASE_URL` to the exact browser-facing URL.
 - Use `HOST_BIND_IP=127.0.0.1` and `TRUST_PROXY=loopback` when publishing only to a same-host reverse proxy.
 - Keep standard Docker bridge networking as the supported default; if a constrained Docker/LXC host requires host networking, use a local-only fallback with `HOST=127.0.0.1` behind a same-host reverse proxy.

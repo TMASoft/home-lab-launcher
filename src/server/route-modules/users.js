@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 function registerUserRoutes(router, deps) {
   const { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload } = deps;
   router.get('/users', requireRole('admin'), (req, res) => {
-    const users = db.prepare('SELECT id, username, role, created_at AS createdAt FROM users ORDER BY username').all();
+    const users = db.prepare('SELECT id, username, role, totp_enabled AS totpEnabled, created_at AS createdAt FROM users ORDER BY username').all();
     res.json({ users });
   });
 
@@ -25,13 +25,18 @@ function registerUserRoutes(router, deps) {
     if (!user) return res.status(404).json({ error: 'User not found' });
     try {
       const { username, password, role } = userPayload(req.body || {}, user);
+      const resetTotp = Boolean(req.body.resetTotp);
       if (password) {
         db.prepare('UPDATE users SET username = ?, role = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(username, role, bcrypt.hashSync(password, 12), req.params.id);
       } else {
         db.prepare('UPDATE users SET username = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(username, role, req.params.id);
       }
+      if (resetTotp) {
+        db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?').run(req.params.id);
+        logEvent(db, req, 'user.totp_reset', { id: Number(req.params.id), username });
+      }
       if (Number(req.params.id) === Number(req.session.user.id)) req.session.user = { ...req.session.user, username, role };
-      logEvent(db, req, 'user.updated', { id: Number(req.params.id), username, role, passwordChanged: Boolean(password) });
+      logEvent(db, req, 'user.updated', { id: Number(req.params.id), username, role, passwordChanged: Boolean(password), totpReset: resetTotp });
       res.json({ ok: true });
     } catch (error) {
       res.status(400).json({ error: error.message });

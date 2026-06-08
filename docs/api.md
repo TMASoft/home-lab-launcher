@@ -17,12 +17,15 @@ Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intend
 | --- | --- | --- | --- |
 | `GET` | `/api/healthz` | Public | Minimal health check with `{ ok, version, uptimeSeconds }`. |
 | `GET` | `/api/bootstrap-status` | Public | Reports whether first-admin setup is still required. |
-| `POST` | `/api/bootstrap` | Public until bootstrapped | Creates the first Admin account when no users exist. |
-| `POST` | `/api/auth/login` | Public | Starts a session and returns `{ user, csrfToken }`. |
+| `POST` | `/api/bootstrap` | Public until bootstrapped | Creates the first Admin account when no users exist; optional `totpSecret` + six-digit `totpCode` enables 2FA immediately. |
+| `POST` | `/api/auth/login` | Public | Starts a session and returns `{ user, csrfToken }`, or `{ requiresTotp: true }` when a valid password needs a TOTP code. |
 | `POST` | `/api/auth/logout` | Session | Ends the current session. |
 | `GET` | `/api/auth/session` | Public | Returns current session user, if any. |
 | `GET` | `/api/me` | Session | Returns the current user. |
 | `PATCH` | `/api/me/password` | Session | Changes the current user's password. |
+| `POST` | `/api/me/totp/setup` | Session | Generates a new Base32 TOTP secret for the current user's authenticator app. |
+| `POST` | `/api/me/totp/enable` | Session | Verifies a six-digit TOTP code and enables 2FA for the current user. |
+| `POST` | `/api/me/totp/disable` | Session | Disables 2FA for the current user. |
 | `GET` | `/api/me/sessions` | Session | Lists active sessions for the current user. |
 | `DELETE` | `/api/me/sessions/:sid` | Session | Revokes one active session. |
 | `DELETE` | `/api/me/sessions` | Session | Revokes other sessions for the current user. |
@@ -111,7 +114,7 @@ Admin-only routes.
 | --- | --- | --- |
 | `GET` | `/api/users` | List users. |
 | `POST` | `/api/users` | Create a user. |
-| `PATCH` | `/api/users/:id` | Change username, role, password, or session-revocation state. |
+| `PATCH` | `/api/users/:id` | Change username, role, password, or reset the user's TOTP 2FA state with `resetTotp`. |
 | `DELETE` | `/api/users/:id` | Delete a user. |
 
 ## Weather settings

@@ -192,7 +192,7 @@ BOOTSTRAP_ADMIN_USERNAME=
 BOOTSTRAP_ADMIN_PASSWORD=
 ```
 
-On first page load, the UI prompts you to create the first Admin. This avoids storing an initial password in the project directory.
+On first page load, the UI prompts you to create the first Admin. This avoids storing an initial password in the project directory. You may also enable TOTP 2FA during this browser setup; the generated secret is shown once for entry into an authenticator app.
 
 ### Environment bootstrap
 
@@ -203,7 +203,7 @@ BOOTSTRAP_ADMIN_USERNAME=admin
 BOOTSTRAP_ADMIN_PASSWORD=replace-this-password
 ```
 
-The app creates the Admin if the users table is empty. Change the password after first login and remove bootstrap credentials from `.env` once setup is complete.
+The app creates the Admin if the users table is empty. Change the password after first login and remove bootstrap credentials from `.env` once setup is complete. Environment bootstrap is intentionally password-only; enable TOTP 2FA from the user's profile after the first login when using this path.
 
 ## Validation checks
 
@@ -296,6 +296,8 @@ Admins can inspect health, warnings, effective configuration, reverse-proxy/HTTP
 
 Mutating API requests after login require the `X-CSRF-Token` header returned by `/api/auth/session` or `/api/auth/login`. The bundled frontend handles this automatically. If you build external clients, fetch a session first and reuse the returned token.
 
+Users can enable TOTP 2FA from the profile menu. After 2FA is enabled, password login returns a `requiresTotp` challenge until a valid six-digit code is submitted. Admins can reset another user's 2FA from **Admin → Users** when account recovery is needed.
+
 ### Native SQLite module errors
 
 If you see a native module or GLIBC error, make sure `node_modules/` is not copied from the host into the image. The repository includes `.dockerignore` for this reason. Rebuild with:
@@ -306,7 +308,7 @@ docker compose build --no-cache launcher
 
 ## Public beta hardening notes
 
-Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, leave weather unset until the operator chooses a location, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings and documentation links for these items.
+Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, enable TOTP 2FA for Admin accounts, leave weather unset until the operator chooses a location, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings and documentation links for these items.
 
 Remote service icons, branding images, URL tests, and service health checks are fetched by the server. This is useful in home labs because operators often monitor private dashboards, but it is also an SSRF boundary: a user who can trigger these fetches can ask the launcher host to contact network locations the user may not be able to reach directly.
 

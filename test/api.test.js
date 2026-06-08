@@ -269,6 +269,9 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     ['PATCH', '/api/me/password'],
     ['DELETE', '/api/me/sessions/not-a-session'],
     ['DELETE', '/api/me/sessions'],
+    ['POST', '/api/me/totp/setup'],
+    ['POST', '/api/me/totp/enable'],
+    ['POST', '/api/me/totp/disable'],
     ['PATCH', '/api/settings'],
     ['PUT', '/api/admin/appearance'],
     ['POST', '/api/admin/appearance/reset'],
@@ -319,4 +322,71 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     const data = await response.json();
     assert.equal(data.error, 'Invalid CSRF token', `${method} ${pathname} should return CSRF error`);
   }
+});
+
+test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t) => {
+  const server = startServer({ port: 19102 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  const setup = await admin.request('/api/me/totp/setup', { method: 'POST' });
+  assert.ok(setup.secret);
+  assert.equal(setup.secret.length, 20);
+
+  await assert.rejects(
+    () => admin.request('/api/me/totp/enable', { method: 'POST', body: { secret: setup.secret, code: '000000' } }),
+    /Invalid verification code/
+  );
+
+  const totp = require('../src/server/totp');
+  const secretBuffer = totp.decodeBase32(setup.secret);
+  const correctCode = totp.generateHOTP(secretBuffer, Math.floor(Date.now() / 1000 / 30));
+
+  const enableRes = await admin.request('/api/me/totp/enable', { method: 'POST', body: { secret: setup.secret, code: totp.formatToken(correctCode) } });
+  assert.equal(enableRes.ok, true);
+
+  const me = await admin.request('/api/me');
+  assert.equal(me.user.totpEnabled, 1);
+
+  await admin.request('/api/auth/logout', { method: 'POST' });
+
+  const client2 = new Client(server.baseUrl);
+  const loginAttempt1 = await client2.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  assert.equal(loginAttempt1.requiresTotp, true);
+
+  await assert.rejects(
+    () => client2.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', code: '000000' } }),
+    /Invalid 2FA code/
+  );
+
+  const correctCode2 = totp.generateHOTP(secretBuffer, Math.floor(Date.now() / 1000 / 30));
+  const loginAttempt2 = await client2.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', code: totp.formatToken(correctCode2) } });
+  assert.equal(loginAttempt2.user.role, 'admin');
+
+  const createdUser = await client2.request('/api/users', { method: 'POST', body: { username: 'editor-user', password: 'test-editor-password', role: 'editor' } });
+  const userId = createdUser.user.id;
+
+  const editor = new Client(server.baseUrl);
+  await editor.request('/api/auth/login', { method: 'POST', body: { username: 'editor-user', password: 'test-editor-password' } });
+  const editorSetup = await editor.request('/api/me/totp/setup', { method: 'POST' });
+  const editorSecretBuffer = totp.decodeBase32(editorSetup.secret);
+  const editorCode = totp.generateHOTP(editorSecretBuffer, Math.floor(Date.now() / 1000 / 30));
+  await editor.request('/api/me/totp/enable', { method: 'POST', body: { secret: editorSetup.secret, code: totp.formatToken(editorCode) } });
+
+  const userListBefore = await client2.request('/api/users');
+  const listedEditor = userListBefore.users.find(u => u.id === userId);
+  assert.equal(listedEditor.totpEnabled, 1);
+
+  await client2.request(`/api/users/${userId}`, { method: 'PATCH', body: { username: 'editor-user', role: 'editor', resetTotp: true } });
+
+  const userListAfter = await client2.request('/api/users');
+  const listedEditorAfter = userListAfter.users.find(u => u.id === userId);
+  assert.equal(listedEditorAfter.totpEnabled, 0);
+
+  await client2.request('/api/me/totp/disable', { method: 'POST' });
+  const meAfterDisable = await client2.request('/api/me');
+  assert.equal(meAfterDisable.user.totpEnabled, 0);
 });

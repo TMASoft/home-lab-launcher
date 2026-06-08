@@ -52,8 +52,11 @@ test('openDb upgrades a pre-migration schema and records versions', () => {
     assert.ok(pluginColumns.includes('installed_hash'));
     assert.ok(pluginColumns.includes('lifecycle'));
     assert.ok(pluginColumns.includes('last_error'));
-    assert.equal(upgraded.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN (1, 2, 3)").get().count, 3);
-    assert.equal(upgraded.pragma('user_version', { simple: true }), 3);
+    const userColumns = upgraded.prepare('PRAGMA table_info(users)').all().map((row) => row.name);
+    assert.ok(userColumns.includes('totp_secret'));
+    assert.ok(userColumns.includes('totp_enabled'));
+    assert.equal(upgraded.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN (1, 2, 3, 4)").get().count, 4);
+    assert.equal(upgraded.pragma('user_version', { simple: true }), 4);
     upgraded.close();
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });

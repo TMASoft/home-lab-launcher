@@ -515,13 +515,119 @@ function showServiceModal(s) {
   $('save-service').onclick = async () => { try { const body = await readServiceForm(); await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) }); closeModal(); await loadServices(); if (isAdmin()) await loadAdminData(); renderServices(); toast('Service saved'); } catch (error) { toast(error.message); } };
 }
 
-function showLoginModal() { openModal(`<h2>Login</h2><div class="form-grid"><div class="field"><label>Username</label><input id="login-username"></div><div class="field"><label>Password</label><input id="login-password" type="password"></div><button class="primary" id="login-submit" type="button">Login</button></div>`); $('login-submit').onclick = async () => { await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username: formValue('login-username'), password: formValue('login-password') }) }); location.reload(); }; }
-function showBootstrapModal() { openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><button class="primary" id="boot-submit" type="button">Create Admin</button></div>`); $('boot-submit').onclick = async () => { await api('/api/bootstrap', { method: 'POST', body: JSON.stringify({ username: formValue('boot-username'), password: formValue('boot-password') }) }); location.reload(); }; }
+function showLoginModal() {
+  openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label>2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);
+  let requiresTotp = false;
+  $('login-submit').onclick = async () => {
+    const username = formValue('login-username');
+    const password = formValue('login-password');
+    const code = requiresTotp ? formValue('login-code') : '';
+    try {
+      const res = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password, code }) });
+      if (res.requiresTotp) {
+        requiresTotp = true;
+        $('login-user-field').hidden = true;
+        $('login-pass-field').hidden = true;
+        $('login-code-field').hidden = false;
+        $('login-submit').textContent = 'Verify & Login';
+        $('login-code').focus();
+      } else {
+        location.reload();
+      }
+    } catch (error) {
+      toast(error.message);
+    }
+  };
+}
+function showBootstrapModal() {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const bytes = new Uint8Array(20);
+  window.crypto.getRandomValues(bytes);
+  let generatedSecret = '';
+  for (let i = 0; i < bytes.length; i++) generatedSecret += alphabet[bytes[i] % 32];
+  const formattedSecret = generatedSecret.match(/.{1,4}/g).join(' ');
+  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
+  $('boot-enable-totp').addEventListener('change', (e) => { $('boot-totp-setup').hidden = !e.target.checked; });
+  $('boot-submit').onclick = async () => {
+    const username = formValue('boot-username');
+    const password = formValue('boot-password');
+    const enableTotp = $('boot-enable-totp').checked;
+    const totpCode = enableTotp ? formValue('boot-totp-code') : '';
+    const payload = { username, password };
+    if (enableTotp) {
+      if (!totpCode) {
+        toast('Please enter the 2FA code to verify setup');
+        return;
+      }
+      payload.totpSecret = generatedSecret;
+      payload.totpCode = totpCode;
+    }
+    try {
+      await api('/api/bootstrap', { method: 'POST', body: JSON.stringify(payload) });
+      location.reload();
+    } catch (error) {
+      toast(error.message);
+    }
+  };
+}
 async function showProfileModal() {
   const [me, sessions] = await Promise.all([api('/api/me'), api('/api/me/sessions')]);
-  openModal(`<h2>Profile</h2><div class="settings-card"><p><strong>${escapeHtml(me.user.username)}</strong></p><p>${escapeHtml(roleLabel(me.user.role))} · Created ${new Date(me.user.createdAt).toLocaleString()}</p></div><h3>Change password</h3><div class="form-grid"><div class="field"><label>Current password</label><input id="profile-current" type="password"></div><div class="field"><label>New password</label><input id="profile-new" type="password" placeholder="10+ characters"></div><button class="primary" id="profile-save-password" type="button">Change password</button></div><h3>Active sessions</h3><div class="log-list">${sessions.sessions.map((item) => `<article class="log-item"><strong>${item.current ? 'Current session' : 'Other session'}</strong><span>${escapeHtml(item.ip)} · expires ${new Date(item.expiresAt).toLocaleString()}</span><small>${escapeHtml(item.userAgent)}</small>${item.current ? '' : `<button class="ghost danger" data-revoke-session="${escapeHtml(item.sid)}" type="button">Revoke</button>`}</article>`).join('')}</div><button class="ghost danger" id="revoke-other-sessions" type="button">Revoke all other sessions</button><h3>Preferences</h3><div class="inline-controls"><button class="ghost" id="reset-layout-preferences" type="button">Reset layout/preferences</button><button class="ghost" id="reset-favorites" type="button">Reset favorites</button></div><p class="muted-copy">Reset layout order, hidden categories, and view mode separately from favorites.</p>`);
+  const totpSection = me.user.totpEnabled ? `
+    <div class="settings-card">
+      <p><strong>Status:</strong> Enabled</p>
+      <button class="ghost danger" id="profile-disable-2fa" type="button">Disable 2FA</button>
+    </div>
+  ` : `
+    <div class="settings-card">
+      <p><strong>Status:</strong> Disabled</p>
+      <button class="ghost" id="profile-setup-2fa" type="button">Setup 2FA</button>
+      <div id="profile-2fa-setup-area" hidden style="margin-top: 15px;">
+        <p>Scan or add this secret key to your authenticator app:</p>
+        <p id="profile-2fa-secret" style="font-family: monospace; font-size: 1.15rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;"></p>
+        <div class="field" style="margin-top: 10px;">
+          <label>Enter the 6-digit verification code</label>
+          <input id="profile-2fa-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric">
+        </div>
+        <button class="primary" style="margin-top: 10px;" id="profile-confirm-2fa" type="button">Verify & Enable</button>
+      </div>
+    </div>
+  `;
+  openModal(`<h2>Profile</h2><div class="settings-card"><p><strong>${escapeHtml(me.user.username)}</strong></p><p>${escapeHtml(roleLabel(me.user.role))} · Created ${new Date(me.user.createdAt).toLocaleString()}</p></div><h3>Two-factor authentication (2FA)</h3>${totpSection}<h3>Change password</h3><div class="form-grid"><div class="field"><label>Current password</label><input id="profile-current" type="password"></div><div class="field"><label>New password</label><input id="profile-new" type="password" placeholder="10+ characters"></div><button class="primary" id="profile-save-password" type="button">Change password</button></div><h3>Active sessions</h3><div class="log-list">${sessions.sessions.map((item) => `<article class="log-item"><strong>${item.current ? 'Current session' : 'Other session'}</strong><span>${escapeHtml(item.ip)} · expires ${new Date(item.expiresAt).toLocaleString()}</span><small>${escapeHtml(item.userAgent)}</small>${item.current ? '' : `<button class="ghost danger" data-revoke-session="${escapeHtml(item.sid)}" type="button">Revoke</button>`}</article>`).join('')}</div><button class="ghost danger" id="revoke-other-sessions" type="button">Revoke all other sessions</button><h3>Preferences</h3><div class="inline-controls"><button class="ghost" id="reset-layout-preferences" type="button">Reset layout/preferences</button><button class="ghost" id="reset-favorites" type="button">Reset favorites</button></div><p class="muted-copy">Reset layout order, hidden categories, and view mode separately from favorites.</p>`);
   $('profile-save-password').onclick = async () => { await api('/api/me/password', { method: 'PATCH', body: JSON.stringify({ currentPassword: formValue('profile-current'), newPassword: formValue('profile-new') }) }); closeModal(); toast('Password changed'); };
   $('revoke-other-sessions').onclick = async () => { await api('/api/me/sessions', { method: 'DELETE' }); closeModal(); toast('Other sessions revoked'); };
+  if (me.user.totpEnabled) {
+    $('profile-disable-2fa').onclick = async () => {
+      if (confirm('Are you sure you want to disable 2FA? This will lower your account security.')) {
+        await api('/api/me/totp/disable', { method: 'POST' });
+        toast('2FA disabled');
+        await showProfileModal();
+      }
+    };
+  } else {
+    let activeSecret = '';
+    $('profile-setup-2fa').onclick = async () => {
+      const res = await api('/api/me/totp/setup', { method: 'POST' });
+      activeSecret = res.secret;
+      const formatted = res.secret.match(/.{1,4}/g).join(' ');
+      $('profile-2fa-secret').textContent = formatted;
+      $('profile-2fa-setup-area').hidden = false;
+      $('profile-setup-2fa').hidden = true;
+    };
+    $('profile-confirm-2fa').onclick = async () => {
+      const code = formValue('profile-2fa-code');
+      if (!code) {
+        toast('Please enter verification code');
+        return;
+      }
+      try {
+        await api('/api/me/totp/enable', { method: 'POST', body: JSON.stringify({ secret: activeSecret, code }) });
+        toast('2FA enabled successfully');
+        await showProfileModal();
+      } catch (error) {
+        toast(error.message);
+      }
+    };
+  }
   $('reset-layout-preferences').onclick = async () => {
     if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
     else localStorage.removeItem('hll.launchpad');

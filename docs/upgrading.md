@@ -21,7 +21,8 @@ For source checkouts, use `docker compose build --pull && docker compose up -d` 
 3. Review `CHANGELOG.md` and the release notes for deployment, security, or plugin compatibility changes.
 4. Confirm `.env` still contains a strong `SESSION_SECRET` and correct `APP_BASE_URL`.
 5. Confirm bootstrap credentials are empty unless you are intentionally doing a first-run non-interactive setup.
-6. Leave weather defaults empty unless the deployment intentionally uses a neutral demo location.
+6. Confirm database backup handling protects user TOTP secrets before enabling 2FA on upgraded accounts.
+7. Leave weather defaults empty unless the deployment intentionally uses a neutral demo location.
 
 ## After upgrading
 
@@ -29,8 +30,9 @@ For source checkouts, use `docker compose build --pull && docker compose up -d` 
 2. Check `curl -fsS http://localhost:8080/api/healthz` and `/api/bootstrap-status`.
 3. Open **Admin → Overview** and review beta readiness checklist links/warnings.
 4. Open **Admin → Security** and check effective configuration warnings.
-5. Open **Admin → Plugins** and reload plugins if needed.
-6. Review plugin lifecycle states for failed or incompatible plugins.
+5. Have Admin users enable TOTP 2FA from the profile menu when the deployment is reachable beyond a trusted private LAN.
+6. Open **Admin → Plugins** and reload plugins if needed.
+7. Review plugin lifecycle states for failed or incompatible plugins.
 
 ## Public beta backup-before-upgrade checklist
 
