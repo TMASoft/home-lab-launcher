@@ -16,8 +16,11 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 - Added an explicit SSRF boundary for arbitrary server-side service/icon/asset fetches, including configurable private-network access by role.
 - Production startup now fails closed when `SESSION_SECRET` is missing or an example value, and bootstrap admin passwords reject known defaults.
 - Browser first-admin setup, private anonymous-read defaults, and neutral weather defaults are now the documented release baseline.
-- Docker and deployment docs now prefer tagged GHCR images, loopback reverse-proxy binding, and explicit validation checks.
-- CI now covers Node.js 20 and 22, validates Compose config, checks release file hygiene, and smoke-tests container startup.
+- Docker and deployment docs now prefer official tagged GHCR images at `ghcr.io/TMASoft/home-lab-launcher`, loopback reverse-proxy binding, and explicit validation checks.
+- Admin Overview beta readiness checklist items now link directly to deployment, backup, and release documentation.
+- Constrained Docker/LXC guidance now keeps bridge networking as the supported default and documents host networking only as a local loopback fallback.
+- Release readiness docs now include a versioned release checklist, upgrade-notes template, and dependency-audit gate.
+- CI now covers Node.js 20 and 22, validates Compose config, checks release file hygiene, audits production dependencies, and smoke-tests container startup.
 
 ## [0.1.0] - 2026-05-14
 

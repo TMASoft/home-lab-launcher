@@ -70,13 +70,11 @@ Choose one first-admin setup path:
 
 ### 2. Start with Docker Compose
 
-For a tagged public release, prefer the published image and skip a local build:
-
-Replace `OWNER` with the GitHub owner that published the package.
+For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/OWNER/home-lab-launcher:v0.1.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.1.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.1.0 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -120,7 +118,7 @@ TRUST_PROXY=loopback
 APP_BASE_URL=https://launcher.example.test
 ```
 
-`HOST` controls the interface the Node process listens on inside the container and normally stays at `0.0.0.0`. In constrained Docker/LXC environments where normal port publishing is unavailable and you intentionally use host networking, set `HOST=127.0.0.1` so the app listens on loopback only.
+`HOST` controls the interface the Node process listens on inside the container and normally stays at `0.0.0.0`. Standard Docker bridge networking is the supported default. In constrained Docker/LXC environments where normal port publishing is unavailable and you intentionally use host networking as a fallback, set `HOST=127.0.0.1`, keep the app behind a same-host reverse proxy, and document that local override outside the public Compose file.
 
 ## Launchpad personalization and health
 
@@ -233,8 +231,8 @@ Most runtime settings are environment variables on first boot, then editable in 
 | `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username; omit for browser first-admin setup | empty |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password; omit for browser first-admin setup | empty |
 | `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `false` |
-| `WEATHER_LOCATION_LABEL` | Initial weather label; leave empty until configured in Admin settings | empty |
-| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | Initial weather coordinates; leave empty until configured in Admin settings | empty |
+| `WEATHER_LOCATION_LABEL` | Initial weather label; leave empty until configured in Admin settings. The release default intentionally avoids personal or maintainer-specific locations | empty |
+| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | Initial weather coordinates; leave empty until configured in Admin settings or for neutral demo installs | empty |
 | `WEATHER_UNITS` | `fahrenheit` or `celsius` | `fahrenheit` |
 | `LOG_RETENTION_DAYS` | Initial audit-log retention window | `90` |
 | `SCHEDULED_BACKUP_LOCATION` | Optional operator note for desired backup destination | empty |
@@ -342,7 +340,7 @@ This project is in early development. The core app is functional, but plugin API
 
 ## Screenshots
 
-Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`: launchpad, service edit, appearance customization, admin overview, and mobile view.
+Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`: launchpad, service edit, appearance customization, admin overview, and mobile view. Use `npm run dev:seed` and leave weather unset or use neutral example coordinates; do not capture private hosts, personal weather locations, local paths, or tokens.
 
 ## License
 

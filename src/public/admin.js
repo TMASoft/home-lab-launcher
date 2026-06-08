@@ -14,7 +14,10 @@ function renderAdminConsole() {
   bindAdminTabHandlers();
 }
 function statCard(label, value) { return `<div class="stat-card"><div class="tiny-label">${escapeHtml(label)}</div><div class="stat-value">${escapeHtml(value)}</div></div>`; }
-function checklistItem(done, label, detail) { return `<li class="checklist-item ${done ? 'done' : ''}"><strong>${done ? '✓' : '•'} ${escapeHtml(label)}</strong><span>${escapeHtml(detail)}</span></li>`; }
+function checklistItem(done, label, detail, href) {
+  const link = href ? `<a class="checklist-link" href="${escapeHtml(href)}" target="_blank" rel="noopener noreferrer">Docs</a>` : '';
+  return `<li class="checklist-item ${done ? 'done' : ''}"><strong>${done ? '✓' : '•'} ${escapeHtml(label)}</strong><span>${escapeHtml(detail)}</span>${link}</li>`;
+}
 function onboardingChecklistHtml() {
   const o = state.admin.overview || {};
   const h = state.admin.health || {};
@@ -22,13 +25,14 @@ function onboardingChecklistHtml() {
   const highWarnings = (o.warnings || []).filter((w) => w.level === 'high');
   const weatherConfigured = Boolean(h.weatherProvider?.configured);
   const backupLocation = Boolean(c.scheduledBackupLocation);
-  return `<div class="settings-card beta-card"><h3>Beta readiness checklist</h3><ul class="checklist">${[
-    checklistItem(highWarnings.length === 0, 'Secure bootstrap configuration', highWarnings.length ? 'Resolve high-severity configuration warnings.' : 'No high-severity warnings detected.'),
-    checklistItem(Boolean(c.urls?.appBaseUrlValid), 'Set application base URL', c.urls?.appBaseUrl || 'Base URL is not configured.'),
-    checklistItem((o.counts?.services || 0) > 0, 'Add launchpad services', `${o.counts?.services || 0} services configured.`),
-    checklistItem(weatherConfigured, 'Configure weather', h.weatherProvider?.location || 'Weather location is not configured.'),
-    checklistItem(backupLocation, 'Plan backups', backupLocation ? c.scheduledBackupLocation : 'Optional backup location is not configured yet.'),
-    checklistItem(!c.security?.publicReadEnabled, 'Review public access', c.security?.publicReadEnabled ? 'Anonymous read-only access is enabled.' : 'Anonymous public read access is disabled.')
+  const docsBase = 'https://github.com/TMASoft/home-lab-launcher/blob/main';
+  return `<div class="settings-card beta-card"><div class="inline-between"><div><h3>Beta readiness checklist</h3><p>Use these links during first-run deployment review before exposing the launcher beyond a private LAN.</p></div><a class="ghost checklist-docs" href="${docsBase}/docs/release-checklist.md" target="_blank" rel="noopener noreferrer">Release checklist</a></div><ul class="checklist">${[
+    checklistItem(highWarnings.length === 0, 'Secure bootstrap configuration', highWarnings.length ? 'Resolve high-severity configuration warnings.' : 'No high-severity warnings detected.', `${docsBase}/docs/deployment.md#first-admin-bootstrap`),
+    checklistItem(Boolean(c.urls?.appBaseUrlValid), 'Set application base URL', c.urls?.appBaseUrl || 'Base URL is not configured.', `${docsBase}/docs/deployment.md#deployment-patterns`),
+    checklistItem((o.counts?.services || 0) > 0, 'Add launchpad services', `${o.counts?.services || 0} services configured.`, `${docsBase}/README.md#launchpad-personalization-and-health`),
+    checklistItem(weatherConfigured, 'Configure weather', h.weatherProvider?.location || 'Weather location is not configured.', `${docsBase}/README.md#configuration`),
+    checklistItem(backupLocation, 'Plan backups', backupLocation ? c.scheduledBackupLocation : 'Optional backup location is not configured yet.', `${docsBase}/docs/examples/backup-restore.md`),
+    checklistItem(!c.security?.publicReadEnabled, 'Review public access', c.security?.publicReadEnabled ? 'Anonymous read-only access is enabled.' : 'Anonymous public read access is disabled.', `${docsBase}/docs/deployment.md#public-beta-hardening-notes`)
   ].join('')}</ul></div>`;
 }
 function adminOverviewHtml() {

@@ -1140,6 +1140,22 @@ tr:hover td { background: rgba(255,255,255,.018); }
 .checklist-item strong { color: var(--warning); font-size: .9rem; }
 .checklist-item.done strong { color: var(--success); }
 .checklist-item span { color: var(--muted); font-size: .82rem; }
+.checklist-link {
+  justify-self: end;
+  align-self: start;
+  min-height: 0;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--primary);
+  background: rgba(143, 211, 255, .06);
+  font-size: .72rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-decoration: none;
+}
+.checklist-link:hover { border-color: var(--primary); background: rgba(143, 211, 255, .12); }
+.checklist-docs { flex: 0 0 auto; }
 .plugin-row-expanded {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
