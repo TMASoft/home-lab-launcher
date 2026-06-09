@@ -237,6 +237,7 @@ function renderServices() {
   const q = $('service-search').value.trim().toLowerCase();
   const categories = [...new Set(state.services.map((s) => s.category || 'general'))].sort();
   const hidden = new Set(state.preferences.hiddenCategories || []);
+  const controls = $('launchpad-controls');
   if (controls) {
     controls.innerHTML = `<div class="control-group" aria-label="Category filters"><button class="ghost service-category-chip ${!state.selectedCategory ? 'active-filter' : ''}" type="button" data-launch-category="">All</button>${categories.map((cat) => `<button class="ghost service-category-chip ${state.selectedCategory === cat ? 'active-filter' : ''} ${hidden.has(cat) ? 'muted-filter' : ''}" type="button" data-launch-category="${escapeHtml(cat)}">${hidden.has(cat) ? 'Hidden: ' : ''}${escapeHtml(cat)}</button>`).join('')}</div><div class="control-group" aria-label="Layout"><button class="ghost ${state.preferences.viewMode === 'cards' ? 'active-filter' : ''}" type="button" data-view-mode="cards">Cards</button><button class="ghost ${state.preferences.viewMode === 'compact' ? 'active-filter' : ''}" type="button" data-view-mode="compact">Compact</button><button class="ghost ${state.preferences.viewMode === 'list' ? 'active-filter' : ''}" type="button" data-view-mode="list">List</button></div><div class="control-group" aria-label="Options"><button class="ghost ${state.preferences.hideHostnames ? 'active-filter' : ''}" type="button" data-toggle-hostnames>${state.preferences.hideHostnames ? 'Show Hostnames' : 'Hide Hostnames'}</button></div>`;
   }

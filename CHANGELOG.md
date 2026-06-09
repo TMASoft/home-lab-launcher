@@ -6,6 +6,12 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.2.2] - 2026-06-09
+
+### Fixed
+
+- Fixed a ReferenceError crashing the client-side JavaScript on launchpad load due to a missing `controls` variable definition.
+
 ## [0.2.1] - 2026-06-09
 
 ### Changed
