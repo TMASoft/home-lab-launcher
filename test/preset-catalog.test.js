@@ -1,9 +1,51 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 const { startServer, Client } = require('./helpers');
 
 test('Preset Catalog API & Logic', async (t) => {
-  const server = startServer({ port: 19105 });
+  // 0. Spin up a mock Heimdall API server to test local crawls offline
+  const mockServer = http.createServer((req, res) => {
+    const url = req.url;
+    if (url === '/tree') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        tree: [
+          { path: 'mockapp/app.json', type: 'blob' },
+          { path: 'mockapp/logo.png', type: 'blob' }
+        ]
+      }));
+    } else if (url === '/mockapp/app.json') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        name: 'MockApp',
+        description: 'A mock application',
+        colour: '#123456',
+        website: 'http://mockapp.local',
+        category: 'testing'
+      }));
+    } else if (url === '/mockapp/logo.png') {
+      const onePixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64');
+      res.writeHead(200, { 'Content-Type': 'image/png' });
+      res.end(onePixelPng);
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
+  await new Promise((resolve) => mockServer.listen(0, '127.0.0.1', resolve));
+  const mockPort = mockServer.address().port;
+  t.after(() => mockServer.close());
+
+  const server = startServer({
+    port: 19119,
+    env: {
+      HEIMDALL_TREE_URL: `http://127.0.0.1:${mockPort}/tree`,
+      HEIMDALL_RAW_PREFIX: `http://127.0.0.1:${mockPort}/`,
+      SERVER_FETCH_PRIVATE_NETWORK_ACCESS: 'admin' // Allow loopback fetches from mock server
+    }
+  });
   await server.ready();
   t.after(() => server.stop());
 
@@ -19,6 +61,8 @@ test('Preset Catalog API & Logic', async (t) => {
   const settings = await admin.request('/api/admin/presets/settings');
   assert.equal(settings.enableRemotePresets, true);
   assert.equal(settings.counts.local > 0, true);
+  assert.ok(settings.syncStatus);
+  assert.equal(settings.syncStatus.status, 'idle');
 
   // 3. Search presets (pi-hole)
   const search1 = await admin.request('/api/admin/presets/search?q=pi-hole');
@@ -45,6 +89,12 @@ test('Preset Catalog API & Logic', async (t) => {
   assert.equal(updateRes.ok, true);
   assert.equal(updateRes.message, 'Sync started');
 
+  // Check that the status is set to running immediately
+  const settingsDuring = await admin.request('/api/admin/presets/settings');
+  assert.equal(settingsDuring.syncStatus.status, 'running');
+  assert.ok(settingsDuring.syncStatus.startedAt);
+  assert.equal(settingsDuring.syncStatus.completedAt, null);
+
   // Immediate subsequent update should be throttled (returns 429)
   await assert.rejects(
     () => admin.request('/api/admin/presets/update', { method: 'POST' }),
@@ -54,6 +104,47 @@ test('Preset Catalog API & Logic', async (t) => {
       return true;
     }
   );
+
+  // Wait/poll for completion (fetch timeout can be up to 15s)
+  let finalStatus = null;
+  for (let i = 0; i < 100; i++) {
+    const statusSettings = await admin.request('/api/admin/presets/settings');
+    if (statusSettings.syncStatus.status !== 'running') {
+      finalStatus = statusSettings.syncStatus;
+      break;
+    }
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  assert.ok(finalStatus);
+  assert.equal(finalStatus.status, 'succeeded');
+  assert.equal(finalStatus.synced, 1);
+  assert.ok(finalStatus.completedAt);
+  assert.equal(finalStatus.error, null);
+
+  // 5b. Search for the crawled Heimdall preset
+  const searchMock = await admin.request('/api/admin/presets/search?q=mockapp');
+  assert.ok(searchMock.presets.length > 0);
+  const mockPreset = searchMock.presets.find(p => p.id === 'heimdall-mockapp');
+  assert.ok(mockPreset);
+  assert.equal(mockPreset.name, 'MockApp');
+  assert.equal(mockPreset.source, 'heimdall');
+  assert.equal(mockPreset.accent, '#123456');
+
+  // 5c. Import the crawled Heimdall preset
+  const importMockRes = await admin.request('/api/admin/presets/import', {
+    method: 'POST',
+    body: { presetId: 'heimdall-mockapp', customUrl: 'http://my-mock.local:8082' }
+  });
+  assert.equal(importMockRes.ok, true);
+
+  const servicesResMock = await admin.request('/api/services');
+  const mockSvc = servicesResMock.services.find(s => s.id === importMockRes.serviceId);
+  assert.ok(mockSvc);
+  assert.equal(mockSvc.name, 'MockApp');
+  assert.equal(mockSvc.url, 'http://my-mock.local:8082');
+  assert.equal(mockSvc.category, 'testing');
+  assert.equal(mockSvc.accent, '#123456');
+  assert.equal(mockSvc.description, 'A mock application');
 
   // 6. Import a preset (e.g. lidarr)
   const importRes = await admin.request('/api/admin/presets/import', {

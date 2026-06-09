@@ -1273,3 +1273,9 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   content: '⚠️';
   flex-shrink: 0;
 }
+
+/* Preset catalog sync status */
+.sync-status-text { font-size: .88rem; font-weight: 500; display: inline-flex; align-items: center; }
+.sync-status-text.running { color: var(--primary); }
+.sync-status-text.success { color: var(--success); }
+.sync-status-text.danger { color: var(--danger); }
