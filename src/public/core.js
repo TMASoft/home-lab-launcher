@@ -108,7 +108,7 @@ function applyAppearance(appearance = {}) {
   }
   $('hero-eyebrow').textContent = hero.eyebrow || 'Home lab operations';
   $('hero-heading').textContent = hero.heading || 'Launch and manage your internal services.';
-  $('hero-subheading').textContent = hero.subheading || '';
+  $('hero-subheading').innerHTML = hero.subheading || '';
   const siteNote = $('site-note');
   if (siteNote) {
     siteNote.textContent = brand.footerNote || '';

@@ -99,14 +99,36 @@ function adminAppearanceHtml() {
   const presets = state.admin.presets || [];
   return `<div class="admin-stack">
     <div class="settings-card"><div class="inline-between"><h3>Appearance & branding</h3><div class="inline-controls"><button class="ghost" id="appearance-preview" type="button">Preview without saving</button><button class="ghost" id="appearance-reset-unsaved" type="button">Reset unsaved</button><button class="ghost danger" id="appearance-restore-default" type="button">Restore default theme</button><button class="primary" id="appearance-save" type="button">Save appearance</button></div></div>
-      <div class="appearance-preview" id="appearance-live-preview"><div class="brand"><span class="brand-mark">${escapeHtml(b.brandMarkText || 'HL')}</span><span><strong>${escapeHtml(b.brandText || b.appName || 'Home Lab Launcher')}</strong><small>${escapeHtml(b.brandSubtitle || 'Home lab control plane')}</small></span></div><h2>${escapeHtml(h.heading || '')}</h2><p>${escapeHtml(h.subheading || '')}</p><article class="service-card"><div class="card-top"><span class="icon">🏠</span><span class="status-badge success">Preview</span></div><h3>Service tile</h3><p>Theme colors, radius, and density apply across the launcher.</p></article></div>
+      <div class="appearance-preview" id="appearance-live-preview"><div class="brand"><span class="brand-mark">${escapeHtml(b.brandMarkText || 'HL')}</span><span><strong>${escapeHtml(b.brandText || b.appName || 'Home Lab Launcher')}</strong><small>${escapeHtml(b.brandSubtitle || 'Home lab control plane')}</small></span></div><h2>${escapeHtml(h.heading || '')}</h2><p>${h.subheading || ''}</p><article class="service-card"><div class="card-top"><span class="icon">🏠</span><span class="status-badge success">Preview</span></div><h3>Service tile</h3><p>Theme colors, radius, and density apply across the launcher.</p></article></div>
       <h3>Branding</h3><div class="form-grid">
         <div class="row"><div class="field"><label>Site/app name</label><input id="appearance-app-name" value="${escapeHtml(b.appName || '')}"></div><div class="field"><label>Browser page title</label><input id="appearance-page-title" value="${escapeHtml(b.pageTitle || '')}"></div></div>
         <div class="row"><div class="field"><label>Header brand text</label><input id="appearance-brand-text" value="${escapeHtml(b.brandText || '')}"></div><div class="field"><label>Header subtitle</label><input id="appearance-brand-subtitle" value="${escapeHtml(b.brandSubtitle || '')}"></div></div>
         <div class="row"><div class="field"><label>Brand mark initials</label><input id="appearance-brand-mark" value="${escapeHtml(b.brandMarkText || '')}" maxlength="8"></div><div class="field"><label>Footer/site note</label><input id="appearance-footer-note" value="${escapeHtml(b.footerNote || '')}"></div></div>
         ${assetFieldHtml('favicon', 'Favicon image', b.faviconUrl)}${assetFieldHtml('brand-icon', 'Brand icon image', b.brandIconUrl)}${assetFieldHtml('hero-image', 'Hero/header image', b.heroImageUrl)}
       </div>
-      <h3>Hero content</h3><div class="form-grid"><div class="field"><label>Eyebrow</label><input id="appearance-hero-eyebrow" value="${escapeHtml(h.eyebrow || '')}"></div><div class="field"><label>Heading</label><input id="appearance-hero-heading" value="${escapeHtml(h.heading || '')}"></div><div class="field"><label>Subheading</label><textarea id="appearance-hero-subheading" rows="3">${escapeHtml(h.subheading || '')}</textarea></div></div>
+      <h3>Hero content</h3><div class="form-grid"><div class="field"><label>Eyebrow</label><input id="appearance-hero-eyebrow" value="${escapeHtml(h.eyebrow || '')}"></div><div class="field"><label>Heading</label><input id="appearance-hero-heading" value="${escapeHtml(h.heading || '')}"></div><div class="field"><label>Subheading</label>
+        <div class="rich-editor" id="subheading-rich-editor">
+          <div class="rich-editor-toolbar">
+            <div class="rich-editor-modes">
+              <button type="button" class="ghost active" id="rich-editor-btn-visual">Visual</button>
+              <button type="button" class="ghost" id="rich-editor-btn-code">HTML Code</button>
+            </div>
+            <div class="rich-editor-actions" id="rich-editor-actions">
+              <button type="button" class="ghost" data-rich-command="bold" title="Bold"><b>B</b></button>
+              <button type="button" class="ghost" data-rich-command="italic" title="Italic"><i>I</i></button>
+              <button type="button" class="ghost" data-rich-command="underline" title="Underline"><u>U</u></button>
+              <button type="button" class="ghost" data-rich-command="strikeThrough" title="Strikethrough"><s>S</s></button>
+              <button type="button" class="ghost" data-rich-command="link" title="Insert Link">🔗</button>
+              <button type="button" class="ghost" data-rich-command="unlink" title="Remove Link">🚫</button>
+              <button type="button" class="ghost" data-rich-command="removeFormat" title="Clear Formatting">🧹</button>
+            </div>
+          </div>
+          <div class="rich-editor-content-wrapper">
+            <div id="appearance-hero-subheading-visual" class="rich-editor-visual" contenteditable="true" placeholder="Enter subheading HTML...">${h.subheading || ''}</div>
+            <textarea id="appearance-hero-subheading-code" class="rich-editor-code" rows="4" style="display: none;">${escapeHtml(h.subheading || '')}</textarea>
+          </div>
+        </div>
+      </div></div>
       <h3>Theme</h3><div class="form-grid"><div class="row"><div class="field"><label>Theme mode</label><select id="appearance-mode"><option value="dark" ${t.mode !== 'light' && t.mode !== 'system' ? 'selected' : ''}>Dark</option><option value="light" ${t.mode === 'light' ? 'selected' : ''}>Light</option><option value="system" ${t.mode === 'system' ? 'selected' : ''}>System</option></select></div><div class="field"><label>Font</label><select id="appearance-font"><option value="system" ${t.fontFamily === 'system' ? 'selected' : ''}>System default</option><option value="inter" ${t.fontFamily === 'inter' ? 'selected' : ''}>Inter/system sans</option><option value="serif" ${t.fontFamily === 'serif' ? 'selected' : ''}>Serif</option><option value="mono" ${t.fontFamily === 'mono' ? 'selected' : ''}>Mono</option><option value="custom" ${t.fontFamily === 'custom' ? 'selected' : ''}>Custom CSS font-family</option></select></div></div>
         <div class="field"><label>Custom font-family</label><input id="appearance-custom-font" value="${escapeHtml(t.customFontFamily || '')}" placeholder='ui-rounded, "SF Pro", sans-serif'></div>
         <div class="row"><div class="field"><label>Density</label><select id="appearance-density"><option value="compact" ${t.density === 'compact' ? 'selected' : ''}>Compact</option><option value="comfortable" ${t.density !== 'compact' && t.density !== 'spacious' ? 'selected' : ''}>Comfortable</option><option value="spacious" ${t.density === 'spacious' ? 'selected' : ''}>Spacious</option></select></div><div class="field"><label>Radius</label><select id="appearance-radius"><option value="square" ${t.radius === 'square' ? 'selected' : ''}>Square</option><option value="rounded" ${t.radius === 'rounded' ? 'selected' : ''}>Rounded</option><option value="soft" ${t.radius !== 'square' && t.radius !== 'rounded' ? 'selected' : ''}>Soft</option></select></div></div>
@@ -455,7 +477,13 @@ function readAppearanceForm() {
     hero: {
       eyebrow: formValue('appearance-hero-eyebrow'),
       heading: formValue('appearance-hero-heading'),
-      subheading: formValue('appearance-hero-subheading')
+      subheading: (() => {
+        const visual = $('appearance-hero-subheading-visual');
+        const code = $('appearance-hero-subheading-code');
+        if (!visual || !code) return '';
+        const isCodeActive = code.style.display !== 'none';
+        return isCodeActive ? code.value : visual.innerHTML;
+      })()
     },
     theme: {
       mode: $('appearance-mode')?.value || 'dark',
@@ -476,6 +504,58 @@ async function uploadAppearanceAsset(id) {
   return data.url;
 }
 function bindAppearanceHandlers(content) {
+  // Subheading rich editor tab switching and toolbar logic
+  const visualBtn = $('rich-editor-btn-visual');
+  const codeBtn = $('rich-editor-btn-code');
+  const visualEl = $('appearance-hero-subheading-visual');
+  const codeEl = $('appearance-hero-subheading-code');
+  const toolbarActions = $('rich-editor-actions');
+
+  visualBtn?.addEventListener('click', () => {
+    if (visualBtn.classList.contains('active')) return;
+    visualBtn.classList.add('active');
+    codeBtn.classList.remove('active');
+    visualEl.innerHTML = codeEl.value;
+    codeEl.style.display = 'none';
+    visualEl.style.display = 'block';
+    if (toolbarActions) {
+      toolbarActions.style.pointerEvents = 'auto';
+      toolbarActions.style.opacity = '1';
+    }
+  });
+
+  codeBtn?.addEventListener('click', () => {
+    if (codeBtn.classList.contains('active')) return;
+    codeBtn.classList.add('active');
+    visualBtn.classList.remove('active');
+    codeEl.value = visualEl.innerHTML;
+    visualEl.style.display = 'none';
+    codeEl.style.display = 'block';
+    if (toolbarActions) {
+      toolbarActions.style.pointerEvents = 'none';
+      toolbarActions.style.opacity = '0.5';
+    }
+  });
+
+  toolbarActions?.querySelectorAll('[data-rich-command]').forEach((btn) => {
+    btn.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent losing focus/selection
+    });
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const command = btn.dataset.richCommand;
+      if (command === 'link') {
+        const url = prompt('Enter the link URL (e.g. https://google.com):');
+        if (url) {
+          document.execCommand('createLink', false, url);
+        }
+      } else {
+        document.execCommand(command, false, null);
+      }
+      visualEl?.focus();
+    });
+  });
+
   content.querySelectorAll('[data-upload-app-asset]').forEach((button) => button.addEventListener('click', async () => {
     try { await uploadAppearanceAsset(button.dataset.uploadAppAsset); toast('Asset uploaded'); } catch (error) { toast(error.message); }
   }));

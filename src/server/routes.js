@@ -144,7 +144,7 @@ function sanitizeAppearance(input = {}, { partial = false } = {}) {
     hero: {
       eyebrow: cleanText(hero.eyebrow, DEFAULT_APPEARANCE.hero.eyebrow, 80),
       heading: cleanText(hero.heading, DEFAULT_APPEARANCE.hero.heading, 140),
-      subheading: cleanText(hero.subheading, DEFAULT_APPEARANCE.hero.subheading, 420)
+      subheading: cleanText(hero.subheading, DEFAULT_APPEARANCE.hero.subheading, 10000)
     },
     theme: {
       mode,
