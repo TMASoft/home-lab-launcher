@@ -1,7 +1,7 @@
 const { getSetting, setSetting } = require('./db');
 const { guardedFetch } = require('./server-fetch');
 
-const HEIMDALL_CONTENTS_URL = process.env.HEIMDALL_CONTENTS_URL || 'https://api.github.com/repos/linuxserver/Heimdall-Apps/contents';
+const HEIMDALL_TREE_URL = process.env.HEIMDALL_TREE_URL || 'https://api.github.com/repos/linuxserver/Heimdall-Apps/git/trees/master?recursive=true';
 const HEIMDALL_RAW_PREFIX = process.env.HEIMDALL_RAW_PREFIX || 'https://raw.githubusercontent.com/linuxserver/Heimdall-Apps/master/';
 const HEIMDALL_RAW_RE = new RegExp('^' + HEIMDALL_RAW_PREFIX.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
 const COOLDOWN_MS = 60_000;
@@ -35,17 +35,17 @@ async function syncHeimdallPresets(db) {
 
   updateStatus('running');
 
-  let entries;
+  let treeData;
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await guardedFetch(HEIMDALL_CONTENTS_URL, {
+      const response = await guardedFetch(HEIMDALL_TREE_URL, {
         signal: controller.signal,
         headers: { 'User-Agent': 'home-lab-launcher', Accept: 'application/vnd.github.v3+json' }
       }, { actorRole: 'admin', label: 'Heimdall catalog URL' });
       if (!response.ok) throw new Error(`GitHub API returned HTTP ${response.status}`);
-      entries = await response.json();
+      treeData = await response.json();
     } finally {
       clearTimeout(timeout);
     }
@@ -55,13 +55,27 @@ async function syncHeimdallPresets(db) {
     return { synced: 0, error: error.message };
   }
 
-  if (!Array.isArray(entries)) {
+  const tree = treeData?.tree;
+  if (!Array.isArray(tree)) {
     console.warn('[preset-catalog] Unexpected GitHub API response, skipping.');
     updateStatus('failed', 0, 'Unexpected response format');
     return { synced: 0, error: 'Unexpected response format' };
   }
 
-  const dirs = entries.filter((e) => e.type === 'dir');
+  const filesByDir = {};
+  for (const item of tree) {
+    const parts = item.path.split('/');
+    if (parts.length > 1) {
+      const dirName = parts[0];
+      const fileName = parts.slice(1).join('/');
+      if (!filesByDir[dirName]) {
+        filesByDir[dirName] = [];
+      }
+      filesByDir[dirName].push(fileName);
+    }
+  }
+
+  const dirs = Object.keys(filesByDir);
   let synced = 0;
 
   const stmt = db.prepare(`
@@ -78,9 +92,11 @@ async function syncHeimdallPresets(db) {
     WHERE source = 'heimdall'
   `);
 
-  for (const dir of dirs) {
+  for (const dirName of dirs) {
     try {
-      const appJsonUrl = `${HEIMDALL_RAW_PREFIX}${encodeURIComponent(dir.name)}/app.json`;
+      if (!filesByDir[dirName].includes('app.json')) continue;
+
+      const appJsonUrl = `${HEIMDALL_RAW_PREFIX}${encodeURIComponent(dirName)}/app.json`;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
       let appJson;
@@ -95,9 +111,21 @@ async function syncHeimdallPresets(db) {
         clearTimeout(timeout);
       }
 
-      const name = appJson.name || dir.name;
+      const name = appJson.name || dirName;
       const id = `heimdall-${slugify(name)}`;
-      const iconUrl = `${HEIMDALL_RAW_PREFIX}${encodeURIComponent(dir.name)}/logo.png`;
+
+      // Discover actual image asset
+      const supportedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+      const appFiles = filesByDir[dirName];
+      const imageFiles = appFiles.filter(f => supportedExtensions.some(ext => f.toLowerCase().endsWith(ext)));
+
+      let iconUrl = '';
+      if (imageFiles.length > 0) {
+        const logoFile = imageFiles.find(f => f.toLowerCase().includes('logo'));
+        const iconFile = logoFile || imageFiles[0];
+        iconUrl = `${HEIMDALL_RAW_PREFIX}${encodeURIComponent(dirName)}/${encodeURIComponent(iconFile)}`;
+      }
+
       const colour = appJson.colour || appJson.color || '#4de7ff';
 
       stmt.run({
@@ -107,12 +135,12 @@ async function syncHeimdallPresets(db) {
         description: appJson.description || '',
         category: (appJson.category || 'general').toLowerCase(),
         accent: colour.startsWith('#') ? colour : `#${colour}`,
-        icon_url: iconUrl
+        icon_url: iconUrl || null
       });
       synced += 1;
     } catch (error) {
       // Skip individual app failures
-      console.warn(`[preset-catalog] Skipping Heimdall app ${dir.name}:`, error.message);
+      console.warn(`[preset-catalog] Skipping Heimdall app ${dirName}:`, error.message);
     }
   }
 

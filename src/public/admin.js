@@ -506,12 +506,26 @@ function bindAppearanceHandlers(content) {
     await loadAdminData(); toast('Preset saved');
   });
   $('theme-import-preset')?.addEventListener('click', () => {
-    openModal(`<h2>Import theme preset</h2><p>Only safe appearance fields are imported.</p><div class="field"><label>Preset JSON</label><textarea id="theme-import-json" rows="10" placeholder='{"format":"home-lab-launcher-theme-v1",...}'></textarea></div><button class="primary" id="theme-import-confirm" type="button">Import preset</button>`);
+    openModal(`<h2>Import theme preset</h2><p>Only safe appearance fields are imported.</p><div class="field"><label>Preset JSON</label><textarea id="theme-import-json" rows="10" placeholder='{"format":"home-lab-launcher-theme-v1",...}'></textarea></div><div id="theme-import-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="theme-import-confirm" type="button">Import preset</button>`);
     $('theme-import-confirm').onclick = async () => {
-      const payload = JSON.parse($('theme-import-json').value || '{}');
-      if (!confirm(`Import preset "${payload.name || 'Untitled'}"?`)) return;
-      await api('/api/admin/theme-presets/import', { method: 'POST', body: JSON.stringify(payload) });
-      closeModal(); await loadAdminData(); toast('Preset imported');
+      const errorEl = $('theme-import-error');
+      if (errorEl) {
+        errorEl.textContent = '';
+        errorEl.style.display = 'none';
+      }
+      try {
+        const payload = JSON.parse($('theme-import-json').value || '{}');
+        if (!confirm(`Import preset "${payload.name || 'Untitled'}"?`)) return;
+        await api('/api/admin/theme-presets/import', { method: 'POST', body: JSON.stringify(payload) });
+        closeModal(); await loadAdminData(); toast('Preset imported');
+      } catch (error) {
+        if (errorEl) {
+          errorEl.textContent = error.message;
+          errorEl.style.display = 'flex';
+        } else {
+          toast(error.message);
+        }
+      }
     };
   });
   content.querySelectorAll('[data-preset-apply]').forEach((button) => button.addEventListener('click', async () => {

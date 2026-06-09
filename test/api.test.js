@@ -390,3 +390,34 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
   const meAfterDisable = await client2.request('/api/me');
   assert.equal(meAfterDisable.user.totpEnabled, 0);
 });
+
+test('service creation falls back gracefully and logs warning on broken icon URL', async (t) => {
+  const server = startServer({ port: 19106 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  // Use a URL that will fail to connect/download (e.g. invalid domain or port)
+  const res = await admin.request('/api/services', {
+    method: 'POST',
+    body: {
+      name: 'Graceful Fallback Svc',
+      url: 'https://example.com',
+      icon: 'http://127.0.0.1:40999/non-existent-logo.png'
+    }
+  });
+
+  assert.ok(res.service);
+  assert.equal(res.service.name, 'Graceful Fallback Svc');
+  assert.equal(res.service.icon, '🔗'); // Fallback icon applied
+
+  // Verify the failure log is recorded in app logs
+  const logsRes = await admin.request('/api/admin/logs?limit=5');
+  const fallbackLog = logsRes.logs.find(log => log.action === 'service.icon_download_failed');
+  assert.ok(fallbackLog);
+  assert.equal(fallbackLog.level, 'warn');
+  assert.equal(fallbackLog.details.iconUrl, 'http://127.0.0.1:40999/non-existent-logo.png');
+  assert.ok(fallbackLog.details.error);
+});

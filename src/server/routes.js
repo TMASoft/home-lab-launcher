@@ -270,11 +270,22 @@ function saveServiceIconDataUrl(dataDir, dataUrl) {
   return saveServiceIconBuffer(dataDir, Buffer.from(match[2], 'base64'), mime);
 }
 
-async function normalizeServiceIcon(dataDir, body, fallback = '🔗') {
+async function normalizeServiceIcon(db, req, dataDir, body, fallback = '🔗') {
   if (body.iconImageData) return saveServiceIconDataUrl(dataDir, body.iconImageData);
   const icon = String(body.icon || fallback || '🔗').trim();
   if (!icon) return '🔗';
-  if (isHttpUrl(icon)) return downloadServiceIcon(dataDir, icon, body.actorRole || 'editor');
+  if (isHttpUrl(icon)) {
+    try {
+      return await downloadServiceIcon(dataDir, icon, body.actorRole || 'editor');
+    } catch (err) {
+      if (err.message.includes('resolves to a private, loopback, link-local, or reserved network address')) {
+        throw err;
+      }
+      console.warn(`[service-icon] Could not download icon from ${icon}:`, err.message);
+      logEvent(db, req, 'service.icon_download_failed', { iconUrl: icon, error: err.message }, 'warn');
+      return fallback || '🔗';
+    }
+  }
   return icon.slice(0, 512);
 }
 

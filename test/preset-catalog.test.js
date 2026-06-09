@@ -7,11 +7,14 @@ test('Preset Catalog API & Logic', async (t) => {
   // 0. Spin up a mock Heimdall API server to test local crawls offline
   const mockServer = http.createServer((req, res) => {
     const url = req.url;
-    if (url === '/contents') {
+    if (url === '/tree') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify([
-        { name: 'mockapp', type: 'dir' }
-      ]));
+      res.end(JSON.stringify({
+        tree: [
+          { path: 'mockapp/app.json', type: 'blob' },
+          { path: 'mockapp/logo.png', type: 'blob' }
+        ]
+      }));
     } else if (url === '/mockapp/app.json') {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
@@ -38,7 +41,7 @@ test('Preset Catalog API & Logic', async (t) => {
   const server = startServer({
     port: 19119,
     env: {
-      HEIMDALL_CONTENTS_URL: `http://127.0.0.1:${mockPort}/contents`,
+      HEIMDALL_TREE_URL: `http://127.0.0.1:${mockPort}/tree`,
       HEIMDALL_RAW_PREFIX: `http://127.0.0.1:${mockPort}/`,
       SERVER_FETCH_PRIVATE_NETWORK_ACCESS: 'admin' // Allow loopback fetches from mock server
     }

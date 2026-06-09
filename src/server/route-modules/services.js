@@ -28,7 +28,7 @@ function registerServiceRoutes(router, deps) {
       const body = req.body || {};
       const normalized = servicePayload(body);
       const id = body.id && !db.prepare('SELECT 1 FROM services WHERE id = ?').get(slug(body.id)) ? slug(body.id) : uniqueServiceId(db, body.id || normalized.name);
-      const icon = await normalizeServiceIcon(dataDir, { ...body, icon: normalized.icon, actorRole: req.session.user.role });
+      const icon = await normalizeServiceIcon(db, req, dataDir, { ...body, icon: normalized.icon, actorRole: req.session.user.role });
       db.prepare(`
         INSERT INTO services (id, name, icon, url, category, accent, description, tags_json, sort_order, featured, enabled, health_check_enabled, health_check_url, health_check_interval_minutes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -87,7 +87,7 @@ function registerServiceRoutes(router, deps) {
       if (!existing) return res.status(404).json({ error: 'Service not found' });
       const current = serviceFromRow(existing);
       const next = servicePayload(req.body || {}, current);
-      const icon = await normalizeServiceIcon(dataDir, { ...req.body, actorRole: req.session.user.role, icon: Object.prototype.hasOwnProperty.call(req.body, 'icon') ? req.body.icon : current.icon }, current.icon);
+      const icon = await normalizeServiceIcon(db, req, dataDir, { ...req.body, actorRole: req.session.user.role, icon: Object.prototype.hasOwnProperty.call(req.body, 'icon') ? req.body.icon : current.icon }, current.icon);
       db.prepare(`
         UPDATE services SET name=?, icon=?, url=?, category=?, accent=?, description=?, tags_json=?, sort_order=?, featured=?, enabled=?, health_check_enabled=?, health_check_url=?, health_check_interval_minutes=?, updated_at=CURRENT_TIMESTAMP WHERE id=?
       `).run(next.name, icon, next.url, next.category, next.accent, next.description, JSON.stringify(next.tags), next.sortOrder, next.featured ? 1 : 0, next.enabled ? 1 : 0, next.healthCheckEnabled ? 1 : 0, next.healthCheckUrl, next.healthCheckIntervalMinutes, req.params.id);
