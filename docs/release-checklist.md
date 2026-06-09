@@ -33,7 +33,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 
 ## 4. Quality gates
 
-Run these from a clean source checkout before tagging or publishing release notes:
+These checks must be passing before publishing. While they are fully automated in GitHub Actions when a release tag is pushed (via `.github/workflows/docker-publish.yml`), it is recommended to run them locally to ensure success before pushing the tag:
 
 ```bash
 npm run release:check
@@ -42,7 +42,13 @@ npm test
 npm run audit:ci
 ```
 
-For Docker/deployment changes, also validate Compose and smoke-test the container path:
+When a tag matching `v*.*.*` is pushed, the release pipeline will:
+1. Run the quality gate checks on both Node 20 and 22.
+2. Build and push a multi-platform Docker image supporting both `linux/amd64` and `linux/arm64` targets.
+3. Automatically apply semantic tags (`vX.Y.Z`, `vX.Y`, `vX`, and `latest`).
+
+For Docker/deployment changes, also validate Compose and smoke-test the container path locally:
+
 
 ```bash
 SESSION_SECRET=ci-session-secret-for-compose-validation-only \
