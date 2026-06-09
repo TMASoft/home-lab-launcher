@@ -1279,3 +1279,130 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .sync-status-text.running { color: var(--primary); }
 .sync-status-text.success { color: var(--success); }
 .sync-status-text.danger { color: var(--danger); }
+
+/* Rich Text Editor Styling */
+.rich-editor {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  overflow: hidden;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+
+.rich-editor:focus-within {
+  border-color: rgba(143,211,255,.7);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.rich-editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  padding: 6px 10px;
+  background: var(--surface-2);
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rich-editor-modes {
+  display: flex;
+  gap: 4px;
+}
+
+.rich-editor-modes button {
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 550;
+  min-height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+
+.rich-editor-modes button:hover {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.rich-editor-modes button.active {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.rich-editor-actions {
+  display: flex;
+  gap: 4px;
+  transition: opacity 0.2s ease, pointer-events 0.2s ease;
+}
+
+.rich-editor-actions button {
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.85rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  background: transparent;
+  color: var(--muted);
+  transition: all 0.15s ease;
+}
+
+.rich-editor-actions button:hover {
+  background: var(--surface-3);
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.rich-editor-content-wrapper {
+  position: relative;
+  background: #0b1017;
+}
+
+.theme-light .rich-editor-content-wrapper {
+  background: var(--surface);
+}
+
+.rich-editor-visual {
+  min-height: 120px;
+  padding: 12px;
+  outline: none;
+  color: var(--ink);
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+.rich-editor-visual[placeholder]:empty:before {
+  content: attr(placeholder);
+  color: var(--quiet);
+  cursor: text;
+}
+
+.rich-editor-code {
+  width: 100%;
+  border: none !important;
+  border-radius: 0 !important;
+  margin: 0 !important;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.88rem;
+  min-height: 120px;
+  background: transparent !important;
+  color: var(--ink);
+  padding: 12px !important;
+  box-shadow: none !important;
+  resize: vertical;
+  line-height: 1.5;
+  outline: none !important;
+}
+
