@@ -496,7 +496,7 @@ function presetResultHtml(p) {
     : '<span class="preset-badge preset-badge-native" title="Bundled with Home Lab Launcher">★ Native</span>';
   return `<button class="preset-result" type="button" data-preset-id="${escapeHtml(p.id)}"><span class="preset-result-name">${escapeHtml(p.name)}</span>${badge}<span class="preset-result-desc">${escapeHtml(p.description || p.category || '')}</span></button>`;
 }
-function serviceForm(s = {}) { return `<h2>${s.id ? 'Edit' : 'Add'} service</h2><div class="form-grid">${!s.id && canEditServices() ? presetSearchHtml() : ''}<div class="row"><div class="field"><label>Name</label><input id="svc-name" value="${escapeHtml(s.name || '')}"></div><div class="field"><label>Icon</label><input id="svc-icon" value="${escapeHtml(s.icon || '🔗')}" placeholder="Emoji or https://... image URL"><small>Use an emoji, paste an image URL, or choose a local JPEG, PNG, GIF, or WebP. Remote/local images are stored by the launcher.</small><div class="choice-row">${iconChoices.map((icon) => `<button class="ghost choice-btn" type="button" data-icon-choice="${escapeHtml(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div></div><div class="field"><label>Local icon image</label><input id="svc-icon-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><small>Animated GIFs/WebP and transparent images are preserved. Maximum size: 5 MiB.</small></div><div class="field"><label>URL</label><input id="svc-url" value="${escapeHtml(s.url || '')}"></div><div class="field"><label>Description</label><textarea id="svc-description">${escapeHtml(s.description || '')}</textarea></div><div class="row"><div class="field"><label>Category</label><input id="svc-category" value="${escapeHtml(s.category || 'general')}"></div><div class="field"><label>Accent color</label><input id="svc-accent" type="color" value="${escapeHtml(s.accent || '#8fd3ff')}"><div class="choice-row">${colorChoices.map((color) => `<button class="color-choice" type="button" data-color-choice="${escapeHtml(color)}" style="--swatch:${escapeHtml(color)}" aria-label="Use ${escapeHtml(color)}"></button>`).join('')}</div></div></div><div class="field"><label>Tags, comma-separated</label><input id="svc-tags" value="${escapeHtml((s.tags || []).join(', '))}"></div><div class="row"><div class="field"><label>Sort order</label><input id="svc-sort" type="number" value="${escapeHtml(s.sortOrder || 0)}"></div><div class="field"><label>Health interval minutes</label><input id="svc-health-interval" type="number" min="1" value="${escapeHtml(s.healthCheckIntervalMinutes || 15)}"></div></div><label class="check-line"><input id="svc-health-enabled" type="checkbox" ${s.healthCheckEnabled ? 'checked' : ''}> Enable HTTP health checks</label><div class="field"><label>Health check URL</label><input id="svc-health-url" value="${escapeHtml(s.healthCheckUrl || '')}" placeholder="Defaults to service URL"><small>Leave blank to check the main service URL. Checks run in the background and can also be triggered manually.</small></div><div class="inline-controls"><button class="ghost" id="test-service-url" type="button">Test URL</button><span id="service-url-test-result" class="test-result"></span></div><div class="row"><label><input id="svc-featured" type="checkbox" ${s.featured ? 'checked' : ''}> Featured</label><label><input id="svc-enabled" type="checkbox" ${s.enabled !== false ? 'checked' : ''}> Enabled</label></div><button class="primary" id="save-service" type="button">Save service</button></div>`; }
+function serviceForm(s = {}) { return `<h2>${s.id ? 'Edit' : 'Add'} service</h2><div class="form-grid">${!s.id && canEditServices() ? presetSearchHtml() : ''}<div class="row"><div class="field"><label>Name</label><input id="svc-name" value="${escapeHtml(s.name || '')}"></div><div class="field"><label>Icon</label><input id="svc-icon" value="${escapeHtml(s.icon || '🔗')}" placeholder="Emoji or https://... image URL"><small>Use an emoji, paste an image URL, or choose a local JPEG, PNG, GIF, or WebP. Remote/local images are stored by the launcher.</small><div class="choice-row">${iconChoices.map((icon) => `<button class="ghost choice-btn" type="button" data-icon-choice="${escapeHtml(icon)}">${escapeHtml(icon)}</button>`).join('')}</div></div></div><div class="field"><label>Local icon image</label><input id="svc-icon-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><small>Animated GIFs/WebP and transparent images are preserved. Maximum size: 5 MiB.</small></div><div class="field"><label>URL</label><input id="svc-url" value="${escapeHtml(s.url || '')}"></div><div class="field"><label>Description</label><textarea id="svc-description">${escapeHtml(s.description || '')}</textarea></div><div class="row"><div class="field"><label>Category</label><input id="svc-category" value="${escapeHtml(s.category || 'general')}"></div><div class="field"><label>Accent color</label><input id="svc-accent" type="color" value="${escapeHtml(s.accent || '#8fd3ff')}"><div class="choice-row">${colorChoices.map((color) => `<button class="color-choice" type="button" data-color-choice="${escapeHtml(color)}" style="--swatch:${escapeHtml(color)}" aria-label="Use ${escapeHtml(color)}"></button>`).join('')}</div></div></div><div class="field"><label>Tags, comma-separated</label><input id="svc-tags" value="${escapeHtml((s.tags || []).join(', '))}"></div><div class="row"><div class="field"><label>Sort order</label><input id="svc-sort" type="number" value="${escapeHtml(s.sortOrder || 0)}"></div><div class="field"><label>Health interval minutes</label><input id="svc-health-interval" type="number" min="1" value="${escapeHtml(s.healthCheckIntervalMinutes || 15)}"></div></div><label class="check-line"><input id="svc-health-enabled" type="checkbox" ${s.healthCheckEnabled ? 'checked' : ''}> Enable HTTP health checks</label><div class="field"><label>Health check URL</label><input id="svc-health-url" value="${escapeHtml(s.healthCheckUrl || '')}" placeholder="Defaults to service URL"><small>Leave blank to check the main service URL. Checks run in the background and can also be triggered manually.</small></div><div class="inline-controls"><button class="ghost" id="test-service-url" type="button">Test URL</button><span id="service-url-test-result" class="test-result"></span></div><div class="row"><label><input id="svc-featured" type="checkbox" ${s.featured ? 'checked' : ''}> Featured</label><label><input id="svc-enabled" type="checkbox" ${s.enabled !== false ? 'checked' : ''}> Enabled</label></div><div id="service-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="save-service" type="button">Save service</button></div>`; }
 async function readServiceForm() {
   const file = $('svc-icon-file')?.files?.[0];
   const payload = { name: formValue('svc-name'), icon: formValue('svc-icon') || '🔗', url: formValue('svc-url'), description: formValue('svc-description'), category: formValue('svc-category') || 'general', accent: $('svc-accent').value, tags: formValue('svc-tags'), sortOrder: Number(formValue('svc-sort') || 0), featured: $('svc-featured').checked, enabled: $('svc-enabled').checked, healthCheckEnabled: $('svc-health-enabled').checked, healthCheckUrl: formValue('svc-health-url'), healthCheckIntervalMinutes: Number(formValue('svc-health-interval') || 15) };
@@ -567,17 +567,44 @@ function showServiceModal(s) {
       result.className = 'test-result danger';
     }
   };
-  $('save-service').onclick = async () => { try { const body = await readServiceForm(); await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) }); closeModal(); await loadServices(); if (isAdmin()) await loadAdminData(); renderServices(); toast('Service saved'); } catch (error) { toast(error.message); } };
+  $('save-service').onclick = async () => {
+    const errorEl = $('service-form-error');
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
+    try {
+      const body = await readServiceForm();
+      await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+      closeModal();
+      await loadServices();
+      if (isAdmin()) await loadAdminData();
+      renderServices();
+      toast('Service saved');
+    } catch (error) {
+      if (errorEl) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'flex';
+      } else {
+        toast(error.message);
+      }
+    }
+  };
 }
 
 
 function showLoginModal() {
-  openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label>2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);
+  openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label>2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div><div id="login-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);
   let requiresTotp = false;
   $('login-submit').onclick = async () => {
     const username = formValue('login-username');
     const password = formValue('login-password');
     const code = requiresTotp ? formValue('login-code') : '';
+    const errorEl = $('login-form-error');
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
     try {
       const res = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password, code }) });
       if (res.requiresTotp) {
@@ -591,7 +618,12 @@ function showLoginModal() {
         location.reload();
       }
     } catch (error) {
-      toast(error.message);
+      if (errorEl) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'flex';
+      } else {
+        toast(error.message);
+      }
     }
   };
 }
@@ -602,7 +634,7 @@ function showBootstrapModal() {
   let generatedSecret = '';
   for (let i = 0; i < bytes.length; i++) generatedSecret += alphabet[bytes[i] % 32];
   const formattedSecret = generatedSecret.match(/.{1,4}/g).join(' ');
-  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
+  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div></div><div id="boot-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
   $('boot-enable-totp').addEventListener('change', (e) => { $('boot-totp-setup').hidden = !e.target.checked; });
   $('boot-submit').onclick = async () => {
     const username = formValue('boot-username');
@@ -610,9 +642,19 @@ function showBootstrapModal() {
     const enableTotp = $('boot-enable-totp').checked;
     const totpCode = enableTotp ? formValue('boot-totp-code') : '';
     const payload = { username, password };
+    const errorEl = $('boot-form-error');
+    if (errorEl) {
+      errorEl.textContent = '';
+      errorEl.style.display = 'none';
+    }
     if (enableTotp) {
       if (!totpCode) {
-        toast('Please enter the 2FA code to verify setup');
+        if (errorEl) {
+          errorEl.textContent = 'Please enter the 2FA code to verify setup';
+          errorEl.style.display = 'flex';
+        } else {
+          toast('Please enter the 2FA code to verify setup');
+        }
         return;
       }
       payload.totpSecret = generatedSecret;
@@ -622,7 +664,12 @@ function showBootstrapModal() {
       await api('/api/bootstrap', { method: 'POST', body: JSON.stringify(payload) });
       location.reload();
     } catch (error) {
-      toast(error.message);
+      if (errorEl) {
+        errorEl.textContent = error.message;
+        errorEl.style.display = 'flex';
+      } else {
+        toast(error.message);
+      }
     }
   };
 }
@@ -648,55 +695,112 @@ async function showProfileModal() {
       </div>
     </div>
   `;
-  openModal(`<h2>Profile</h2><div class="settings-card"><p><strong>${escapeHtml(me.user.username)}</strong></p><p>${escapeHtml(roleLabel(me.user.role))} · Created ${new Date(me.user.createdAt).toLocaleString()}</p></div><h3>Two-factor authentication (2FA)</h3>${totpSection}<h3>Change password</h3><div class="form-grid"><div class="field"><label>Current password</label><input id="profile-current" type="password"></div><div class="field"><label>New password</label><input id="profile-new" type="password" placeholder="10+ characters"></div><button class="primary" id="profile-save-password" type="button">Change password</button></div><h3>Active sessions</h3><div class="log-list">${sessions.sessions.map((item) => `<article class="log-item"><strong>${item.current ? 'Current session' : 'Other session'}</strong><span>${escapeHtml(item.ip)} · expires ${new Date(item.expiresAt).toLocaleString()}</span><small>${escapeHtml(item.userAgent)}</small>${item.current ? '' : `<button class="ghost danger" data-revoke-session="${escapeHtml(item.sid)}" type="button">Revoke</button>`}</article>`).join('')}</div><button class="ghost danger" id="revoke-other-sessions" type="button">Revoke all other sessions</button><h3>Preferences</h3><div class="inline-controls"><button class="ghost" id="reset-layout-preferences" type="button">Reset layout/preferences</button><button class="ghost" id="reset-favorites" type="button">Reset favorites</button></div><p class="muted-copy">Reset layout order, hidden categories, and view mode separately from favorites.</p>`);
-  $('profile-save-password').onclick = async () => { await api('/api/me/password', { method: 'PATCH', body: JSON.stringify({ currentPassword: formValue('profile-current'), newPassword: formValue('profile-new') }) }); closeModal(); toast('Password changed'); };
-  $('revoke-other-sessions').onclick = async () => { await api('/api/me/sessions', { method: 'DELETE' }); closeModal(); toast('Other sessions revoked'); };
+  openModal(`<h2>Profile</h2><div class="settings-card"><p><strong>${escapeHtml(me.user.username)}</strong></p><p>${escapeHtml(roleLabel(me.user.role))} · Created ${new Date(me.user.createdAt).toLocaleString()}</p></div><div id="profile-form-error" class="form-error-banner" style="display: none;"></div><h3>Two-factor authentication (2FA)</h3>${totpSection}<h3>Change password</h3><div class="form-grid"><div class="field"><label>Current password</label><input id="profile-current" type="password"></div><div class="field"><label>New password</label><input id="profile-new" type="password" placeholder="10+ characters"></div><button class="primary" id="profile-save-password" type="button">Change password</button></div><h3>Active sessions</h3><div class="log-list">${sessions.sessions.map((item) => `<article class="log-item"><strong>${item.current ? 'Current session' : 'Other session'}</strong><span>${escapeHtml(item.ip)} · expires ${new Date(item.expiresAt).toLocaleString()}</span><small>${escapeHtml(item.userAgent)}</small>${item.current ? '' : `<button class="ghost danger" data-revoke-session="${escapeHtml(item.sid)}" type="button">Revoke</button>`}</article>`).join('')}</div><button class="ghost danger" id="revoke-other-sessions" type="button">Revoke all other sessions</button><h3>Preferences</h3><div class="inline-controls"><button class="ghost" id="reset-layout-preferences" type="button">Reset layout/preferences</button><button class="ghost" id="reset-favorites" type="button">Reset favorites</button></div><p class="muted-copy">Reset layout order, hidden categories, and view mode separately from favorites.</p>`);
+  
+  const showError = (msg) => {
+    const errorEl = $('profile-form-error');
+    if (errorEl) {
+      errorEl.textContent = msg;
+      errorEl.style.display = msg ? 'flex' : 'none';
+    }
+  };
+
+  $('profile-save-password').onclick = async () => {
+    showError('');
+    try {
+      await api('/api/me/password', { method: 'PATCH', body: JSON.stringify({ currentPassword: formValue('profile-current'), newPassword: formValue('profile-new') }) });
+      closeModal();
+      toast('Password changed');
+    } catch (error) {
+      showError(error.message);
+    }
+  };
+  $('revoke-other-sessions').onclick = async () => {
+    showError('');
+    try {
+      await api('/api/me/sessions', { method: 'DELETE' });
+      closeModal();
+      toast('Other sessions revoked');
+    } catch (error) {
+      showError(error.message);
+    }
+  };
   if (me.user.totpEnabled) {
     $('profile-disable-2fa').onclick = async () => {
       if (confirm('Are you sure you want to disable 2FA? This will lower your account security.')) {
-        await api('/api/me/totp/disable', { method: 'POST' });
-        toast('2FA disabled');
-        await showProfileModal();
+        showError('');
+        try {
+          await api('/api/me/totp/disable', { method: 'POST' });
+          toast('2FA disabled');
+          await showProfileModal();
+        } catch (error) {
+          showError(error.message);
+        }
       }
     };
   } else {
     let activeSecret = '';
     $('profile-setup-2fa').onclick = async () => {
-      const res = await api('/api/me/totp/setup', { method: 'POST' });
-      activeSecret = res.secret;
-      const formatted = res.secret.match(/.{1,4}/g).join(' ');
-      $('profile-2fa-secret').textContent = formatted;
-      $('profile-2fa-setup-area').hidden = false;
-      $('profile-setup-2fa').hidden = true;
+      showError('');
+      try {
+        const res = await api('/api/me/totp/setup', { method: 'POST' });
+        activeSecret = res.secret;
+        const formatted = res.secret.match(/.{1,4}/g).join(' ');
+        $('profile-2fa-secret').textContent = formatted;
+        $('profile-2fa-setup-area').hidden = false;
+        $('profile-setup-2fa').hidden = true;
+      } catch (error) {
+        showError(error.message);
+      }
     };
     $('profile-confirm-2fa').onclick = async () => {
       const code = formValue('profile-2fa-code');
       if (!code) {
-        toast('Please enter verification code');
+        showError('Please enter verification code');
         return;
       }
+      showError('');
       try {
         await api('/api/me/totp/enable', { method: 'POST', body: JSON.stringify({ secret: activeSecret, code }) });
         toast('2FA enabled successfully');
         await showProfileModal();
       } catch (error) {
-        toast(error.message);
+        showError(error.message);
       }
     };
   }
   $('reset-layout-preferences').onclick = async () => {
-    if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
-    else localStorage.removeItem('hll.launchpad');
-    state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder] };
-    closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
+    showError('');
+    try {
+      if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
+      else localStorage.removeItem('hll.launchpad');
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder] };
+      closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
+    } catch (error) {
+      showError(error.message);
+    }
   };
   $('reset-favorites').onclick = async () => {
-    if (state.user) await api('/api/me/preferences/favorites', { method: 'DELETE' });
-    else localStorage.removeItem('hll.favorites');
-    state.favorites = [];
-    closeModal(); renderServices(); toast('Favorites reset');
+    showError('');
+    try {
+      if (state.user) await api('/api/me/preferences/favorites', { method: 'DELETE' });
+      else localStorage.removeItem('hll.favorites');
+      state.favorites = [];
+      closeModal(); renderServices(); toast('Favorites reset');
+    } catch (error) {
+      showError(error.message);
+    }
   };
-  modalContent.querySelectorAll('[data-revoke-session]').forEach((button) => button.addEventListener('click', async () => { await api(`/api/me/sessions/${button.dataset.revokeSession}`, { method: 'DELETE' }); closeModal(); toast('Session revoked'); }));
+  modalContent.querySelectorAll('[data-revoke-session]').forEach((button) => button.addEventListener('click', async () => {
+    showError('');
+    try {
+      await api(`/api/me/sessions/${button.dataset.revokeSession}`, { method: 'DELETE' });
+      closeModal();
+      toast('Session revoked');
+    } catch (error) {
+      showError(error.message);
+    }
+  }));
 }
 
 init();

@@ -1254,3 +1254,22 @@ tr:hover td { background: rgba(255,255,255,.018); }
 .preset-badge-heimdall { background: rgba(255, 174, 0, .16); color: #ffae00; }
 .preset-empty { padding: .75rem 1rem; color: var(--muted); font-size: .88rem; }
 button:disabled { opacity: .45; cursor: not-allowed; }
+
+/* Inline form error banners for dialog modals */
+.form-error-banner {
+  padding: 12px 16px;
+  border-radius: var(--radius-md, 8px);
+  background: rgba(255, 143, 157, 0.1);
+  border: 1px solid rgba(255, 143, 157, 0.25);
+  color: var(--danger);
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.form-error-banner::before {
+  content: '⚠️';
+  flex-shrink: 0;
+}

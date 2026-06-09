@@ -40,6 +40,7 @@ function registerPresetRoutes(router, deps) {
           icon = await downloadPresetIcon(preset.icon_url, dataDir, deps);
         } catch (iconErr) {
           console.warn(`[preset-import] Could not download icon for ${preset.name}:`, iconErr.message);
+          logEvent(db, req, 'preset.icon_download_failed', { presetId, iconUrl: preset.icon_url, error: iconErr.message }, 'warn');
         }
       }
 

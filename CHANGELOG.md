@@ -24,6 +24,11 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 - Release readiness docs now include a versioned release checklist, upgrade-notes template, and dependency-audit gate.
 - CI now covers Node.js 20 and 22, validates Compose config, checks release file hygiene, audits production dependencies, and smoke-tests container startup.
 
+### Fixed
+
+- Fixed Lidarr and other service preset saves failing due to missing/broken icon URLs by dynamically discovering actual image assets in the Heimdall preset sync and allowing saves to gracefully succeed and fall back to the default icon on icon download failures (Issue #8).
+- Fixed error toasts being obscured/blurred behind modal dialog backdrops by implementing clean, top-layer-safe inline error banners inside the service form, login, bootstrap, profile, and theme preset import modal screens (Issue #9).
+
 ## [0.1.0] - 2026-05-14
 
 ### Added
