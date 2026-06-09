@@ -6,6 +6,21 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.2.1] - 2026-06-09
+
+### Changed
+
+- Made the entire service card/tile in the launcher clickable, opening the service URL in a new tab, except for the action buttons (copy URL, favorite, health check, edit, and delete).
+- Improved the service deletion flow by showing a confirmation prompt that includes the specific service name prior to deletion.
+- Added a "Hide Hostnames" display option toggle in the launchpad options toolbar to conditionally hide hostname links inside service cards and favorite tiles.
+
+### Fixed
+
+- Fixed the modal close (X) button failing to close the dialog on the profile modal (and potentially others) by absolute-positioning the button with high z-index to prevent overlapping, and explicitly binding a click event handler in JavaScript.
+
+
+
+
 ## [0.2.0] - 2026-06-09
 
 ### Changed

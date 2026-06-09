@@ -85,6 +85,10 @@ function openModal(html) {
 }
 function closeModal() { if (modal.open) modal.close(); else restoreModalFocus(); }
 modal?.addEventListener('close', restoreModalFocus);
+modal?.querySelector('.close')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  closeModal();
+});
 function formValue(id) { return $(id)?.value?.trim() || ''; }
 
 function applyAppearance(appearance = {}) {
