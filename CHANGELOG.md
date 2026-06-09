@@ -6,8 +6,11 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.2.0] - 2026-06-09
+
 ### Changed
 
+- Standardized release and Docker image build processes: introduced multi-stage Docker builds, multi-platform Docker images (linux/amd64 and linux/arm64), automated release validation testing in CI/CD, and GHA build caching.
 - Update appearance section to allow custom HTML formatting (such as links) in the hero subheading, replacing the basic textarea with a tabbed Visual/Code WYSIWYG editor, increasing the subheading limit to 10,000 characters, and rendering the subheading as HTML in the live preview and launcher.
 - Added Service Preset Catalog with offline local top-50 popular presets and remote Heimdall Apps catalog synchronization, including auto-fill service creation, brand color and icon downloads (with SSRF protection), manual catalog update trigger with 60-second rate-limiting, and clear source badge visual indicators.
 - Added optional TOTP 2FA for first-admin browser setup and user profiles, including Admin 2FA reset support, strict six-digit code validation, and stronger generated Base32 secrets.
