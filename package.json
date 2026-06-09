@@ -24,7 +24,8 @@
     "test:api": "node --test test/api.test.js",
     "test:frontend": "node --test test/frontend-smoke.test.js",
     "audit:ci": "npm audit --omit=dev --audit-level=high",
-    "release:check": "sh scripts/release-check.sh"
+    "release:check": "sh scripts/release-check.sh",
+    "validate": "npm run check && npm run release:check && node --test --test-reporter=dot test/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
