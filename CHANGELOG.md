@@ -4,6 +4,13 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.3.1] - 2026-06-11
+
+### Fixed
+
+- Fixed the service launchpad metadata toggle so it now works in card, compact, and list views.
+- Fixed launchpad metadata visibility so service hostnames remain admin-only, while non-admins can still hide or show tags with the metadata toggle.
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
@@ -31,6 +38,7 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 ### Fixed
 
 - Fixed logged-in launchpad preference persistence for layout order, view mode, hidden categories, and metadata visibility, including legacy preference normalization.
+- Fixed the launchpad metadata toggle so it works in card, compact, and list views, while keeping service hostnames admin-only and letting non-admins hide or show tags without exposing hostnames.
 - Fixed Admin appearance reset by wiring default appearance data into the route module and returning sanitized reset settings.
 - Added weather upstream timeouts and a short server-side cache with stale-cache fallback to reduce repeated network work.
 - Preserved service health-check settings during config backup restore.
