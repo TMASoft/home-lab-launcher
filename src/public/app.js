@@ -412,6 +412,7 @@ $('launchpad-controls').addEventListener('click', async (event) => {
   const categoryButton = event.target.closest('[data-launch-category]');
   const viewButton = event.target.closest('[data-view-mode]');
   const hideButton = event.target.closest('[data-hide-category]');
+  let shouldSavePreferences = false;
   if (categoryButton) {
     const category = categoryButton.dataset.launchCategory;
     if (event.altKey || event.shiftKey) {
@@ -419,7 +420,7 @@ $('launchpad-controls').addEventListener('click', async (event) => {
       hidden.has(category) ? hidden.delete(category) : hidden.add(category);
       state.preferences.hiddenCategories = [...hidden].filter(Boolean);
       if (hidden.has(state.selectedCategory)) state.selectedCategory = '';
-      await saveLaunchpadPreferences();
+      shouldSavePreferences = true;
     } else {
       state.selectedCategory = category;
     }
@@ -427,22 +428,29 @@ $('launchpad-controls').addEventListener('click', async (event) => {
   }
   if (viewButton) {
     state.preferences.viewMode = viewButton.dataset.viewMode;
-    await saveLaunchpadPreferences();
     renderServices();
+    shouldSavePreferences = true;
   }
   if (hideButton) {
     const hidden = new Set(state.preferences.hiddenCategories || []);
     hidden.add(hideButton.dataset.hideCategory);
     state.preferences.hiddenCategories = [...hidden];
     if (state.selectedCategory === hideButton.dataset.hideCategory) state.selectedCategory = '';
-    await saveLaunchpadPreferences();
     renderServices();
+    shouldSavePreferences = true;
   }
   const toggleMetadataButton = event.target.closest('[data-toggle-metadata]');
   if (toggleMetadataButton) {
     state.preferences.hideMetadata = !state.preferences.hideMetadata;
-    await saveLaunchpadPreferences();
     renderServices();
+    shouldSavePreferences = true;
+  }
+  if (shouldSavePreferences) {
+    try {
+      await saveLaunchpadPreferences();
+    } catch (error) {
+      toast(`Could not save launchpad preferences: ${error.message}`);
+    }
   }
 });
 $('favorites').addEventListener('click', async (event) => {
