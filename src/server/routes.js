@@ -6,7 +6,7 @@ const packageJson = require('../../package.json');
 const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
 const { guardedFetch, serverFetchConfig, parsePrivateNetworkAccess } = require('./server-fetch');
 const { apiResponseMiddleware } = require('./api-response');
-const { servicePayload, settingsPayload, userPayload, preferencePayload, weatherSettingsPayload, pluginInstallPayload } = require('./validation');
+const { servicePayload, settingsPayload, userPayload, preferencePayload, normalizeLaunchpad, weatherSettingsPayload, pluginInstallPayload } = require('./validation');
 const { registerAuthRoutes } = require('./route-modules/auth');
 const { registerAdminRoutes } = require('./route-modules/admin');
 const { registerServiceRoutes } = require('./route-modules/services');
@@ -61,12 +61,25 @@ function logEvent(db, req, action, details = {}, level = 'info') {
   }
 }
 
-function publicSettings(db) {
+function publicSettings(db, req) {
+  const rawWeather = getSetting(db, 'weather', null);
+  let weather = null;
+  if (rawWeather) {
+    const isAdmin = req?.session?.user?.role === 'admin';
+    if (isAdmin) {
+      weather = rawWeather;
+    } else {
+      weather = {
+        label: rawWeather.label || '',
+        units: rawWeather.units || 'fahrenheit'
+      };
+    }
+  }
   return {
     appName: getSetting(db, 'app_name', 'Home Lab Launcher'),
     appBaseUrl: getSetting(db, 'app_base_url', ''),
     publicReadEnabled: getSetting(db, 'public_read_enabled', true),
-    weather: getSetting(db, 'weather', null),
+    weather,
     appearance: getAppearance(db)
   };
 }
@@ -112,6 +125,41 @@ function cleanAssetUrl(value) {
   return '';
 }
 
+function sanitizeHtml(html) {
+  if (typeof html !== 'string') return '';
+  const allowedTags = new Set(['strong', 'em', 'b', 'i', 'code', 'br', 'p', 'ul', 'ol', 'li', 'a']);
+  const tagRe = /<\/?([a-zA-Z1-6]+)([^>]*)>/g;
+  return html.replace(tagRe, (match, tagName, attrs) => {
+    const lowerTag = tagName.toLowerCase();
+    if (!allowedTags.has(lowerTag)) {
+      return '';
+    }
+    const isClosing = match.startsWith('</');
+    if (isClosing) {
+      return `</${lowerTag}>`;
+    }
+    if (lowerTag === 'a') {
+      const hrefMatch = attrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
+      const hrefValue = hrefMatch ? (hrefMatch[1] || hrefMatch[2] || hrefMatch[3]) : '';
+      let isSafe = false;
+      try {
+        const url = new URL(hrefValue);
+        isSafe = ['http:', 'https:'].includes(url.protocol);
+      } catch {
+        if (/^https?:\/\//i.test(hrefValue)) {
+          isSafe = true;
+        }
+      }
+      if (isSafe) {
+        const cleanHref = hrefValue.replace(/"/g, '&quot;');
+        return `<a href="${cleanHref}">`;
+      }
+      return '<a>';
+    }
+    return `<${lowerTag}>`;
+  });
+}
+
 function sanitizeAppearance(input = {}, { partial = false } = {}) {
   const merged = partial ? deepMerge(DEFAULT_APPEARANCE, input || {}) : deepMerge(DEFAULT_APPEARANCE, input || {});
   const brand = merged.brand || {};
@@ -144,7 +192,7 @@ function sanitizeAppearance(input = {}, { partial = false } = {}) {
     hero: {
       eyebrow: cleanText(hero.eyebrow, DEFAULT_APPEARANCE.hero.eyebrow, 80),
       heading: cleanText(hero.heading, DEFAULT_APPEARANCE.hero.heading, 140),
-      subheading: cleanText(hero.subheading, DEFAULT_APPEARANCE.hero.subheading, 10000)
+      subheading: sanitizeHtml(cleanText(hero.subheading, DEFAULT_APPEARANCE.hero.subheading, 10000))
     },
     theme: {
       mode,
@@ -529,11 +577,23 @@ function applyConfigBackup(db, backup) {
     if (services.length) {
       db.prepare('DELETE FROM services').run();
       const stmt = db.prepare(`
-        INSERT INTO services (id, name, icon, url, category, accent, description, tags_json, sort_order, featured, enabled)
-        VALUES (@id, @name, @icon, @url, @category, @accent, @description, @tags_json, @sort_order, @featured, @enabled)
+        INSERT INTO services (id, name, icon, url, category, accent, description, tags_json, sort_order, featured, enabled, health_check_enabled, health_check_url, health_check_interval_minutes)
+        VALUES (@id, @name, @icon, @url, @category, @accent, @description, @tags_json, @sort_order, @featured, @enabled, @health_check_enabled, @health_check_url, @health_check_interval_minutes)
       `);
       for (const service of services) {
         if (!service.id || !service.name || !service.url || !validateUrl(service.url)) continue;
+
+        let hcEnabled = (service.healthCheckEnabled === true || service.health_check_enabled === 1 || service.health_check_enabled === true) ? 1 : 0;
+        let hcUrl = String(service.healthCheckUrl || service.health_check_url || '');
+        if (hcEnabled && (!hcUrl || !validateUrl(hcUrl))) {
+          hcEnabled = 0;
+          hcUrl = '';
+        }
+        let hcInterval = Number(service.healthCheckIntervalMinutes || service.health_check_interval_minutes || 15);
+        if (!Number.isInteger(hcInterval) || hcInterval < 1 || hcInterval > 1440) {
+          hcInterval = 15;
+        }
+
         stmt.run({
           id: slug(service.id),
           name: String(service.name),
@@ -546,9 +606,9 @@ function applyConfigBackup(db, backup) {
           sort_order: Number(service.sortOrder || service.sort_order || 0),
           featured: service.featured ? 1 : 0,
           enabled: service.enabled === false ? 0 : 1,
-          health_check_enabled: service.healthCheckEnabled ? 1 : 0,
-          health_check_url: String(service.healthCheckUrl || ''),
-          health_check_interval_minutes: Number(service.healthCheckIntervalMinutes || 15)
+          health_check_enabled: hcEnabled,
+          health_check_url: hcUrl,
+          health_check_interval_minutes: hcInterval
         });
       }
     }
@@ -558,7 +618,7 @@ function applyConfigBackup(db, backup) {
 }
 
 function effectiveConfig(db, req, { dataDir, pluginDir }) {
-  const settings = publicSettings(db);
+  const settings = publicSettings(db, req);
   const baseUrl = settings.appBaseUrl || '';
   let parsedBaseUrl = null;
   try { parsedBaseUrl = baseUrl ? new URL(baseUrl) : null; } catch {}
@@ -679,20 +739,20 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures });
 
   router.get('/settings/public', (req, res) => {
-    res.json(publicSettings(db));
+    res.json(publicSettings(db, req));
   });
 
-  registerAdminRoutes(router, { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler });
+  registerAdminRoutes(router, { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, DEFAULT_APPEARANCE, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler });
 
   registerServiceRoutes(router, { db, dataDir, requireRole, canRead, logEvent, allServices, serviceFromRow, serviceSelectSql, serviceIconDir, appAssetDir, slug, uniqueServiceId, normalizeServiceIcon, validateUrl, guardedFetch, healthStatusFrom, checkServiceHealth, servicePayload, normalizeTags });
 
-  registerUserRoutes(router, { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload });
+  registerUserRoutes(router, { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload, normalizeLaunchpad });
 
   registerWeatherRoutes(router, { db, requireRole, canRead, logEvent, weatherSettingsPayload });
 
   registerPluginRoutes(router, { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload });
 
-  registerPresetRoutes(router, { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch });
+  registerPresetRoutes(router, { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler });
 
   startPresetCatalogScheduler(db, scheduler);
 

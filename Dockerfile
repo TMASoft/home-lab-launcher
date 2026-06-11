@@ -11,8 +11,15 @@ RUN npm ci --omit=dev
 FROM node:20-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
-COPY . .
-COPY --from=builder /app/node_modules ./node_modules
+
+COPY --chown=node:node . .
+COPY --chown=node:node --from=builder /app/node_modules ./node_modules
+
+# Ensure data directory exists and is owned by node
+RUN mkdir -p /app/data && chown -R node:node /app/data
+
+USER node
+
 EXPOSE 8080
 CMD ["npm", "start"]
 

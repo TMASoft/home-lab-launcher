@@ -59,7 +59,7 @@ test('Preset Catalog API & Logic', async (t) => {
 
   // 2. Fetch preset catalog settings
   const settings = await admin.request('/api/admin/presets/settings');
-  assert.equal(settings.enableRemotePresets, true);
+  assert.equal(settings.enableRemotePresets, false);
   assert.equal(settings.counts.local > 0, true);
   assert.ok(settings.syncStatus);
   assert.equal(settings.syncStatus.status, 'idle');
@@ -72,18 +72,18 @@ test('Preset Catalog API & Logic', async (t) => {
   assert.equal(piHolePreset.name, 'Pi-hole');
   assert.equal(piHolePreset.source, 'local');
 
-  // 4. Update preset settings (disable remote presets)
+  // 4. Update preset settings (enable remote presets)
   await admin.request('/api/admin/presets/settings', {
     method: 'PUT',
-    body: { enableRemotePresets: false }
+    body: { enableRemotePresets: true }
   });
   const settingsAfter = await admin.request('/api/admin/presets/settings');
-  assert.equal(settingsAfter.enableRemotePresets, false);
+  assert.equal(settingsAfter.enableRemotePresets, true);
 
   // 5. Update catalog manual trigger (test throttling & async start)
   await admin.request('/api/admin/presets/settings', {
     method: 'PUT',
-    body: { enableRemotePresets: true } // re-enable to allow manual sync check
+    body: { enableRemotePresets: true } // already enabled, but let's be safe
   });
   const updateRes = await admin.request('/api/admin/presets/update', { method: 'POST' });
   assert.equal(updateRes.ok, true);

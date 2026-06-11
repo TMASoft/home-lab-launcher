@@ -3,13 +3,13 @@ const { getSetting, setSetting } = require('../db');
 const { syncHeimdallPresets, canUpdateCatalog, catalogCooldownRemaining, searchPresets, getPreset, HEIMDALL_RAW_RE } = require('../preset-catalog');
 
 function registerPresetRoutes(router, deps) {
-  const { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch } = deps;
+  const { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler } = deps;
 
   // Search presets
   router.get('/admin/presets/search', requireRole('admin', 'editor'), (req, res) => {
     const query = String(req.query.q || '').trim();
     if (!query) return res.json({ presets: [] });
-    const remoteEnabled = getSetting(db, 'enable_remote_presets', true);
+    const remoteEnabled = getSetting(db, 'enable_remote_presets', false);
     const rows = searchPresets(db, query, { source: remoteEnabled ? undefined : 'local' });
     const presets = rows.map((row) => ({
       id: row.id,
@@ -81,7 +81,7 @@ function registerPresetRoutes(router, deps) {
 
   // Get preset catalog settings
   router.get('/admin/presets/settings', requireRole('admin'), (req, res) => {
-    const enableRemotePresets = getSetting(db, 'enable_remote_presets', true);
+    const enableRemotePresets = getSetting(db, 'enable_remote_presets', false);
     const lastCrawledAt = getSetting(db, 'last_preset_crawled_at', null);
     const cooldownRemaining = catalogCooldownRemaining(db);
     const presetCount = db.prepare('SELECT COUNT(*) AS count FROM preset_cache').get().count;
@@ -106,8 +106,17 @@ function registerPresetRoutes(router, deps) {
   // Update preset catalog settings
   router.put('/admin/presets/settings', requireRole('admin'), express.json(), (req, res) => {
     if (Object.prototype.hasOwnProperty.call(req.body, 'enableRemotePresets')) {
-      setSetting(db, 'enable_remote_presets', Boolean(req.body.enableRemotePresets));
-      logEvent(db, req, 'preset_settings.updated', { enableRemotePresets: Boolean(req.body.enableRemotePresets) });
+      const enabled = Boolean(req.body.enableRemotePresets);
+      setSetting(db, 'enable_remote_presets', enabled);
+      logEvent(db, req, 'preset_settings.updated', { enableRemotePresets: enabled });
+      if (enabled) {
+        const { startPresetCatalogScheduler } = require('../preset-catalog');
+        startPresetCatalogScheduler(db, scheduler);
+      } else {
+        if (scheduler) {
+          scheduler.stop('preset-catalog-sync');
+        }
+      }
     }
     res.json({ ok: true });
   });

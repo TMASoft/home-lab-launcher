@@ -26,7 +26,7 @@ async function syncHeimdallPresets(db) {
     });
   };
 
-  const remoteEnabled = getSetting(db, 'enable_remote_presets', true);
+  const remoteEnabled = getSetting(db, 'enable_remote_presets', false);
   if (!remoteEnabled) {
     console.log('[preset-catalog] Remote presets disabled, skipping sync.');
     updateStatus('idle', 0, 'Remote presets disabled');
@@ -197,10 +197,13 @@ function getPreset(db, id) {
 function startPresetCatalogScheduler(db, scheduler) {
   const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
   if (scheduler) {
-    scheduler.addInterval('preset-catalog-sync', () => syncHeimdallPresets(db), {
-      intervalMs: WEEK_MS,
-      initialDelayMs: 30_000
-    });
+    const remoteEnabled = getSetting(db, 'enable_remote_presets', false);
+    if (remoteEnabled) {
+      scheduler.addInterval('preset-catalog-sync', () => syncHeimdallPresets(db), {
+        intervalMs: WEEK_MS,
+        initialDelayMs: 30_000
+      });
+    }
   }
 }
 

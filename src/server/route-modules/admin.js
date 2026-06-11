@@ -3,7 +3,7 @@ const path = require('path');
 const { getSetting, setSetting } = require('../db');
 
 function registerAdminRoutes(router, deps) {
-  const { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler } = deps;
+  const { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, DEFAULT_APPEARANCE, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler } = deps;
   router.patch('/settings', requireRole('admin'), express.json(), (req, res) => {
     try {
       const settings = settingsPayload(req.body || {});

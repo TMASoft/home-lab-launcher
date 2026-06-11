@@ -25,7 +25,7 @@ Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intend
 | `PATCH` | `/api/me/password` | Session | Changes the current user's password. |
 | `POST` | `/api/me/totp/setup` | Session | Generates a new Base32 TOTP secret for the current user's authenticator app. |
 | `POST` | `/api/me/totp/enable` | Session | Verifies a six-digit TOTP code and enables 2FA for the current user. |
-| `POST` | `/api/me/totp/disable` | Session | Disables 2FA for the current user. |
+| `POST` | `/api/me/totp/disable` | Session | Disables 2FA for the current user. Requires `{ password }` and, when 2FA is enabled, `{ code }`; other sessions are revoked after disable. |
 | `GET` | `/api/me/sessions` | Session | Lists active sessions for the current user. |
 | `DELETE` | `/api/me/sessions/:sid` | Session | Revokes one active session. |
 | `DELETE` | `/api/me/sessions` | Session | Revokes other sessions for the current user. |
@@ -37,7 +37,7 @@ Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intend
 | `GET` | `/api/settings/public` | Public | Public runtime settings, appearance, and anonymous-read status. |
 | `GET` | `/api/services` | Public if enabled, otherwise session | Lists enabled/visible services with health metadata. |
 | `GET` | `/api/service-health` | Public if enabled, otherwise session | Lists service health rows. |
-| `GET` | `/api/service-icons/:filename` | Public | Serves stored service icons. Treat icons as public. |
+| `GET` | `/api/service-icons/:filename` | Public/Session | Serves stored service icons. Requires launcher read access when public read is disabled. |
 | `GET` | `/api/app-assets/:filename` | Public | Serves stored branding assets. Treat branding assets as public. |
 | `GET` | `/api/weather` | Public if enabled, otherwise session | Returns configured weather data or disabled/unconfigured status. |
 

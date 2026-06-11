@@ -4,16 +4,36 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
-## Unreleased
+## [0.3.0] - 2026-06-11
 
 ### Added
 
 - Added `scripts/release-pr.sh` automation script that runs local tests, pushes the branch to GitHub, creates a Pull Request, and configures auto-merge.
+- Added comprehensive unit tests for server-side `guardedFetch` (SSRF/DNS rebinding, redirects, and abort handling) in `test/server-fetch.test.js`.
+- Added regression test verification for service icon and app asset access control policy in `test/api.test.js`.
 
 ### Changed
 
+- Hardened server-side fetches against SSRF and DNS rebinding attacks by resolving hostnames exactly once and pinning connections directly to the IP address (with original Host header and TLS SNI verification).
+- Hardened Docker container runtime security by running under the non-root `node` user, dropping capabilities (`cap_drop: ["ALL"]`), preventing privilege escalation (`no-new-privileges: true`), and adding a native Node fetch-based container healthcheck against `/api/healthz`.
+- Minimized unauthenticated public settings weather data so exact coordinates are only exposed through authenticated Admin flows.
+- Disabled remote Heimdall preset sync by default while keeping bundled local presets available; Admins can opt in to remote presets from catalog settings.
+- Clarified backups UI/docs so the stored backup path is an operator note/preferred target, not an automatic scheduler.
+- Documented service icons as access-controlled assets and branding images as public login-shell assets.
 - Downsized the cards, compact, and list view modes for the service launchpad, tightening margins, paddings, and card heights to make them smaller and cleaner.
 - Replaced the "Hide Hostnames" display option with a "Hide/Show Metadata" button (hiding both tags and hostnames in the service cards and favorite tiles), restricted to admin users.
+
+### Security
+
+- Sanitized hero subheading HTML to a small safe formatting subset and stripped unsafe tags, attributes, and non-http(s) links before persistence.
+- Hardened TOTP disable so users must reauthenticate with their current password and current TOTP code when 2FA is enabled; disabling 2FA revokes other sessions and is audited.
+
+### Fixed
+
+- Fixed logged-in launchpad preference persistence for layout order, view mode, hidden categories, and metadata visibility, including legacy preference normalization.
+- Fixed Admin appearance reset by wiring default appearance data into the route module and returning sanitized reset settings.
+- Added weather upstream timeouts and a short server-side cache with stale-cache fallback to reduce repeated network work.
+- Preserved service health-check settings during config backup restore.
 
 ## [0.2.2] - 2026-06-09
 
