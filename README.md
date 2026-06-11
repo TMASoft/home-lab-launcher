@@ -1,3 +1,6 @@
+<img width="621" height="285" alt="Screenshot_20260609_162805" src="https://github.com/user-attachments/assets/cb352b92-f7ed-4906-804b-2e817f378cf2" />
+
+
 # Home Lab Launcher
 
 > A self-hosted, role-aware home portal for service links, weather, user favorites, admin settings, and trusted plugin-powered dashboard sections.
