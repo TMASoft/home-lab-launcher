@@ -87,6 +87,11 @@ test('Preset Catalog API & Logic', async (t) => {
   assert.equal(piHolePreset.name, 'Pi-hole');
   assert.equal(piHolePreset.source, 'local');
 
+  const searchQbit = await admin.request('/api/admin/presets/search?q=qbittorrent');
+  const qbitPreset = searchQbit.presets.find(p => p.id === 'qbittorrent');
+  assert.ok(qbitPreset);
+  assert.match(qbitPreset.iconUrl, /\/qBittorrent\/qbittorrent\.svg$/);
+
   // 4. Update preset settings (enable remote presets)
   await admin.request('/api/admin/presets/settings', {
     method: 'PUT',
