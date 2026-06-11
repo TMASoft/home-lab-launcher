@@ -29,8 +29,8 @@ The official release image is published to GHCR as `ghcr.io/TMASoft/home-lab-lau
 ```bash
 cp .env.example .env
 # edit .env
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -181,6 +181,19 @@ For internal-only domains, use your preferred CA workflow, then proxy to the app
 
 The launcher itself does not need to know certificate paths. It only needs `APP_BASE_URL` to reflect the URL users open.
 
+If the launcher or a trusted plugin makes outbound HTTPS requests to services using an internal CA, mount the issuing CA certificate into the container and point Node.js at it:
+
+```yaml
+services:
+  launcher:
+    environment:
+      NODE_EXTRA_CA_CERTS: /app/certs/internal-ca.pem
+    volumes:
+      - ./certs/internal-ca.pem:/app/certs/internal-ca.pem:ro
+```
+
+Keep the CA file and any private keys out of Git. Trusting the CA is preferred over disabling TLS verification in plugin-specific settings.
+
 ## First admin bootstrap
 
 There are two supported approaches.
@@ -231,8 +244,8 @@ For image-based installs, update by pulling the next tagged GHCR image:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose up -d --no-build
 
 # Or, for source checkouts:
 # docker compose build --pull
