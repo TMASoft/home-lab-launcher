@@ -281,10 +281,10 @@ See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
 The first plugin lives separately at:
 
 ```text
-home-lab-launcher-plugins/news
+https://github.com/TMASoft/home-lab-launcher-plugins/tree/main/uptime-kuma
 ```
 
-It implements an optional RSS/news dashboard section with feed management, folders, per-feed refresh status, cleanup/retention, and OPML import/export. See that plugin’s README for packaging notes.
+It implements an optional Uptime Kuma dashboard section for surfacing monitor status inside the launcher. See that plugin’s README for packaging notes.
 
 ## Development
 

@@ -222,7 +222,7 @@ In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTA
 The first plugin project is stored separately at:
 
 ```text
-home-lab-launcher-plugins/news
+https://github.com/TMASoft/home-lab-launcher-plugins/tree/main/uptime-kuma
 ```
 
 It demonstrates:
