@@ -26,6 +26,7 @@ services:
       SCHEDULED_BACKUP_LOCATION: ${SCHEDULED_BACKUP_LOCATION:-}
       DATA_DIR: /app/data
       PLUGIN_DIR: /app/data/plugins
+      NODE_EXTRA_CA_CERTS: ${NODE_EXTRA_CA_CERTS:-}
       ENABLE_LOCAL_PLUGIN_INSTALL: ${ENABLE_LOCAL_PLUGIN_INSTALL:-false}
       LOCAL_PLUGIN_HOST_DIR: ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}
       LOCAL_PLUGIN_CONTAINER_DIR: ${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}
@@ -34,6 +35,8 @@ services:
     volumes:
       - launcher-data:/app/data
       - ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}:${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}:ro
+      # Optional: mount an internal CA bundle and set NODE_EXTRA_CA_CERTS=/app/certs/internal-ca.pem.
+      # - ./certs/internal-ca.pem:/app/certs/internal-ca.pem:ro
     cap_drop:
       - ALL
     security_opt:

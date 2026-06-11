@@ -4,7 +4,11 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
-## [0.3.5] - 2026-06-11
+## [0.3.6] - 2026-06-11
+
+### Added
+
+- Added Docker Compose and documentation support for `NODE_EXTRA_CA_CERTS` so deployments can trust internal CA certificates for outbound Node.js HTTPS requests, including trusted plugins.
 
 ### Fixed
 

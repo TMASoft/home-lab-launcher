@@ -77,8 +77,8 @@ Choose one first-admin setup path:
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -234,6 +234,7 @@ Most runtime settings are environment variables on first boot, then editable in 
 | `SESSION_SECRET` | Required session signing secret; generate a long random value before deployment | Change this |
 | `DATA_DIR` | SQLite/session/plugin data directory | `/app/data` in Docker |
 | `PLUGIN_DIR` | Installed plugin directory | `/app/data/plugins` |
+| `NODE_EXTRA_CA_CERTS` | Optional path inside the container/native runtime to an internal CA bundle that Node.js should trust for outbound HTTPS requests, including trusted plugins | empty |
 | `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username; omit for browser first-admin setup | empty |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password; omit for browser first-admin setup | empty |
 | `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `false` |
@@ -245,6 +246,8 @@ Most runtime settings are environment variables on first boot, then editable in 
 | `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` | Which roles may make arbitrary server-side fetches to private, loopback, link-local, or reserved addresses through service health checks and remote image downloads. Use `admin-editor`, `admin`, or `disabled` | `admin-editor` |
 
 Runtime data is stored in SQLite in the Docker volume `launcher-data` unless you override `DATA_DIR`. Keep `.env`, database files, plugin installs, and private certificates out of Git.
+
+For internal services that use a private CA, prefer mounting the CA certificate and setting `NODE_EXTRA_CA_CERTS` instead of disabling TLS verification in a plugin. For Docker Compose, mount the CA file read-only and set `NODE_EXTRA_CA_CERTS` to the container path, such as `/app/certs/internal-ca.pem`.
 
 ## HTTPS and domains
 
