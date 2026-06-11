@@ -115,14 +115,16 @@ async function syncHeimdallPresets(db) {
       const id = `heimdall-${slugify(name)}`;
 
       // Discover actual image asset
-      const supportedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+      const supportedExtensions = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'];
       const appFiles = filesByDir[dirName];
       const imageFiles = appFiles.filter(f => supportedExtensions.some(ext => f.toLowerCase().endsWith(ext)));
 
       let iconUrl = '';
       if (imageFiles.length > 0) {
+        const declaredIcon = String(appJson.icon || '').trim();
+        const declaredIconMatch = declaredIcon && imageFiles.find((file) => file.toLowerCase() === declaredIcon.toLowerCase());
         const logoFile = imageFiles.find(f => f.toLowerCase().includes('logo'));
-        const iconFile = logoFile || imageFiles[0];
+        const iconFile = declaredIconMatch || logoFile || imageFiles[0];
         iconUrl = `${HEIMDALL_RAW_PREFIX}${encodeURIComponent(dirName)}/${encodeURIComponent(iconFile)}`;
       }
 

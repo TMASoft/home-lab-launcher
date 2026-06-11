@@ -1,5 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const http = require('node:http');
 const { startServer, Client } = require('./helpers');
 
 test('core API supports auth, services, settings, logs, and plugin health', async (t) => {
@@ -572,3 +573,68 @@ test('service creation falls back gracefully and logs warning on broken icon URL
   assert.ok(fallbackLog.details.error);
 });
 
+test('manual health checks persist down status for unresolved hosts', async (t) => {
+  const server = startServer({ port: 19107 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  await admin.request('/api/services', {
+    method: 'POST',
+    body: {
+      id: 'bad-health-service',
+      name: 'Bad Health Service',
+      url: 'https://definitely-not-a-real-hostname.invalid',
+      icon: '🔗',
+      healthCheckEnabled: true
+    }
+  });
+
+  const result = await admin.request('/api/services/bad-health-service/check', { method: 'POST', body: {} });
+  assert.equal(result.health.status, 'down');
+  assert.match(result.health.error, /could not be resolved/i);
+
+  const services = await admin.request('/api/services');
+  const service = services.services.find((item) => item.id === 'bad-health-service');
+  assert.equal(service.health.status, 'down');
+  assert.match(service.health.error, /could not be resolved/i);
+});
+
+test('service creation stores remote SVG icons locally', async (t) => {
+  const mockServer = http.createServer((req, res) => {
+    if (req.url !== '/icon.svg') {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+    res.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><circle cx="0.5" cy="0.5" r="0.5" fill="#0af"/></svg>');
+  });
+  await new Promise((resolve) => mockServer.listen(0, '127.0.0.1', resolve));
+  const mockPort = mockServer.address().port;
+  t.after(() => mockServer.close());
+
+  const server = startServer({ port: 19108, env: { SERVER_FETCH_PRIVATE_NETWORK_ACCESS: 'admin' } });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  const created = await admin.request('/api/services', {
+    method: 'POST',
+    body: {
+      id: 'svg-icon-service',
+      name: 'SVG Icon Service',
+      url: 'https://example.com',
+      icon: `http://127.0.0.1:${mockPort}/icon.svg`
+    }
+  });
+
+  assert.match(created.service.icon, /^\/api\/service-icons\/[a-f0-9]{64}\.svg$/);
+  const response = await fetch(`${server.baseUrl}${created.service.icon}`, { headers: { Cookie: admin.cookie } });
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') || '', /image\/svg\+xml/);
+});
