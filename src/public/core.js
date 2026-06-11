@@ -5,6 +5,8 @@ const state = {
   preferences: { viewMode: 'cards', hiddenCategories: [], hideMetadata: false },
   selectedCategory: '',
   settings: null,
+  version: '',
+  repositoryUrl: '',
   pluginSections: [],
   csrfToken: null,
   adminTab: 'overview',
@@ -98,6 +100,11 @@ function applyAppearance(appearance = {}) {
   document.title = brand.pageTitle || brand.appName || 'Home Lab Launcher';
   $('brand-name').textContent = brand.brandText || brand.appName || 'Home Lab Launcher';
   $('brand-subtitle').textContent = brand.brandSubtitle || 'Home lab control plane';
+  if ($('app-version')) $('app-version').textContent = state.version ? `v${state.version}` : '';
+  if ($('repo-link')) {
+    $('repo-link').href = state.repositoryUrl || 'https://github.com/TMASoft/home-lab-launcher';
+    $('repo-link').hidden = !state.repositoryUrl;
+  }
   const mark = $('brand-mark');
   if (mark) {
     mark.replaceChildren();
@@ -145,4 +152,3 @@ function applyAppearance(appearance = {}) {
   if (theme.fontFamily === 'custom' && theme.customFontFamily) document.body.style.fontFamily = sanitizeClientFontFamily(theme.customFontFamily);
   else document.body.style.fontFamily = '';
 }
-

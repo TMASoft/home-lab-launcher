@@ -134,6 +134,28 @@ a { color: inherit; }
   color: var(--quiet);
   font-size: .72rem;
 }
+.version-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--quiet);
+  background: rgba(255, 255, 255, .03);
+  font-size: .72rem;
+  font-weight: 750;
+  letter-spacing: .02em;
+}
+.version-pill:empty { display: none; }
+.repo-link {
+  width: 36px;
+  padding: 0 !important;
+}
+.repo-link svg {
+  width: 16px;
+  height: 16px;
+}
 
 .topbar nav,
 .top-nav {
@@ -1265,6 +1287,10 @@ tr:hover td { background: rgba(255,255,255,.018); }
 }
 .color-choice:hover { border-color: var(--line-strong); transform: translateY(-1px); }
 @media (max-width: 720px) {
+  .topbar { gap: 10px; }
+  .brand small,
+  .version-pill { display: none; }
+  .top-nav { gap: 6px; }
   .launchpad-controls { align-items: stretch; flex-direction: column; }
   .control-group { width: 100%; }
   .control-group .ghost { flex: 1 1 auto; }
@@ -1554,4 +1580,3 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   line-height: 1.5;
   outline: none !important;
 }
-

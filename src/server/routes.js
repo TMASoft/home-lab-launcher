@@ -63,6 +63,7 @@ function logEvent(db, req, action, details = {}, level = 'info') {
 
 function publicSettings(db, req) {
   const rawWeather = getSetting(db, 'weather', null);
+  const repositoryUrl = packageJson.homepage ? String(packageJson.homepage).replace(/#.*$/, '') : '';
   let weather = null;
   if (rawWeather) {
     const isAdmin = req?.session?.user?.role === 'admin';
@@ -77,6 +78,8 @@ function publicSettings(db, req) {
   }
   return {
     appName: getSetting(db, 'app_name', 'Home Lab Launcher'),
+    version: packageJson.version,
+    repositoryUrl,
     appBaseUrl: getSetting(db, 'app_base_url', ''),
     publicReadEnabled: getSetting(db, 'public_read_enabled', true),
     weather,
