@@ -28,6 +28,7 @@ plugins/
 # Local-only planning / workspace notes
 dev/
 AGENTS.md
+scripts/
 
 # Build/cache output
 coverage/

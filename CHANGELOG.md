@@ -6,6 +6,15 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+### Added
+
+- Added `scripts/release-pr.sh` automation script that runs local tests, pushes the branch to GitHub, creates a Pull Request, and configures auto-merge.
+
+### Changed
+
+- Downsized the cards, compact, and list view modes for the service launchpad, tightening margins, paddings, and card heights to make them smaller and cleaner.
+- Replaced the "Hide Hostnames" display option with a "Hide/Show Metadata" button (hiding both tags and hostnames in the service cards and favorite tiles), restricted to admin users.
+
 ## [0.2.2] - 2026-06-09
 
 ### Fixed

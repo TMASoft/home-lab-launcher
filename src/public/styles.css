@@ -1093,12 +1093,15 @@ tr:hover td { background: rgba(255,255,255,.018); }
 .favorite-actions { display: inline-flex; gap: 5px; }
 .view-list {
   grid-template-columns: 1fr;
+  gap: 6px;
 }
 .view-list .service-card {
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  padding: 8px 12px;
+  gap: 8px;
 }
 .view-list .service-card p,
 .view-list .service-card .tags {
@@ -1106,27 +1109,141 @@ tr:hover td { background: rgba(255,255,255,.018); }
 }
 .view-list .service-card h3 {
   white-space: normal;
+  margin: 0;
+  font-size: 0.92rem;
 }
+.view-list .service-card .icon {
+  width: 30px;
+  height: 30px;
+  font-size: 1rem;
+  border-radius: 8px;
+}
+.view-list .service-card .icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+.view-list .service-card .service-link {
+  min-height: 26px;
+  padding: 0 8px;
+  font-size: 0.75rem;
+}
+.view-list .service-card .status-badge {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+}
+
+.view-cards {
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 10px;
+}
+.view-cards .service-card {
+  min-height: 165px;
+  padding: 12px;
+  gap: 10px;
+}
+.view-cards .service-card h3 {
+  margin: 6px 0 2px;
+  font-size: 0.95rem;
+}
+.view-cards .service-card p {
+  margin: 0 0 4px;
+  font-size: 0.82rem;
+  min-height: 2.8em;
+}
+.view-cards .service-card .icon {
+  width: 36px;
+  height: 36px;
+  font-size: 1.15rem;
+  border-radius: 10px;
+}
+.view-cards .service-card .icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+.view-cards .service-card .service-link {
+  min-height: 28px;
+  padding: 0 8px;
+  font-size: 0.78rem;
+}
+.view-cards .service-card .tags {
+  margin-top: 8px;
+  gap: 4px;
+}
+.view-cards .service-card .tag,
+.view-cards .service-card .status-badge {
+  padding: 2px 6px;
+  font-size: 0.7rem;
+}
+
 .view-compact {
   grid-template-columns: 1fr;
 }
-.service-group {
+.view-compact .service-group {
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
-.service-group-head {
+.view-compact .service-group-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 2px 0;
+  padding: 0;
 }
-.service-group-head h3 {
+.view-compact .service-group-head h3 {
   margin: 0;
-  font-size: .95rem;
+  font-size: 0.9rem;
   color: var(--muted);
   letter-spacing: -.015em;
   text-transform: capitalize;
+}
+.view-compact .service-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+.view-compact .service-card {
+  min-height: 135px;
+  padding: 10px;
+  gap: 8px;
+}
+.view-compact .service-card h3 {
+  margin: 4px 0 2px;
+  font-size: 0.9rem;
+}
+.view-compact .service-card p {
+  margin: 0 0 4px;
+  font-size: 0.78rem;
+  min-height: 2.6em;
+}
+.view-compact .service-card .icon {
+  width: 32px;
+  height: 32px;
+  font-size: 1.05rem;
+  border-radius: 8px;
+}
+.view-compact .service-card .icon-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 0.8rem;
+}
+.view-compact .service-card .service-link {
+  min-height: 26px;
+  padding: 0 6px;
+  font-size: 0.75rem;
+}
+.view-compact .service-card .tags {
+  margin-top: 6px;
+  gap: 4px;
+}
+.view-compact .service-card .tag,
+.view-compact .service-card .status-badge {
+  padding: 1px 5px;
+  font-size: 0.68rem;
 }
 .service-group-grid {
   display: grid;
