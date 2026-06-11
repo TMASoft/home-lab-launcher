@@ -76,8 +76,8 @@ Choose one first-admin setup path:
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.1 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.1 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -125,7 +125,9 @@ APP_BASE_URL=https://launcher.example.test
 
 ## Launchpad personalization and health
 
-The launchpad supports card, compact grouped, and list views. Logged-in users can save their layout preference, reorder favorites, and hide categories. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled.
+The launchpad supports card, compact grouped, and list views. Logged-in users can save their layout preference, reorder favorites, hide categories, and toggle launchpad metadata visibility. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled.
+
+Service hostnames in the launchpad are shown only to Admins. The metadata toggle hides both hostnames and tags for Admins, while non-admin viewers can use the same toggle to hide or show tags only.
 
 Editors and Admins can enable HTTP health checks per service, optionally override the health-check URL, set the check interval, and trigger manual checks. Cards show the latest status, last-check timing, response time, and error details where available. These checks are server-side fetches; see the SSRF notes below before granting Editor access in shared or internet-exposed deployments.
 
