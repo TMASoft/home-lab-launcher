@@ -2,7 +2,7 @@ const state = {
   user: null,
   services: [],
   favorites: [],
-  preferences: { viewMode: 'cards', hiddenCategories: [] },
+  preferences: { viewMode: 'cards', hiddenCategories: [], hideMetadata: false },
   selectedCategory: '',
   settings: null,
   pluginSections: [],

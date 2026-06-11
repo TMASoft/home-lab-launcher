@@ -10,3 +10,4 @@ docker-compose*.yml
 dev
 AGENTS.md
 ROADMAP.md
+scripts

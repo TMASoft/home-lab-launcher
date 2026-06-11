@@ -33,7 +33,15 @@ Use this checklist before publishing a version tag and again before upgrading a 
 
 ## 4. Quality gates
 
-These checks must be passing before publishing. While they are fully automated in GitHub Actions when a release tag is pushed (via `.github/workflows/docker-publish.yml`), it is recommended to run them locally to ensure success before pushing the tag:
+These checks must be passing before publishing. While they are fully automated in GitHub Actions when a release tag is pushed (via `.github/workflows/docker-publish.yml`), it is recommended to run them locally to ensure success before pushing the tag.
+
+> [!TIP]
+> You can automate the validation, git push, PR creation, and auto-merge setup by running:
+> ```bash
+> ./scripts/release-pr.sh [branch-name] [options]
+> ```
+> This script runs all required local checks and configures GitHub to automatically merge once the CI pipeline passes.
+
 
 ```bash
 npm run release:check

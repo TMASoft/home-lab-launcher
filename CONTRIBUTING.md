@@ -38,7 +38,7 @@ Frontend browser code is split into `src/public/core.js` for shared state/API/DO
 - Keep secrets out of commits. Use `.env` locally and `.env.example` for scaffolded configuration.
 - Update documentation when behavior changes.
 - Add or update tests for API, role, and UI behavior where practical.
-- Run `npm run release:check`, `npm run check`, `npm test`, `docker compose config`, and a Docker build before opening a release PR.
+- Run `npm run release:check`, `npm run check`, `npm test`, `docker compose config`, and a Docker build before opening a release PR. Alternatively, you can use the release automation script `scripts/release-pr.sh [branch-name]` which automates running the local validation checks, pushing your branch, creating the GitHub Pull Request, and enabling auto-merge.
 
 ## Plugin changes
 

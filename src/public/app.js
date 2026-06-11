@@ -32,6 +32,9 @@ async function loadPreferences() {
     state.favorites = JSON.parse(localStorage.getItem('hll.favorites') || '[]');
     state.preferences = { ...state.preferences, ...JSON.parse(localStorage.getItem('hll.launchpad') || '{}') };
   }
+  if (state.preferences.hideMetadata === undefined) {
+    state.preferences.hideMetadata = !!state.preferences.hideHostnames;
+  }
 }
 async function saveFavorites() {
   if (state.user) await api('/api/me/preferences/favorites', { method: 'PUT', body: JSON.stringify({ value: state.favorites }) });
@@ -239,7 +242,7 @@ function renderServices() {
   const hidden = new Set(state.preferences.hiddenCategories || []);
   const controls = $('launchpad-controls');
   if (controls) {
-    controls.innerHTML = `<div class="control-group" aria-label="Category filters"><button class="ghost service-category-chip ${!state.selectedCategory ? 'active-filter' : ''}" type="button" data-launch-category="">All</button>${categories.map((cat) => `<button class="ghost service-category-chip ${state.selectedCategory === cat ? 'active-filter' : ''} ${hidden.has(cat) ? 'muted-filter' : ''}" type="button" data-launch-category="${escapeHtml(cat)}">${hidden.has(cat) ? 'Hidden: ' : ''}${escapeHtml(cat)}</button>`).join('')}</div><div class="control-group" aria-label="Layout"><button class="ghost ${state.preferences.viewMode === 'cards' ? 'active-filter' : ''}" type="button" data-view-mode="cards">Cards</button><button class="ghost ${state.preferences.viewMode === 'compact' ? 'active-filter' : ''}" type="button" data-view-mode="compact">Compact</button><button class="ghost ${state.preferences.viewMode === 'list' ? 'active-filter' : ''}" type="button" data-view-mode="list">List</button></div><div class="control-group" aria-label="Options"><button class="ghost ${state.preferences.hideHostnames ? 'active-filter' : ''}" type="button" data-toggle-hostnames>${state.preferences.hideHostnames ? 'Show Hostnames' : 'Hide Hostnames'}</button></div>`;
+    controls.innerHTML = `<div class="control-group" aria-label="Category filters"><button class="ghost service-category-chip ${!state.selectedCategory ? 'active-filter' : ''}" type="button" data-launch-category="">All</button>${categories.map((cat) => `<button class="ghost service-category-chip ${state.selectedCategory === cat ? 'active-filter' : ''} ${hidden.has(cat) ? 'muted-filter' : ''}" type="button" data-launch-category="${escapeHtml(cat)}">${hidden.has(cat) ? 'Hidden: ' : ''}${escapeHtml(cat)}</button>`).join('')}</div><div class="control-group" aria-label="Layout"><button class="ghost ${state.preferences.viewMode === 'cards' ? 'active-filter' : ''}" type="button" data-view-mode="cards">Cards</button><button class="ghost ${state.preferences.viewMode === 'compact' ? 'active-filter' : ''}" type="button" data-view-mode="compact">Compact</button><button class="ghost ${state.preferences.viewMode === 'list' ? 'active-filter' : ''}" type="button" data-view-mode="list">List</button></div>${isAdmin() ? `<div class="control-group" aria-label="Options"><button class="ghost ${state.preferences.hideMetadata ? 'active-filter' : ''}" type="button" data-toggle-metadata>${state.preferences.hideMetadata ? 'Show Metadata' : 'Hide Metadata'}</button></div>` : ''}`;
   }
   const visible = state.services.filter((s) => {
     const category = s.category || 'general';
@@ -259,7 +262,7 @@ function renderServices() {
   favorites.hidden = favoriteServices.length === 0;
   favorites.innerHTML = favoriteServices.map((s, index) => `
     <article class="favorite-tile">
-      <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(s.name)}">${iconHtml(s.icon, s.name)}<span><strong>${escapeHtml(s.name)}</strong>${state.preferences.hideHostnames ? '' : `<br><small>${escapeHtml(getHost(s.url))}</small>`}</span></a>
+      <a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer" aria-label="Open ${escapeHtml(s.name)}">${iconHtml(s.icon, s.name)}<span><strong>${escapeHtml(s.name)}</strong>${state.preferences.hideMetadata ? '' : `<br><small>${escapeHtml(getHost(s.url))}</small>`}</span></a>
       <span class="favorite-actions"><button class="icon-btn" data-fav-move="up" data-fav-id="${escapeHtml(s.id)}" ${index === 0 ? 'disabled' : ''} aria-label="Move favorite up">↑</button><button class="icon-btn" data-fav-move="down" data-fav-id="${escapeHtml(s.id)}" ${index === favoriteServices.length - 1 ? 'disabled' : ''} aria-label="Move favorite down">↓</button></span>
     </article>`).join('');
 
@@ -307,8 +310,8 @@ function serviceCardHtml(s) {
       <button class="icon-btn" data-copy="${escapeHtml(s.url)}" title="Copy URL" aria-label="Copy ${escapeHtml(s.name)} URL">⧉</button>
       <button class="icon-btn ${state.favorites.includes(s.id) ? 'active' : ''}" data-fav="${escapeHtml(s.id)}" title="Favorite" aria-label="${state.favorites.includes(s.id) ? 'Remove from' : 'Add to'} favorites">★</button>
       ${editable ? `<button class="icon-btn" data-check-service="${escapeHtml(s.id)}" title="Check health" aria-label="Check ${escapeHtml(s.name)} health">●</button><button class="icon-btn" data-edit="${escapeHtml(s.id)}" title="Edit" aria-label="Edit ${escapeHtml(s.name)}">✎</button><button class="icon-btn" data-delete="${escapeHtml(s.id)}" title="Delete" aria-label="Delete ${escapeHtml(s.name)}">×</button>` : ''}
-    </span></div><h3 title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</h3><p>${escapeHtml(s.description || 'No description provided.')}</p><a class="service-link ${state.preferences.hideHostnames ? 'link-only-overlay' : ''}" href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer"><span>${state.preferences.hideHostnames ? '' : escapeHtml(getHost(s.url))}</span></a></div>
-    <div><div class="service-meta">${meta}</div><div class="tags">${(s.tags || []).slice(0, 4).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div></div>
+    </span></div><h3 title="${escapeHtml(s.name)}">${escapeHtml(s.name)}</h3><p>${escapeHtml(s.description || 'No description provided.')}</p><a class="service-link ${state.preferences.hideMetadata ? 'link-only-overlay' : ''}" href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer"><span>${state.preferences.hideMetadata ? '' : escapeHtml(getHost(s.url))}</span></a></div>
+    <div><div class="service-meta">${meta}</div>${state.preferences.hideMetadata ? '' : `<div class="tags">${(s.tags || []).slice(0, 4).map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>`}</div>
   </article>`;
 }
 
@@ -427,9 +430,9 @@ $('launchpad-controls').addEventListener('click', async (event) => {
     await saveLaunchpadPreferences();
     renderServices();
   }
-  const toggleHostnamesButton = event.target.closest('[data-toggle-hostnames]');
-  if (toggleHostnamesButton) {
-    state.preferences.hideHostnames = !state.preferences.hideHostnames;
+  const toggleMetadataButton = event.target.closest('[data-toggle-metadata]');
+  if (toggleMetadataButton && isAdmin()) {
+    state.preferences.hideMetadata = !state.preferences.hideMetadata;
     await saveLaunchpadPreferences();
     renderServices();
   }
@@ -790,7 +793,7 @@ async function showProfileModal() {
     try {
       if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
       else localStorage.removeItem('hll.launchpad');
-      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideHostnames: false };
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false };
       closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
     } catch (error) {
       showError(error.message);
