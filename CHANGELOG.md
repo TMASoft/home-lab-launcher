@@ -4,6 +4,14 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.3.4] - 2026-06-11
+
+### Fixed
+
+- Fixed preset-based service creation so selected catalog entries import and preserve stored service icons reliably instead of falling back to the generic link icon.
+- Fixed bundled local preset refresh on startup so corrected preset metadata, including icon URLs, propagates to existing databases.
+- Fixed the bundled qBittorrent preset to use the current Heimdall SVG icon asset.
+
 ## [0.3.3] - 2026-06-11
 
 ### Added
