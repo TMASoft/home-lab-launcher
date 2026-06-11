@@ -12,7 +12,9 @@ test('Preset Catalog API & Logic', async (t) => {
       res.end(JSON.stringify({
         tree: [
           { path: 'mockapp/app.json', type: 'blob' },
-          { path: 'mockapp/logo.png', type: 'blob' }
+          { path: 'mockapp/logo.png', type: 'blob' },
+          { path: 'svgapp/app.json', type: 'blob' },
+          { path: 'svgapp/proxmox.svg', type: 'blob' }
         ]
       }));
     } else if (url === '/mockapp/app.json') {
@@ -28,6 +30,19 @@ test('Preset Catalog API & Logic', async (t) => {
       const onePixelPng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/p9sAAAAASUVORK5CYII=', 'base64');
       res.writeHead(200, { 'Content-Type': 'image/png' });
       res.end(onePixelPng);
+    } else if (url === '/svgapp/app.json') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        name: 'SvgApp',
+        description: 'An app with an SVG icon',
+        colour: '#654321',
+        website: 'https://svgapp.local',
+        category: 'testing',
+        icon: 'proxmox.svg'
+      }));
+    } else if (url === '/svgapp/proxmox.svg') {
+      res.writeHead(200, { 'Content-Type': 'image/svg+xml' });
+      res.end('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1" fill="#f60"/></svg>');
     } else {
       res.writeHead(404);
       res.end();
@@ -117,7 +132,7 @@ test('Preset Catalog API & Logic', async (t) => {
   }
   assert.ok(finalStatus);
   assert.equal(finalStatus.status, 'succeeded');
-  assert.equal(finalStatus.synced, 1);
+  assert.equal(finalStatus.synced, 2);
   assert.ok(finalStatus.completedAt);
   assert.equal(finalStatus.error, null);
 
@@ -129,6 +144,11 @@ test('Preset Catalog API & Logic', async (t) => {
   assert.equal(mockPreset.name, 'MockApp');
   assert.equal(mockPreset.source, 'heimdall');
   assert.equal(mockPreset.accent, '#123456');
+
+  const searchSvg = await admin.request('/api/admin/presets/search?q=svgapp');
+  const svgPreset = searchSvg.presets.find(p => p.id === 'heimdall-svgapp');
+  assert.ok(svgPreset);
+  assert.match(svgPreset.iconUrl, /\/svgapp\/proxmox\.svg$/);
 
   // 5c. Import the crawled Heimdall preset
   const importMockRes = await admin.request('/api/admin/presets/import', {
@@ -145,6 +165,17 @@ test('Preset Catalog API & Logic', async (t) => {
   assert.equal(mockSvc.category, 'testing');
   assert.equal(mockSvc.accent, '#123456');
   assert.equal(mockSvc.description, 'A mock application');
+
+  const importSvgRes = await admin.request('/api/admin/presets/import', {
+    method: 'POST',
+    body: { presetId: 'heimdall-svgapp', customUrl: 'https://svgapp.local' }
+  });
+  assert.equal(importSvgRes.ok, true);
+
+  const servicesAfterSvg = await admin.request('/api/services');
+  const svgSvc = servicesAfterSvg.services.find(s => s.id === importSvgRes.serviceId);
+  assert.ok(svgSvc);
+  assert.match(svgSvc.icon, /^\/api\/service-icons\/[a-f0-9]{64}\.svg$/);
 
   // 6. Import a preset (e.g. lidarr)
   const importRes = await admin.request('/api/admin/presets/import', {

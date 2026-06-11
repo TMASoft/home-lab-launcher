@@ -263,7 +263,8 @@ const IMAGE_MIME_EXTENSIONS = {
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/gif': 'gif',
-  'image/webp': 'webp'
+  'image/webp': 'webp',
+  'image/svg+xml': 'svg'
 };
 
 function serviceIconDir(dataDir) {
@@ -275,10 +276,14 @@ function appAssetDir(dataDir) {
 }
 
 function detectImageMime(buffer, contentType = '') {
+  const normalizedType = String(contentType || '').split(';', 1)[0].trim().toLowerCase();
   if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return 'image/jpeg';
   if (buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return 'image/png';
   if (buffer.length >= 6 && ['GIF87a', 'GIF89a'].includes(buffer.subarray(0, 6).toString('ascii'))) return 'image/gif';
   if (buffer.length >= 12 && buffer.subarray(0, 4).toString('ascii') === 'RIFF' && buffer.subarray(8, 12).toString('ascii') === 'WEBP') return 'image/webp';
+  if (normalizedType === 'image/svg+xml') return 'image/svg+xml';
+  const text = buffer.subarray(0, Math.min(buffer.length, 512)).toString('utf8').trimStart();
+  if (text.startsWith('<svg') || (text.startsWith('<?xml') && text.includes('<svg'))) return 'image/svg+xml';
   return null;
 }
 
@@ -295,7 +300,7 @@ function saveServiceIconBuffer(dataDir, buffer, contentType) {
   if (!buffer.length) throw new Error('Icon image is empty');
   if (buffer.length > SERVICE_ICON_MAX_BYTES) throw new Error('Icon image must be 5 MiB or smaller');
   const mime = detectImageMime(buffer, contentType);
-  if (!mime) throw new Error('Icon image must be JPEG, PNG, GIF, or WebP');
+  if (!mime) throw new Error('Icon image must be JPEG, PNG, GIF, WebP, or SVG');
   const dir = serviceIconDir(dataDir);
   fs.mkdirSync(dir, { recursive: true });
   const hash = crypto.createHash('sha256').update(buffer).digest('hex');
@@ -317,7 +322,7 @@ function saveServiceIconDataUrl(dataDir, dataUrl) {
   const match = String(dataUrl || '').match(/^data:([^;,]+);base64,(.+)$/);
   if (!match) throw new Error('Uploaded icon image is invalid');
   const mime = match[1].toLowerCase();
-  if (!IMAGE_MIME_EXTENSIONS[mime]) throw new Error('Icon image must be JPEG, PNG, GIF, or WebP');
+  if (!IMAGE_MIME_EXTENSIONS[mime]) throw new Error('Icon image must be JPEG, PNG, GIF, WebP, or SVG');
   return saveServiceIconBuffer(dataDir, Buffer.from(match[2], 'base64'), mime);
 }
 
@@ -344,6 +349,7 @@ function saveAppAssetBuffer(dataDir, buffer, contentType) {
   if (!buffer.length) throw new Error('Asset image is empty');
   if (buffer.length > APP_ASSET_MAX_BYTES) throw new Error('Asset image must be 5 MiB or smaller');
   const mime = detectImageMime(buffer, contentType);
+  if (mime === 'image/svg+xml') throw new Error('Asset image must be JPEG, PNG, GIF, or WebP');
   if (!mime) throw new Error('Asset image must be JPEG, PNG, GIF, or WebP');
   const dir = appAssetDir(dataDir);
   fs.mkdirSync(dir, { recursive: true });
@@ -359,6 +365,7 @@ function saveAppAssetDataUrl(dataDir, dataUrl) {
   if (!match) throw new Error('Uploaded asset image is invalid');
   const mime = match[1].toLowerCase();
   if (!IMAGE_MIME_EXTENSIONS[mime]) throw new Error('Asset image must be JPEG, PNG, GIF, or WebP');
+  if (mime === 'image/svg+xml') throw new Error('Asset image must be JPEG, PNG, GIF, or WebP');
   return saveAppAssetBuffer(dataDir, Buffer.from(match[2], 'base64'), mime);
 }
 
@@ -473,7 +480,11 @@ async function checkServiceHealth(db, service) {
     status = healthStatusFrom(response.status);
   } catch (err) {
     status = 'down';
-    error = err.name === 'AbortError' ? 'Health check timed out' : err.message;
+    error = err.name === 'AbortError'
+      ? 'Health check timed out'
+      : err.code === 'ENOTFOUND'
+        ? 'Health check host could not be resolved'
+        : err.message;
   }
   const responseMs = Date.now() - started;
   db.prepare(`
