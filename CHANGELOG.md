@@ -4,6 +4,12 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.3.5] - 2026-06-11
+
+### Fixed
+
+- Fixed GitHub plugin installs for plugins stored in repository subdirectories, including URLs such as `https://github.com/OWNER/repo/tree/main/plugin-id`, with an explicit-branch fallback when no releases or tags exist.
+
 ## [0.3.4] - 2026-06-11
 
 ### Fixed

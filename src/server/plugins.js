@@ -12,9 +12,37 @@ const MAX_PLUGIN_FILES = 2000;
 
 function parseGithubRepo(input) {
   const value = String(input || '').trim();
-  const match = value.match(/github\.com[/:]([^/]+)\/([^/#?]+?)(?:\.git)?(?:[/#?].*)?$/) || value.match(/^([^/]+)\/([^/]+)$/);
-  if (!match) throw new Error('Expected a GitHub repo URL or owner/repo');
-  return { owner: match[1], repo: match[2].replace(/\.git$/, '') };
+  const shorthand = value.match(/^([^/\s]+)\/([^/\s]+)$/);
+  if (shorthand) return { owner: shorthand[1], repo: shorthand[2].replace(/\.git$/, ''), pluginPath: '', sourceUrl: `https://github.com/${shorthand[1]}/${shorthand[2].replace(/\.git$/, '')}` };
+
+  let url;
+  try {
+    url = new URL(value.replace(/^git\+/, ''));
+  } catch {
+    const scpLike = value.match(/^git@github\.com:([^/]+)\/(.+)$/);
+    if (scpLike) url = new URL(`https://github.com/${scpLike[1]}/${scpLike[2]}`);
+  }
+  if (!url || url.hostname !== 'github.com') throw new Error('Expected a GitHub repo URL or owner/repo');
+
+  const parts = url.pathname.split('/').filter(Boolean);
+  const owner = parts[0];
+  const repo = String(parts[1] || '').replace(/\.git$/, '');
+  if (!owner || !repo) throw new Error('Expected a GitHub repo URL or owner/repo');
+
+  let pluginPath = '';
+  let treeRef = 'main';
+  if (parts[2] === 'tree' && parts.length > 4) {
+    treeRef = parts[3];
+    pluginPath = parts.slice(4).join('/');
+    validateTarEntryPath(pluginPath);
+  }
+  if (parts[2] && parts[2] !== 'tree' && !String(parts[1] || '').endsWith('.git')) throw new Error('GitHub plugin subdirectories must use a /tree/<branch>/<path> URL');
+
+  return { owner, repo, pluginPath, treeRef, sourceUrl: `https://github.com/${owner}/${repo}${pluginPath ? `/tree/${treeRef}/${pluginPath}` : ''}` };
+}
+
+function safePathSlug(value) {
+  return String(value || '').replace(/[^a-zA-Z0-9_.-]+/g, '-').replace(/^-+|-+$/g, '') || 'root';
 }
 
 function safeJson(value, fallback = {}) {
@@ -325,7 +353,7 @@ class PluginManager {
   }
 
   async discoverGithubVersions(repoInput) {
-    const { owner, repo } = parseGithubRepo(repoInput);
+    const { owner, repo, pluginPath, treeRef } = parseGithubRepo(repoInput);
     const headers = { 'Accept': 'application/vnd.github+json', 'User-Agent': 'home-lab-launcher' };
     const releasesRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases`, { headers });
     let versions = [];
@@ -339,6 +367,10 @@ class PluginManager {
       for (const tag of tags) {
         if (!versions.some(v => v.version === tag.name)) versions.push({ name: tag.name, version: tag.name, type: 'tag', tarballUrl: tag.tarball_url, body: '', htmlUrl: '' });
       }
+    }
+    if (!versions.length && pluginPath && treeRef) {
+      const branchRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(treeRef)}`, { headers });
+      if (branchRes.ok) versions.push({ name: treeRef, version: treeRef, type: 'branch', body: 'No releases or tags were found. Installing from this branch is useful for development, but releases or tags are recommended for production installs.', htmlUrl: `https://github.com/${owner}/${repo}/tree/${treeRef}/${pluginPath}` });
     }
     return versions;
   }
@@ -361,9 +393,10 @@ class PluginManager {
   async installFromGithub(repoUrl, version, { expectedSha256 = '' } = {}) {
     if (!version) throw new Error('A version/tag is required');
     const normalizedExpectedSha256 = normalizeSha256(expectedSha256);
-    const { owner, repo } = parseGithubRepo(repoUrl);
+    const { owner, repo, pluginPath, sourceUrl } = parseGithubRepo(repoUrl);
     const safeVersion = String(version).replace(/[^a-zA-Z0-9_.-]/g, '_');
-    const destination = path.join(this.pluginDir, `${owner}-${repo}-${safeVersion}`);
+    const pluginPathSlug = pluginPath ? `-${safePathSlug(pluginPath)}` : '';
+    const destination = path.join(this.pluginDir, `${owner}-${repo}${pluginPathSlug}-${safeVersion}`);
     fs.rmSync(destination, { recursive: true, force: true });
     fs.mkdirSync(destination, { recursive: true });
     const tarUrl = `https://api.github.com/repos/${owner}/${repo}/tarball/${encodeURIComponent(version)}`;
@@ -373,7 +406,8 @@ class PluginManager {
     fs.writeFileSync(tmpFile, tarball);
     await tar.x({ file: tmpFile, cwd: destination, strip: 1, filter: createPluginTarSafetyFilter({ strip: 1 }) });
     fs.rmSync(tmpFile, { force: true });
-    const manifestPath = path.join(destination, 'plugin.json');
+    const installRoot = pluginPath ? path.join(destination, pluginPath) : destination;
+    const manifestPath = path.join(installRoot, 'plugin.json');
     if (!fs.existsSync(manifestPath)) throw new Error('Plugin is missing plugin.json');
     const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
     validateManifest(manifest);
@@ -381,7 +415,7 @@ class PluginManager {
       INSERT INTO plugins (id, name, source_url, source_type, version, install_path, enabled, manifest_json, config_json, installed_hash, lifecycle, last_error)
       VALUES (?, ?, ?, 'github', ?, ?, 1, ?, '{}', ?, 'installed', NULL)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, source_url=excluded.source_url, source_type='github', version=excluded.version, install_path=excluded.install_path, enabled=1, manifest_json=excluded.manifest_json, installed_hash=excluded.installed_hash, lifecycle='installed', last_error=NULL, updated_at=CURRENT_TIMESTAMP
-    `).run(manifest.id, manifest.name, `https://github.com/${owner}/${repo}`, version, destination, JSON.stringify(manifest), installedHash);
+    `).run(manifest.id, manifest.name, sourceUrl, version, installRoot, JSON.stringify(manifest), installedHash);
     return { id: manifest.id, name: manifest.name, version, enabled: true, installedHash };
   }
 

@@ -19,11 +19,13 @@ A plugin can provide:
 
 ## Installation model
 
-The Admin console supports GitHub repository URLs. The launcher discovers versions from GitHub releases and tags. Admins choose a specific version to install.
+The Admin console supports GitHub repository URLs and GitHub tree URLs for plugin subdirectories. The launcher discovers versions from GitHub releases and tags. Admins choose a specific version to install.
 
 Current behavior:
 
 - GitHub releases/tags are supported for normal installs.
+- Plugin repositories may keep `plugin.json` at the repository root, or they may use a URL such as `https://github.com/OWNER/repo/tree/main/plugins/example` when the plugin lives in a subdirectory.
+- If a subdirectory tree URL has no releases or tags, the launcher offers the explicit tree branch as a development fallback. Releases or tags are still recommended for production installs.
 - Versions are manually selected and pinned.
 - Installed tarball SHA-256 hashes are stored and shown in the Admin console. Admins may also provide an expected SHA-256 checksum during install/update; mismatches fail before extraction.
 - GitHub plugin archives are extracted with path, entry-count, expanded-size, and symlink/hardlink safety checks.
@@ -49,7 +51,7 @@ my-plugin/
 
 ## Manifest
 
-Every plugin must include `plugin.json` at the repository root.
+Every plugin must include `plugin.json` at the root of the install target. For repository-root installs, that means the repository root. For GitHub tree URL installs, that means the selected subdirectory.
 
 ```json
 {

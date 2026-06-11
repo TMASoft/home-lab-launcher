@@ -699,6 +699,7 @@ function bindPluginHandlers(content) {
     $('plugin-version').innerHTML = data.versions.map((v, i) => `<option value="${escapeHtml(v.version)}" data-notes="${escapeHtml(v.body || '')}">${escapeHtml(v.version)} (${escapeHtml(v.type)})</option>`).join('');
     const first = data.versions[0];
     $('plugin-release-notes').innerHTML = first ? `<pre class="release-notes">${escapeHtml((first.body || 'No release notes available.').slice(0, 2000))}</pre>` : '';
+    if (!first) toast('No releases or tags found for this GitHub repository');
   });
   $('plugin-version')?.addEventListener('change', () => {
     const option = $('plugin-version').selectedOptions[0];
@@ -730,4 +731,3 @@ function bindPluginHandlers(content) {
     }
   });
 }
-

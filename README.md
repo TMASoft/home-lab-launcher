@@ -20,7 +20,7 @@ Home Lab Launcher is a small Docker-first web app for turning a home server, lab
 - **Appearance and theme presets** — Admins can customize global branding, hero copy, colors, fonts, density, radius, favicons, and brand images, then export/import safe shareable theme JSON.
 - **Admin console** — manage users, services, app settings, health, effective config, backups/restores, plugins, and audit logs.
 - **Weather widget** — configurable by ZIP/city search or manual coordinates; refreshes every 5 minutes.
-- **Trusted plugin system** — install pinned plugin versions from GitHub releases/tags, review permissions/compatibility, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
+- **Trusted plugin system** — install pinned plugin versions from GitHub releases/tags or plugin subdirectory tree URLs, review permissions/compatibility, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
 - **HTTP or HTTPS** — run directly over HTTP or place behind Nginx, Caddy, Traefik, or another reverse proxy.
 - **Portable by default** — no baked-in domain names or home-lab-specific assumptions.
 - **Security foundations** — CSRF protection, login throttling, optional TOTP 2FA, secure headers, session revocation, audit logging, log retention, and admin notices.
@@ -76,8 +76,8 @@ Choose one first-admin setup path:
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.2 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.2 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.5 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -212,7 +212,7 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 - **Users** — create users, change roles, reset passwords, reset user 2FA, and delete users.
 - **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.
 - **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record a preferred backup path/operator note.
-- **Plugins** — discover GitHub versions, install pinned plugin releases/tags, enable/disable, and remove plugins.
+- **Plugins** — discover GitHub versions, install pinned plugin releases/tags from repository roots or plugin subdirectory tree URLs, enable/disable, and remove plugins.
 - **Logs** — filtered audit log entries for login, settings, user, service, weather, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
 
 Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
