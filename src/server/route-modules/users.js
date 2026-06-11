@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 
 function registerUserRoutes(router, deps) {
-  const { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload } = deps;
+  const { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload, normalizeLaunchpad } = deps;
   router.get('/users', requireRole('admin'), (req, res) => {
     const users = db.prepare('SELECT id, username, role, totp_enabled AS totpEnabled, created_at AS createdAt FROM users ORDER BY username').all();
     res.json({ users });
@@ -52,7 +52,13 @@ function registerUserRoutes(router, deps) {
 
   router.get('/me/preferences', requireAuth, (req, res) => {
     const rows = db.prepare('SELECT key, value FROM user_preferences WHERE user_id = ?').all(req.session.user.id);
-    const preferences = Object.fromEntries(rows.map(r => [r.key, JSON.parse(r.value)]));
+    const preferences = Object.fromEntries(rows.map(r => {
+      let val = JSON.parse(r.value);
+      if (r.key === 'launchpad') {
+        val = normalizeLaunchpad(val);
+      }
+      return [r.key, val];
+    }));
     res.json({ preferences });
   });
 

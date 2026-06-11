@@ -139,8 +139,26 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     res.apiOk();
   });
 
-  router.post('/me/totp/disable', requireAuth, (req, res) => {
+  router.post('/me/totp/disable', requireAuth, express.json(), (req, res) => {
+    const password = String(req.body.password || '');
+    const code = String(req.body.code || '').trim();
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+      return res.apiError(401, 'Current password is incorrect');
+    }
+
+    if (user.totp_enabled === 1) {
+      if (!code) {
+        return res.apiError(400, 'Verification code is required');
+      }
+      if (!totp.verifyTOTP(user.totp_secret, code)) {
+        return res.apiError(401, 'Invalid verification code');
+      }
+    }
+
     db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.session.user.id);
+    req.sessionStore.destroyForUser(req.session.user.id, { exceptSid: req.sessionID });
     logEvent(db, req, 'profile.totp_disabled');
     res.apiOk();
   });

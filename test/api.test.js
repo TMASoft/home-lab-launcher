@@ -98,6 +98,32 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   await assert.rejects(() => admin.request('/api/admin/theme-presets/import', { method: 'POST', body: { format: 'wrong', appearance: {} } }), /Unsupported theme preset format/);
   await assert.rejects(() => admin.request('/api/admin/appearance', { method: 'PUT', body: { appearance: { theme: { colors: { primary: 'javascript:alert(1)' } } } } }), /Invalid theme color/);
 
+  // Test appearance reset
+  const resetAppearance = await admin.request('/api/admin/appearance/reset', { method: 'POST' });
+  assert.deepEqual(resetAppearance.appearance.theme.colors, {});
+  assert.equal(resetAppearance.appearance.brand.appName, 'Theme Test');
+
+  // Test hero subheading HTML sanitization
+  const testSubheadingInput = '<p>Hello <strong>World</strong>! <script>alert(1)</script> <a href="javascript:alert(2)">XSS</a> <a href="https://example.com" onclick="steal()">Safe Link</a></p>';
+  const sanitizedAppearanceObj = await admin.request('/api/admin/appearance', {
+    method: 'PUT',
+    body: {
+      appearance: {
+        ...resetAppearance.appearance,
+        hero: {
+          ...resetAppearance.appearance.hero,
+          subheading: testSubheadingInput
+        }
+      }
+    }
+  });
+  assert.equal(
+    sanitizedAppearanceObj.appearance.hero.subheading,
+    '<p>Hello <strong>World</strong>! alert(1) <a>XSS</a> <a href="https://example.com">Safe Link</a></p>'
+  );
+
+
+
   await admin.request('/api/users', { method: 'POST', body: { username: 'basic', password: 'change-me-basic', role: 'user' } });
   const basic = new Client(server.baseUrl);
   await basic.request('/api/auth/login', { method: 'POST', body: { username: 'basic', password: 'change-me-basic' } });
@@ -137,6 +163,36 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   });
   const fallbackSettings = await anon.request('/api/settings/public');
   assert.equal(fallbackSettings.appearance.brand.appName, 'Home Lab Launcher');
+
+  // Test backup and restore of services with health checks
+  const backupData = await admin.request('/api/admin/backup');
+  assert.equal(backupData.format, 'home-lab-launcher-config-v1');
+  
+  // Create a service with health check
+  await admin.request('/api/services', {
+    method: 'POST',
+    body: {
+      name: 'Health Check Svc',
+      url: 'https://healthcheck.example.com',
+      healthCheckEnabled: true,
+      healthCheckUrl: 'https://healthcheck.example.com/status',
+      healthCheckIntervalMinutes: 5
+    }
+  });
+
+  const backupDataWithSvc = await admin.request('/api/admin/backup');
+  const restored = await admin.request('/api/admin/restore', {
+    method: 'POST',
+    body: backupDataWithSvc
+  });
+  assert.equal(restored.ok, true);
+
+  const servicesAfterRestore = await admin.request('/api/services');
+  const restoredSvc = servicesAfterRestore.services.find(s => s.name === 'Health Check Svc');
+  assert.ok(restoredSvc);
+  assert.equal(restoredSvc.healthCheckEnabled, true);
+  assert.equal(restoredSvc.healthCheckUrl, 'https://healthcheck.example.com/status');
+  assert.equal(restoredSvc.healthCheckIntervalMinutes, 5);
 });
 
 
@@ -222,9 +278,25 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
   await assert.rejects(() => anon.request('/api/service-health'), /Authentication required/);
   await assert.rejects(() => anon.request('/api/weather'), /Authentication required/);
 
+  // Service icons and app assets access controls check
+  const dummyFilename = '0000000000000000000000000000000000000000000000000000000000000000.png';
+  await assert.rejects(
+    async () => { await anon.request(`/api/service-icons/${dummyFilename}`); },
+    (err) => err.status === 401
+  );
+  await assert.rejects(
+    async () => { await anon.request(`/api/app-assets/${dummyFilename}`); },
+    (err) => err.status === 404
+  );
+
   const admin = new Client(server.baseUrl);
   const adminLogin = await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
   assert.equal(adminLogin.user.role, 'admin');
+
+  await assert.rejects(
+    async () => { await admin.request(`/api/service-icons/${dummyFilename}`); },
+    (err) => err.status === 404
+  );
 
   await admin.request('/api/users', { method: 'POST', body: { username: 'editor-role', password: 'change-me-editor', role: 'editor' } });
   await admin.request('/api/users', { method: 'POST', body: { username: 'basic-role', password: 'change-me-basic', role: 'user' } });
@@ -252,13 +324,61 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
   assert.ok(basicPrefs.preferences.favorites.includes('editor-created-service'));
   assert.ok(basicPrefs.preferences.favorites.includes('bad-id-with-spaces'));
   await basic.request('/api/me/preferences/launchpad', { method: 'PUT', body: { value: { view: 'list', density: 'spacious', hiddenCategories: ['Ops', 'Media'] } } });
-  const launchpadPrefs = await basic.request('/api/me/preferences');
-  assert.deepEqual(launchpadPrefs.preferences.launchpad, { hiddenCategories: ['Ops', 'Media'], density: 'spacious', view: 'list' });
+  let launchpadPrefs = await basic.request('/api/me/preferences');
+  assert.deepEqual(launchpadPrefs.preferences.launchpad, {
+    hiddenCategories: ['Ops', 'Media'],
+    viewMode: 'list',
+    hideMetadata: false,
+    layoutOrder: ['hero', 'weather', 'profile', 'services', 'plugins']
+  });
+
+  await basic.request('/api/me/preferences/launchpad', {
+    method: 'PUT',
+    body: {
+      value: {
+        layoutOrder: ['services', 'hero', 'weather', 'invalid-section', 'services'],
+        viewMode: 'compact',
+        hideMetadata: true,
+        hiddenCategories: ['Media']
+      }
+    }
+  });
+  launchpadPrefs = await basic.request('/api/me/preferences');
+  assert.deepEqual(launchpadPrefs.preferences.launchpad, {
+    hiddenCategories: ['Media'],
+    viewMode: 'compact',
+    hideMetadata: true,
+    layoutOrder: ['services', 'hero', 'weather', 'profile', 'plugins']
+  });
+
   await assert.rejects(() => basic.request('/api/me/preferences/adminTheme', { method: 'PUT', body: { value: true } }), /Unsupported preference key/);
 
   await admin.request('/api/settings', { method: 'PATCH', body: { public_read_enabled: true } });
   const unlockedSettings = await anon.request('/api/settings/public');
   assert.equal(unlockedSettings.publicReadEnabled, true);
+
+  // Set weather config first via admin
+  await admin.request('/api/weather/settings', {
+    method: 'PUT',
+    body: {
+      latitude: 40.7128,
+      longitude: -74.0060,
+      label: 'New York, NY',
+      units: 'celsius'
+    }
+  });
+
+  const anonSettings = await anon.request('/api/settings/public');
+  assert.equal(anonSettings.weather.latitude, undefined);
+  assert.equal(anonSettings.weather.longitude, undefined);
+  assert.equal(anonSettings.weather.label, 'New York, NY');
+  assert.equal(anonSettings.weather.units, 'celsius');
+
+  const adminSettings = await admin.request('/api/settings/public');
+  assert.equal(adminSettings.weather.latitude, 40.7128);
+  assert.equal(adminSettings.weather.longitude, -74.0060);
+  assert.equal(adminSettings.weather.label, 'New York, NY');
+
   const anonServices = await anon.request('/api/services');
   assert.ok(anonServices.services.length > 0);
   await admin.request('/api/settings', { method: 'PATCH', body: { public_read_enabled: false } });
@@ -386,9 +506,39 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
   const listedEditorAfter = userListAfter.users.find(u => u.id === userId);
   assert.equal(listedEditorAfter.totpEnabled, 0);
 
-  await client2.request('/api/me/totp/disable', { method: 'POST' });
+  // Disable fails without password/code
+  await assert.rejects(
+    () => client2.request('/api/me/totp/disable', { method: 'POST', body: {} }),
+    /Current password is incorrect/
+  );
+
+  // Disable fails with incorrect password
+  await assert.rejects(
+    () => client2.request('/api/me/totp/disable', { method: 'POST', body: { password: 'wrong-password', code: '000000' } }),
+    /Current password is incorrect/
+  );
+
+  // Disable fails with incorrect code
+  await assert.rejects(
+    () => client2.request('/api/me/totp/disable', { method: 'POST', body: { password: 'test-admin-password-please-change', code: '000000' } }),
+    /Invalid verification code/
+  );
+
+  // Disable succeeds with valid password and code
+  const correctCodeDisable = totp.generateHOTP(secretBuffer, Math.floor(Date.now() / 1000 / 30));
+  await client2.request('/api/me/totp/disable', {
+    method: 'POST',
+    body: {
+      password: 'test-admin-password-please-change',
+      code: totp.formatToken(correctCodeDisable)
+    }
+  });
+
   const meAfterDisable = await client2.request('/api/me');
   assert.equal(meAfterDisable.user.totpEnabled, 0);
+
+  const logs = await client2.request('/api/admin/logs?limit=20');
+  assert.ok(logs.logs.some((entry) => entry.action === 'profile.totp_disabled'));
 });
 
 test('service creation falls back gracefully and logs warning on broken icon URL', async (t) => {
@@ -421,3 +571,4 @@ test('service creation falls back gracefully and logs warning on broken icon URL
   assert.equal(fallbackLog.details.iconUrl, 'http://127.0.0.1:40999/non-existent-logo.png');
   assert.ok(fallbackLog.details.error);
 });
+

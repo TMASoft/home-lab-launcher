@@ -34,6 +34,17 @@ services:
     volumes:
       - launcher-data:/app/data
       - ${LOCAL_PLUGIN_HOST_DIR:-./local-plugins}:${LOCAL_PLUGIN_CONTAINER_DIR:-/app/local-plugins}:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/api/healthz').then(r => r.ok ? process.exit(0) : process.exit(1)).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
 
 volumes:
   launcher-data:

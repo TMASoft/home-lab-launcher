@@ -28,7 +28,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 - Review public read-only access.
 - Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` or `disabled` for shared/public demos; keep `admin-editor` only when Editors are trusted to probe private network URLs.
 - Disable local plugin installs in production unless intentionally needed.
-- Treat uploaded branding/service images as public assets; remove any sensitive images.
+- Treat uploaded branding images as public assets and service icons as read-authorized assets; remove any sensitive images.
 - For plugin installs/updates, prefer release checksums from trusted release notes when available.
 
 ## 4. Quality gates

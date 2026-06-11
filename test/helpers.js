@@ -72,7 +72,14 @@ class Client {
     const setCookie = response.headers.get('set-cookie');
     if (setCookie) this.cookie = setCookie.split(';')[0];
     const text = await response.text();
-    const data = text ? JSON.parse(text) : {};
+    let data = {};
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } catch {
+        data = {};
+      }
+    }
     if (!response.ok) {
       const error = new Error(data.error || `HTTP ${response.status}`);
       error.status = response.status;

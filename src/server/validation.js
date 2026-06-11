@@ -92,6 +92,69 @@ function userPayload(input = {}, existing = {}, { requirePassword = false } = {}
   return { username, role: nextRole, password };
 }
 
+function normalizeLaunchpad(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {
+      hiddenCategories: [],
+      viewMode: 'cards',
+      hideMetadata: false,
+      layoutOrder: ['hero', 'weather', 'profile', 'services', 'plugins']
+    };
+  }
+  const out = {};
+  if (Object.prototype.hasOwnProperty.call(value, 'hiddenCategories')) {
+    out.hiddenCategories = stringList(value.hiddenCategories).slice(0, 200);
+  } else {
+    out.hiddenCategories = [];
+  }
+
+  let viewMode = 'cards';
+  if (Object.prototype.hasOwnProperty.call(value, 'viewMode')) {
+    viewMode = value.viewMode;
+  } else if (Object.prototype.hasOwnProperty.call(value, 'view')) {
+    if (value.view === 'list') {
+      viewMode = 'list';
+    } else if (value.view === 'grid') {
+      if (value.density === 'compact') {
+        viewMode = 'compact';
+      } else {
+        viewMode = 'cards';
+      }
+    }
+  }
+  out.viewMode = ['cards', 'compact', 'list'].includes(viewMode) ? viewMode : 'cards';
+
+  if (Object.prototype.hasOwnProperty.call(value, 'hideMetadata')) {
+    out.hideMetadata = value.hideMetadata === true;
+  } else {
+    out.hideMetadata = false;
+  }
+
+  const validSections = ['hero', 'weather', 'profile', 'services', 'plugins'];
+  let layoutOrder = validSections;
+  if (Object.prototype.hasOwnProperty.call(value, 'layoutOrder')) {
+    if (Array.isArray(value.layoutOrder)) {
+      layoutOrder = value.layoutOrder;
+    }
+  }
+  const seen = new Set();
+  const validOrder = [];
+  for (const item of layoutOrder) {
+    if (validSections.includes(item) && !seen.has(item)) {
+      seen.add(item);
+      validOrder.push(item);
+    }
+  }
+  for (const item of validSections) {
+    if (!seen.has(item)) {
+      validOrder.push(item);
+    }
+  }
+  out.layoutOrder = validOrder;
+
+  return out;
+}
+
 function preferencePayload(key, value) {
   const allowed = new Set(['favorites', 'launchpad']);
   if (!allowed.has(key)) throw new Error('Unsupported preference key');
@@ -100,11 +163,7 @@ function preferencePayload(key, value) {
     return value.map((item) => slugId(item, '')).filter(Boolean).slice(0, 500);
   }
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Launchpad preference must be an object');
-  const out = {};
-  if (Object.prototype.hasOwnProperty.call(value, 'hiddenCategories')) out.hiddenCategories = stringList(value.hiddenCategories).slice(0, 200);
-  if (Object.prototype.hasOwnProperty.call(value, 'density')) out.density = ['compact', 'comfortable', 'spacious'].includes(value.density) ? value.density : 'comfortable';
-  if (Object.prototype.hasOwnProperty.call(value, 'view')) out.view = ['grid', 'list'].includes(value.view) ? value.view : 'grid';
-  return out;
+  return normalizeLaunchpad(value);
 }
 
 function coordinate(value, label, { min, max }) {
@@ -151,4 +210,4 @@ function settingsPayload(input = {}) {
   return out;
 }
 
-module.exports = { cleanText, bool, intInRange, httpUrl, optionalHttpUrl, color, stringList, slugId, servicePayload, settingsPayload, userPayload, preferencePayload, weatherSettingsPayload, pluginInstallPayload, HEX_COLOR_RE };
+module.exports = { cleanText, bool, intInRange, httpUrl, optionalHttpUrl, color, stringList, slugId, servicePayload, settingsPayload, userPayload, preferencePayload, normalizeLaunchpad, weatherSettingsPayload, pluginInstallPayload, HEX_COLOR_RE };

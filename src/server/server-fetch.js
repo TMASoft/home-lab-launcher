@@ -70,7 +70,7 @@ async function resolveHostAddresses(hostname) {
   return dns.lookup(hostname, { all: true, verbatim: true });
 }
 
-async function assertServerFetchAllowed(input, { actorRole = '', label = 'URL' } = {}) {
+async function resolveAllowedServerFetch(input, { actorRole = '', label = 'URL' } = {}) {
   let parsed;
   try { parsed = new URL(String(input)); } catch { throw new Error(`${label} is invalid`); }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(`${label} must use http or https`);
@@ -80,6 +80,11 @@ async function assertServerFetchAllowed(input, { actorRole = '', label = 'URL' }
   if (privateHits.length && !privateNetworkFetchAllowed(actorRole)) {
     throw new Error(`${label} resolves to a private, loopback, link-local, or reserved network address; set SERVER_FETCH_PRIVATE_NETWORK_ACCESS to permit this role`);
   }
+  return { parsed, addresses };
+}
+
+async function assertServerFetchAllowed(input, options = {}) {
+  const { parsed } = await resolveAllowedServerFetch(input, options);
   return parsed;
 }
 
@@ -89,20 +94,184 @@ function redirectLocation(response, currentUrl) {
   return new URL(location, currentUrl).toString();
 }
 
+const http = require('http');
+const https = require('https');
+const tls = require('tls');
+
+class HeadersWrapper {
+  constructor(headers) {
+    this._headers = {};
+    for (const [key, val] of Object.entries(headers)) {
+      this._headers[key.toLowerCase()] = Array.isArray(val) ? val.join(', ') : val;
+    }
+  }
+
+  get(name) {
+    return this._headers[name.toLowerCase()] || null;
+  }
+}
+
+class ResponseWrapper {
+  constructor(status, headers, bodyBuffer) {
+    this.status = status;
+    this.ok = status >= 200 && status < 300;
+    this.headers = new HeadersWrapper(headers);
+    this._bodyBuffer = bodyBuffer;
+  }
+
+  async arrayBuffer() {
+    return this._bodyBuffer.buffer.slice(
+      this._bodyBuffer.byteOffset,
+      this._bodyBuffer.byteOffset + this._bodyBuffer.byteLength
+    );
+  }
+
+  async json() {
+    return JSON.parse(this._bodyBuffer.toString('utf8'));
+  }
+
+  async text() {
+    return this._bodyBuffer.toString('utf8');
+  }
+}
+
+function createAbortError() {
+  const err = new Error('The user aborted a request.');
+  err.name = 'AbortError';
+  return err;
+}
+
+function singleRequest(parsedUrl, resolvedIp, options = {}) {
+  return new Promise((resolve, reject) => {
+    const protocol = parsedUrl.protocol;
+    const isHttps = protocol === 'https:';
+    const transport = isHttps ? https : http;
+
+    const hostname = parsedUrl.hostname;
+    const port = parsedUrl.port || (isHttps ? 443 : 80);
+    const path = parsedUrl.pathname + parsedUrl.search;
+
+    const headers = { ...options.headers };
+    const lowerHeaders = {};
+    for (const [key, val] of Object.entries(headers)) {
+      lowerHeaders[key.toLowerCase()] = val;
+    }
+
+    if (!lowerHeaders['user-agent']) {
+      lowerHeaders['user-agent'] = 'home-lab-launcher';
+    }
+    if (!lowerHeaders['host']) {
+      lowerHeaders['host'] = parsedUrl.host;
+    }
+
+    const reqOpts = {
+      host: resolvedIp,
+      port: port,
+      path: path,
+      method: options.method || 'GET',
+      headers: lowerHeaders
+    };
+
+    if (parsedUrl.username || parsedUrl.password) {
+      reqOpts.auth = `${parsedUrl.username}:${parsedUrl.password}`;
+    }
+
+    if (isHttps) {
+      reqOpts.servername = hostname;
+      reqOpts.checkServerIdentity = (host, cert) => {
+        return tls.checkServerIdentity(hostname, cert);
+      };
+    }
+
+    if (options.rejectUnauthorized !== undefined) {
+      reqOpts.rejectUnauthorized = options.rejectUnauthorized;
+    }
+
+    let aborted = false;
+    let abortListener;
+
+    const cleanup = () => {
+      if (options.signal && abortListener) {
+        options.signal.removeEventListener('abort', abortListener);
+      }
+    };
+
+    if (options.signal) {
+      if (options.signal.aborted) {
+        reject(createAbortError());
+        return;
+      }
+      abortListener = () => {
+        aborted = true;
+        req.destroy(createAbortError());
+        reject(createAbortError());
+      };
+      options.signal.addEventListener('abort', abortListener);
+    }
+
+    const req = transport.request(reqOpts, (res) => {
+      const chunks = [];
+      let totalLength = 0;
+      const maxLimit = 15 * 1024 * 1024; // 15MB safety limit
+
+      res.on('data', (chunk) => {
+        if (aborted) return;
+        totalLength += chunk.length;
+        if (totalLength > maxLimit) {
+          req.destroy(new Error('Response body exceeds safety limit of 15MB'));
+          return;
+        }
+        chunks.push(chunk);
+      });
+
+      res.on('end', () => {
+        if (aborted) return;
+        cleanup();
+        const bodyBuffer = Buffer.concat(chunks);
+        resolve(new ResponseWrapper(res.statusCode, res.headers, bodyBuffer));
+      });
+
+      res.on('error', (err) => {
+        if (aborted) return;
+        cleanup();
+        reject(err);
+      });
+    });
+
+    req.on('error', (err) => {
+      if (aborted) return;
+      cleanup();
+      reject(err);
+    });
+
+    if (options.body) {
+      req.write(options.body);
+    }
+    req.end();
+  });
+}
+
 async function guardedFetch(input, options = {}, guard = {}) {
   let current = String(input);
   const maxRedirects = Number.isFinite(Number(options.maxRedirects)) ? Number(options.maxRedirects) : MAX_REDIRECTS_DEFAULT;
   const fetchOptions = { ...options };
   delete fetchOptions.maxRedirects;
+
   for (let redirectCount = 0; redirectCount <= maxRedirects; redirectCount += 1) {
-    await assertServerFetchAllowed(current, guard);
-    const response = await fetch(current, { ...fetchOptions, redirect: 'manual' });
+    const { parsed: parsedUrl, addresses } = await resolveAllowedServerFetch(current, guard);
+    const resolvedIp = addresses[0].address;
+    const response = await singleRequest(parsedUrl, resolvedIp, fetchOptions);
+
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+
     const next = redirectLocation(response, current);
     if (!next) return response;
     if (redirectCount === maxRedirects) throw new Error('Too many redirects');
+
     current = next;
-    if (response.status === 303 && fetchOptions.method && fetchOptions.method !== 'HEAD') fetchOptions.method = 'GET';
+    if (response.status === 303 && fetchOptions.method && fetchOptions.method !== 'HEAD') {
+      fetchOptions.method = 'GET';
+    }
   }
   throw new Error('Too many redirects');
 }

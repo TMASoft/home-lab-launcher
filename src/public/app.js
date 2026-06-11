@@ -698,6 +698,17 @@ async function showProfileModal() {
     <div class="settings-card">
       <p><strong>Status:</strong> Enabled</p>
       <button class="ghost danger" id="profile-disable-2fa" type="button">Disable 2FA</button>
+      <div id="profile-2fa-disable-area" hidden style="margin-top: 15px;">
+        <div class="field">
+          <label>Confirm current password</label>
+          <input id="profile-2fa-disable-password" type="password">
+        </div>
+        <div class="field" style="margin-top: 10px;">
+          <label>Enter the 6-digit verification code</label>
+          <input id="profile-2fa-disable-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric">
+        </div>
+        <button class="ghost danger" style="margin-top: 10px;" id="profile-confirm-disable-2fa" type="button">Confirm Disable</button>
+      </div>
     </div>
   ` : `
     <div class="settings-card">
@@ -745,16 +756,24 @@ async function showProfileModal() {
     }
   };
   if (me.user.totpEnabled) {
-    $('profile-disable-2fa').onclick = async () => {
-      if (confirm('Are you sure you want to disable 2FA? This will lower your account security.')) {
-        showError('');
-        try {
-          await api('/api/me/totp/disable', { method: 'POST' });
-          toast('2FA disabled');
-          await showProfileModal();
-        } catch (error) {
-          showError(error.message);
-        }
+    $('profile-disable-2fa').onclick = () => {
+      $('profile-2fa-disable-area').hidden = false;
+      $('profile-disable-2fa').hidden = true;
+    };
+    $('profile-confirm-disable-2fa').onclick = async () => {
+      const password = formValue('profile-2fa-disable-password');
+      const code = formValue('profile-2fa-disable-code');
+      if (!password || !code) {
+        showError('Password and verification code are required');
+        return;
+      }
+      showError('');
+      try {
+        await api('/api/me/totp/disable', { method: 'POST', body: JSON.stringify({ password, code }) });
+        toast('2FA disabled');
+        await showProfileModal();
+      } catch (error) {
+        showError(error.message);
       }
     };
   } else {

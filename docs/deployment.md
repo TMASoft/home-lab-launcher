@@ -29,8 +29,8 @@ The official release image is published to GHCR as `ghcr.io/TMASoft/home-lab-lau
 ```bash
 cp .env.example .env
 # edit .env
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.2.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.2.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -39,9 +39,11 @@ For development from a source checkout, use `docker compose up --build -d` inste
 The default Compose file:
 
 - can use a published image through `APP_IMAGE` or build the local app image for source checkouts,
+- runs the application as a non-root `node` user in the container,
 - stores runtime data in the `launcher-data` volume,
-- exposes `HOST_PORT` on `HOST_BIND_IP`, defaulting to `0.0.0.0:8080`, and
-- keeps the container listening on port `8080` internally.
+- exposes `HOST_PORT` on `HOST_BIND_IP`, defaulting to `0.0.0.0:8080`,
+- drops all capabilities (`cap_drop: ["ALL"]`) and prevents privilege escalation (`no-new-privileges: true`), and
+- registers a healthcheck targeting `/api/healthz`.
 
 Minimum production-minded values:
 
@@ -229,8 +231,8 @@ For image-based installs, update by pulling the next tagged GHCR image:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.2.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.2.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose up -d --no-build
 
 # Or, for source checkouts:
 # docker compose build --pull
@@ -312,12 +314,12 @@ Before exposing the launcher outside a private LAN, configure HTTPS at the rever
 
 Remote service icons, branding images, URL tests, and service health checks are fetched by the server. This is useful in home labs because operators often monitor private dashboards, but it is also an SSRF boundary: a user who can trigger these fetches can ask the launcher host to contact network locations the user may not be able to reach directly.
 
-`SERVER_FETCH_PRIVATE_NETWORK_ACCESS` controls who may target private, loopback, link-local, carrier-grade NAT, documentation, multicast, or reserved IP ranges after DNS resolution. The default `admin-editor` preserves normal home-lab behavior. Use `admin` when Editors should manage cards but not probe internal networks, and use `disabled` for public demos or other deployments where arbitrary internal-network fetches are not acceptable. Redirect targets are checked before following them. Image downloads still have timeouts and 5 MiB limits, and SVG uploads/downloads are intentionally rejected for service and branding images. Trusted plugins are outside this SSRF boundary because plugins are Admin-installed server-side code.
+`SERVER_FETCH_PRIVATE_NETWORK_ACCESS` controls who may target private, loopback, link-local, carrier-grade NAT, documentation, multicast, or reserved IP ranges after DNS resolution. The default `admin-editor` preserves normal home-lab behavior. Use `admin` when Editors should manage cards but not probe internal networks, and use `disabled` for public demos or other deployments where arbitrary internal-network fetches are not acceptable. To prevent DNS rebinding attacks, hostnames are resolved exactly once and connections are pinned directly to that IP address while validating the original `Host` header and TLS SNI configuration. Redirect targets are checked and re-resolved before following them. Image downloads still have timeouts and 5 MiB limits, and SVG uploads/downloads are intentionally rejected for service and branding images. Trusted plugins are outside this SSRF boundary because plugins are Admin-installed server-side code.
 
 
 ### Public assets and login-required portals
 
-Uploaded branding assets and service icons are intentionally served from `/api/app-assets/:filename` and `/api/service-icons/:filename` even when anonymous read-only access is disabled. This lets the login page, browser favicon, and already-rendered portal chrome display configured imagery without granting access to services or settings. Treat uploaded images as public web assets and do not store secrets, private screenshots, certificates, or sensitive diagrams there.
+Uploaded branding assets are served from `/api/app-assets/:filename` publicly even when anonymous read-only access is disabled. This lets the login page, browser favicon, and already-rendered portal chrome display configured branding imagery without granting access to services or settings. Uploaded service icons, however, are access-controlled and served from `/api/service-icons/:filename` only to users with launcher read access. Treat uploaded images as public or read-authorized web assets and do not store secrets, private screenshots, certificates, or sensitive diagrams there.
 
 ### Login throttling
 

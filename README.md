@@ -73,8 +73,8 @@ Choose one first-admin setup path:
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.2.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.2.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.0 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -206,11 +206,11 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 - **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
 - **Users** — create users, change roles, reset passwords, reset user 2FA, and delete users.
 - **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.
-- **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record the desired scheduled backup location.
+- **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record a preferred backup path/operator note.
 - **Plugins** — discover GitHub versions, install pinned plugin releases/tags, enable/disable, and remove plugins.
 - **Logs** — filtered audit log entries for login, settings, user, service, weather, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
 
-Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout.
+Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
 
 ## Configuration
 
@@ -321,7 +321,7 @@ The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the i
 
 - Change `SESSION_SECRET` before deployment.
 - Change or remove the bootstrap password after first login.
-- Enable TOTP 2FA from the first-admin setup or the profile menu when the deployment is reachable beyond a trusted private LAN. TOTP secrets are stored in the application database; include the SQLite database in backup planning and protect database backups accordingly.
+- Enable TOTP 2FA from the first-admin setup or the profile menu when the deployment is reachable beyond a trusted private LAN. Disabling TOTP requires current password verification plus the current TOTP code when 2FA is enabled, and revokes other active sessions. TOTP secrets are stored in the application database; include the SQLite database in backup planning and protect database backups accordingly.
 - CSRF protection is enabled for mutating API routes after login.
 - Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
 - Security headers are set by the application; still use HTTPS for real deployments.
@@ -330,8 +330,8 @@ The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the i
 - Admins can export logs, set retention, prune old audit events, and review management-plane notices.
 - Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement and supports optional SHA-256 checksum verification for GitHub archives.
 - Remote service/branding image fetches, URL tests, and service health checks are server-side fetches. By default, Admins and Editors may target private, loopback, link-local, and reserved addresses for home-lab use. Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` in shared deployments, or `disabled` for internet-exposed demos where no operator should use the launcher as an internal-network HTTP client.
-- The SSRF guard resolves each requested host before fetching and re-checks redirect targets. It blocks private-network destinations for roles not allowed by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`, uses timeouts and size limits for image downloads, and rejects SVG assets. This is a defense-in-depth boundary, not a browser sandbox; trusted plugins still run server-side code and can make their own network requests.
-- Branding assets and service icons are intentionally public from `/api/app-assets/` and `/api/service-icons/` so login, anonymous-disabled, and browser chrome views can still render configured imagery. Do not upload secret or sensitive images.
+- The SSRF guard resolves each requested host before fetching, pins the connection directly to the resolved IP to prevent DNS rebinding attacks, and re-checks/re-resolves redirect targets. It blocks private-network destinations for roles not allowed by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`, uses timeouts and size limits for image downloads, and rejects SVG assets. This is a defense-in-depth boundary, not a browser sandbox; trusted plugins still run server-side code and can make their own network requests.
+- Branding assets are served from `/api/app-assets/` and are public by design so the login page can display custom branding. Service icons, however, are access-controlled and served from `/api/service-icons/` only to users with launcher read access (requiring authentication when anonymous read is disabled). Treat uploaded images as public/read-authorized web assets and do not store secrets or private screenshots there.
 - Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
 - Put the launcher behind HTTPS if credentials traverse an untrusted network.
 
