@@ -6,6 +6,10 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## [0.3.2] - 2026-06-11
 
+### Added
+
+- Added the running app version and a GitHub repository link to the header.
+
 ### Fixed
 
 - Fixed launchpad display controls so metadata visibility and Cards/Compact/List changes render immediately before preference persistence completes.

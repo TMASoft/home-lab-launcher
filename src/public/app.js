@@ -20,6 +20,8 @@ async function loadSession() {
 async function loadSettings() {
   const data = await api('/api/settings/public');
   state.settings = data;
+  state.version = data.version || '';
+  state.repositoryUrl = data.repositoryUrl || '';
   applyAppearance(data.appearance || { brand: { appName: data.appName } });
 }
 async function loadServices() { state.services = (await api('/api/services')).services; }
