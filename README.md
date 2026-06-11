@@ -1,5 +1,6 @@
 <img width="621" height="285" alt="Screenshot_20260609_162805" src="https://github.com/user-attachments/assets/cb352b92-f7ed-4906-804b-2e817f378cf2" />
 
+## This is very beta, use at your own risk, for real.
 
 # Home Lab Launcher
 
