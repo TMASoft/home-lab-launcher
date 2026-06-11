@@ -67,3 +67,22 @@ test('openDb upgrades a pre-migration schema and records versions', () => {
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
 });
+
+test('openDb refreshes bundled local preset metadata on existing databases', () => {
+  const dataDir = tempDir();
+  let db;
+  try {
+    db = openDb(dataDir);
+    db.prepare("UPDATE preset_cache SET icon_url = ? WHERE id = ? AND source = 'local'").run('https://example.invalid/old-qbit-logo.png', 'qbittorrent');
+    db.close();
+
+    db = openDb(dataDir);
+    const preset = db.prepare("SELECT icon_url FROM preset_cache WHERE id = ? AND source = 'local'").get('qbittorrent');
+    assert.ok(preset);
+    assert.match(preset.icon_url, /\/qBittorrent\/qbittorrent\.svg$/);
+    db.close();
+  } finally {
+    try { db?.close(); } catch {}
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

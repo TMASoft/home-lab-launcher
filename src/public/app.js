@@ -533,7 +533,7 @@ document.querySelectorAll('.admin-tab').forEach((tab) => {
 const iconChoices = ['🔗','🏠','📈','📶','🎬','🧰','🖥️','☁️','🔒','📦','🧪','📰'];
 const colorChoices = ['#8fd3ff','#8ee6b0','#ffd27a','#ff8f9d','#b99cff','#6da8ff','#4de7ff','#94a3b8'];
 function presetSearchHtml() {
-  return `<div class="field preset-search-field"><label>Search presets</label><input id="preset-search" placeholder="Type Plex, Pi-hole, Home Assistant…" autocomplete="off"><div id="preset-results" class="preset-results" hidden></div><small>Search the service preset catalog to auto-fill the form. You can also fill in everything manually below.</small></div>`;
+  return `<div class="field preset-search-field"><label>Search presets</label><input id="preset-search" placeholder="Type Plex, Pi-hole, Home Assistant…" autocomplete="off"><input id="svc-preset-id" type="hidden"><div id="preset-results" class="preset-results" hidden></div><small>Search the service preset catalog to auto-fill the form. You can also fill in everything manually below.</small></div>`;
 }
 function presetResultHtml(p) {
   const badge = p.source === 'heimdall'
@@ -585,18 +585,33 @@ function bindPresetSearch() {
   });
 }
 function applyPresetToForm(preset) {
+  $('svc-preset-id').value = preset.id || '';
   $('svc-name').value = preset.name;
   $('svc-description').value = preset.description || '';
   $('svc-category').value = preset.category || 'general';
   $('svc-accent').value = preset.accent || '#8fd3ff';
   $('svc-url').value = preset.website || '';
-  if (preset.iconUrl) $('svc-icon').value = preset.iconUrl;
+  const iconInput = $('svc-icon');
+  iconInput.dataset.presetIconUrl = preset.iconUrl || '';
+  iconInput.dataset.iconEdited = 'false';
+  if (preset.iconUrl) iconInput.value = preset.iconUrl;
   toast(`Preset "${preset.name}" applied — update the URL to your local address`);
 }
 
 function showServiceModal(s) {
   openModal(serviceForm(s));
-  modalContent.querySelectorAll('[data-icon-choice]').forEach((button) => button.addEventListener('click', () => { $('svc-icon').value = button.dataset.iconChoice; }));
+  const iconInput = $('svc-icon');
+  if (iconInput) {
+    iconInput.dataset.presetIconUrl = iconInput.dataset.presetIconUrl || '';
+    iconInput.dataset.iconEdited = 'false';
+    iconInput.addEventListener('input', () => {
+      if (iconInput.value !== (iconInput.dataset.presetIconUrl || '')) iconInput.dataset.iconEdited = 'true';
+    });
+  }
+  modalContent.querySelectorAll('[data-icon-choice]').forEach((button) => button.addEventListener('click', () => {
+    $('svc-icon').value = button.dataset.iconChoice;
+    $('svc-icon').dataset.iconEdited = 'true';
+  }));
   modalContent.querySelectorAll('[data-color-choice]').forEach((button) => button.addEventListener('click', () => { $('svc-accent').value = button.dataset.colorChoice; }));
   if (!s) bindPresetSearch();
   $('test-service-url').onclick = async () => {
@@ -620,7 +635,19 @@ function showServiceModal(s) {
     }
     try {
       const body = await readServiceForm();
-      await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+      const presetId = $('svc-preset-id')?.value?.trim();
+      const presetIconUrl = $('svc-icon')?.dataset?.presetIconUrl || '';
+      const iconEdited = $('svc-icon')?.dataset?.iconEdited === 'true';
+      if (!s?.id && presetId && !body.iconImageData) {
+        const imported = await api('/api/admin/presets/import', { method: 'POST', body: JSON.stringify({ presetId, customUrl: body.url }) });
+        const patchBody = { ...body };
+        delete patchBody.iconImageData;
+        delete patchBody.iconImageName;
+        if (!iconEdited || body.icon === presetIconUrl) delete patchBody.icon;
+        await api(`/api/services/${imported.serviceId}`, { method: 'PATCH', body: JSON.stringify(patchBody) });
+      } else {
+        await api(s?.id ? `/api/services/${s.id}` : '/api/services', { method: s?.id ? 'PATCH' : 'POST', body: JSON.stringify(body) });
+      }
       closeModal();
       await loadServices();
       if (isAdmin()) await loadAdminData();

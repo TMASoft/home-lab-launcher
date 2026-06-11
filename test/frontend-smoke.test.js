@@ -19,7 +19,7 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
     fs.readFileSync(path.join(__dirname, '..', 'src/public/admin.js'), 'utf8'),
     fs.readFileSync(path.join(__dirname, '..', 'src/public/app.js'), 'utf8')
   ].join('\n');
-  for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'renderWeatherForecasts(', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url', 'data-toggle-metadata', 'showServiceHostnames()', 'showServiceTags()']) {
+  for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'renderWeatherForecasts(', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url', 'data-toggle-metadata', 'showServiceHostnames()', 'showServiceTags()', '/api/admin/presets/import', 'svc-preset-id']) {
     assert.ok(js.includes(token), `missing ${token}`);
   }
   const accessibilityTokens = [

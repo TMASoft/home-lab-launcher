@@ -290,11 +290,18 @@ function seed(db) {
 }
 
 function seedPresets(db) {
-  const localCount = db.prepare("SELECT COUNT(*) AS count FROM preset_cache WHERE source = 'local'").get().count;
-  if (localCount > 0) return;
   const stmt = db.prepare(`
-    INSERT OR IGNORE INTO preset_cache (id, name, website, description, category, accent, icon_url, source)
+    INSERT INTO preset_cache (id, name, website, description, category, accent, icon_url, source)
     VALUES (@id, @name, @website, @description, @category, @accent, @icon_url, @source)
+    ON CONFLICT(id) DO UPDATE SET
+      name = excluded.name,
+      website = excluded.website,
+      description = excluded.description,
+      category = excluded.category,
+      accent = excluded.accent,
+      icon_url = excluded.icon_url,
+      cached_at = CURRENT_TIMESTAMP
+    WHERE preset_cache.source = 'local' AND excluded.source = 'local'
   `);
   const tx = db.transaction(() => {
     for (const preset of LOCAL_PRESETS) {
