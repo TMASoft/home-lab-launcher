@@ -10,6 +10,7 @@ function registerWeatherRoutes(router, deps) {
     if (!canRead(req, db)) return res.status(401).json({ error: 'Authentication required' });
     try {
       const cfg = getSetting(db, 'weather', {});
+      if (cfg.enabled === false) return res.status(404).json({ error: 'Weather is disabled' });
       if (!Number.isFinite(Number(cfg.latitude)) || !Number.isFinite(Number(cfg.longitude))) {
         return res.status(400).json({ error: 'Weather location is not configured' });
       }

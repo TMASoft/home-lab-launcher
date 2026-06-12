@@ -25,6 +25,7 @@ const DEFAULT_APPEARANCE = {
     footerNote: ''
   },
   hero: {
+    enabled: true,
     eyebrow: 'Home lab operations',
     heading: 'Launch and manage your internal services.',
     subheading: 'A role-aware launcher for the tools, dashboards, and dynamic sections that make up your home lab.'
@@ -254,6 +255,7 @@ function seed(db) {
     app_base_url: process.env.APP_BASE_URL || 'http://localhost:8080',
     public_read_enabled: process.env.PUBLIC_READ_ENABLED === 'true',
     weather: {
+      enabled: true,
       label: process.env.WEATHER_LOCATION_LABEL || '',
       latitude: envNumber('WEATHER_LATITUDE'),
       longitude: envNumber('WEATHER_LONGITUDE'),

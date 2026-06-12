@@ -34,10 +34,10 @@ The main page includes:
 - quick favorites,
 - current weather,
 - a signed-in user menu,
-- optional plugin sections, and
+- optional plugin sections that can be moved independently in the dashboard layout, and
 - an admin console visible only to Admins.
 
-The UI intentionally hides empty dynamic/plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
+The UI intentionally hides empty plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
 
 ## Public beta quick start
 
@@ -46,6 +46,24 @@ This beta is intended for self-hosters who can manage a Docker Compose service a
 Home Lab Launcher is distributed as a Docker/GHCR application, not as an npm package. `package.json` remains marked `"private": true`; use npm scripts only for local development, validation, and CI.
 
 ## Quick start
+
+### Installer quick start
+
+For a guided Docker Compose install that creates `docker-compose.yml` and `.env`, run the installer for your platform.
+
+Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/linux.sh | sh
+```
+
+macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/macos.sh | sh
+```
+
+The installer checks for Docker and Docker Compose v2, points you to the official Docker installation docs if either is missing, prompts for the basic deployment settings, validates the generated Compose config, and can start the launcher for you. It can also add a basic bundled Nginx reverse-proxy service when you do not already have Nginx, Caddy, Traefik, or another reverse proxy on the host. The bundled Nginx option is HTTP-only; put a TLS-capable proxy in front before exposing the launcher outside a private LAN. If you prefer to inspect the script first, download it and run it with `sh` instead of piping it directly to the shell.
 
 ### 1. Clone and configure
 
@@ -77,8 +95,8 @@ Choose one first-admin setup path:
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -124,6 +142,8 @@ APP_BASE_URL=https://launcher.example.test
 
 `HOST` controls the interface the Node process listens on inside the container and normally stays at `0.0.0.0`. Standard Docker bridge networking is the supported default. In constrained Docker/LXC environments where normal port publishing is unavailable and you intentionally use host networking as a fallback, set `HOST=127.0.0.1`, keep the app behind a same-host reverse proxy, and document that local override outside the public Compose file.
 
+If you do not already have a reverse proxy, the installer can generate a basic Nginx service in the same Compose project. In that mode, only Nginx is published to the host and the launcher stays on the internal Docker network. This is useful for a simple private-LAN HTTP setup, but it does not configure HTTPS certificates.
+
 ## Launchpad personalization and health
 
 The launchpad supports card, compact grouped, and list views. Logged-in users can save their layout preference, reorder favorites, hide categories, and toggle launchpad metadata visibility. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled.
@@ -146,7 +166,7 @@ Appearance settings include:
 
 - site/app name, browser title, header brand text/subtitle, and initials fallback,
 - favicon, brand icon, and optional hero/header image assets,
-- hero eyebrow, heading, and subheading copy,
+- hero visibility, eyebrow, heading, and subheading copy,
 - dark/light/system mode,
 - controlled theme colors, fonts, density, and corner radius.
 
@@ -172,6 +192,7 @@ Admins can save the current appearance as a preset, apply a preset, duplicate/de
       "heroImageUrl": ""
     },
     "hero": {
+      "enabled": true,
       "eyebrow": "Home lab operations",
       "heading": "Launch and manage your internal services.",
       "subheading": "A role-aware launcher for the tools, dashboards, and dynamic sections that make up your home lab."
@@ -207,8 +228,8 @@ Admins can choose whether anonymous visitors may view the portal. Disable anonym
 Logged-in Admins see an **Admin** link in the top navigation. The console includes:
 
 - **Overview** — service/user/plugin/log counts, runtime information, configuration warnings, and admin notices.
-- **Settings** — app name, base URL, public read-only access, and weather settings.
-- **Appearance** — branding, hero content, app assets, color/font/density controls, live preview, default restore, and theme preset import/export.
+- **Settings** — app name, base URL, public read-only access, and weather settings including global weather visibility.
+- **Appearance** — branding, hero visibility/content, app assets, color/font/density controls, live preview, default restore, and theme preset import/export.
 - **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
 - **Users** — create users, change roles, reset passwords, reset user 2FA, and delete users.
 - **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.

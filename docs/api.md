@@ -122,7 +122,7 @@ Admin-only routes.
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/weather/search` | Admin | Search geocoding candidates for Admin weather setup. |
-| `PUT` | `/api/weather/settings` | Admin | Save weather label, coordinates, and units. |
+| `PUT` | `/api/weather/settings` | Admin | Save weather visibility, label, coordinates, and units. |
 
 ## Preset catalog
 

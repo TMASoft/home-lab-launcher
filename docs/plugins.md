@@ -185,7 +185,9 @@ The frontend `api` helper sends same-origin requests and throws on non-2xx respo
 
 ## Dashboard visibility
 
-If no enabled plugin registers a dashboard section, the launcher hides the dynamic plugin area completely for viewers. This keeps the anonymous/basic-user homepage clean.
+If no enabled plugin registers a dashboard section, the launcher hides plugin dashboard content completely for viewers. This keeps the anonymous/basic-user homepage clean.
+
+Each registered plugin dashboard section becomes its own full-width layout item. Signed-in users can use the header layout editor to move plugin sections independently from the hero, weather widget, and service launchpad.
 
 ## Naming database tables
 
