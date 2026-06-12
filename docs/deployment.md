@@ -26,11 +26,38 @@ docker compose version
 
 The official release image is published to GHCR as `ghcr.io/TMASoft/home-lab-launcher`.
 
+For a guided install that does not require a source checkout, use the platform installer. It creates an install directory with `docker-compose.yml` and `.env`, checks that Docker and Docker Compose v2 are available, validates the generated Compose config, and can start the app.
+
+Linux:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/linux.sh | sh
+```
+
+macOS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/macos.sh | sh
+```
+
+The installer prompts for the image tag, optional bundled Nginx reverse proxy, host port, direct-LAN versus existing same-host reverse-proxy binding, browser-facing `APP_BASE_URL`, anonymous read-only access, and first-admin setup mode. Browser first-admin setup remains the recommended default, weather values stay empty, and local plugin installs are disabled unless you edit the generated `.env` later.
+
+When bundled Nginx is selected, the generated Compose project includes an `nginx` service and `nginx/default.conf`. Only Nginx is published to the host; the launcher is exposed on the internal Docker network and receives traffic from the proxy. This option is HTTP-only and intended as a simple starter proxy for private LAN use. For shared or internet-exposed deployments, terminate HTTPS with a proper reverse proxy and set `APP_BASE_URL` to the external HTTPS URL.
+
+If you prefer to inspect the script first, download the file and run it with `sh`:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/linux.sh
+sh linux.sh
+```
+
+For source checkouts, configure and start Compose manually:
+
 ```bash
 cp .env.example .env
 # edit .env
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -244,8 +271,8 @@ For image-based installs, update by pulling the next tagged GHCR image:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.6 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose up -d --no-build
 
 # Or, for source checkouts:
 # docker compose build --pull

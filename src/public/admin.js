@@ -80,7 +80,7 @@ function adminSettingsHtml() {
 
   return `<div class="admin-stack">
     <div class="settings-card"><h3>General</h3><div class="form-grid"><div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"><small>Used for secure cookies, proxy checks, and beta readiness warnings.</small></div></div></div></div>
-    <div class="settings-card"><h3>Weather</h3><div class="form-grid"><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="ZIP code or city"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div><div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div><div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div></div></div>
+    <div class="settings-card"><div class="inline-between"><h3>Weather</h3><button class="ghost" id="weather-visibility-toggle" type="button" data-enabled="${s.weather?.enabled === false ? 'false' : 'true'}">${s.weather?.enabled === false ? 'Show weather' : 'Hide weather'}</button></div><div class="form-grid"><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="ZIP code or city"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div><div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div><div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div></div></div>
     <div class="settings-card"><h3>Access</h3><label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label><p>Review this before exposing the launcher outside your LAN.</p><button class="primary" id="admin-save-settings" type="button">Save settings</button></div>
     <div class="settings-card"><h3>Service preset catalog</h3><p>The preset catalog provides quick access to pre-configured service definitions when adding new services. Native presets are bundled with Home Lab Launcher. Heimdall presets are synced from the <a href="https://github.com/linuxserver/Heimdall-Apps" target="_blank" rel="noopener noreferrer">linuxserver/Heimdall-Apps</a> repository.</p><div class="stats-row">${statCard('Native presets', pc.counts?.local ?? '—')}${statCard('Heimdall presets', pc.counts?.heimdall ?? '—')}${statCard('Total presets', pc.counts?.total ?? '—')}</div><label class="check-line"><input id="admin-remote-presets" type="checkbox" ${pc.enableRemotePresets !== false ? 'checked' : ''}> Enable remote Heimdall presets</label><small>When disabled, only bundled native presets are available and the catalog will not sync from GitHub.</small><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="catalog-update" type="button" ${updateBtnDisabled}>${updateBtnText}</button><span id="catalog-update-status" class="test-result">${syncStatusHtml}</span></div><button class="primary" id="save-preset-settings" type="button" style="margin-top: 10px;">Save preset settings</button></div>
   </div>`;
@@ -106,7 +106,7 @@ function adminAppearanceHtml() {
         <div class="row"><div class="field"><label>Brand mark initials</label><input id="appearance-brand-mark" value="${escapeHtml(b.brandMarkText || '')}" maxlength="8"></div><div class="field"><label>Footer/site note</label><input id="appearance-footer-note" value="${escapeHtml(b.footerNote || '')}"></div></div>
         ${assetFieldHtml('favicon', 'Favicon image', b.faviconUrl)}${assetFieldHtml('brand-icon', 'Brand icon image', b.brandIconUrl)}${assetFieldHtml('hero-image', 'Hero/header image', b.heroImageUrl)}
       </div>
-      <h3>Hero content</h3><div class="form-grid"><div class="field"><label>Eyebrow</label><input id="appearance-hero-eyebrow" value="${escapeHtml(h.eyebrow || '')}"></div><div class="field"><label>Heading</label><input id="appearance-hero-heading" value="${escapeHtml(h.heading || '')}"></div><div class="field"><label>Subheading</label><small>Supported tags: <code>&lt;strong&gt;</code>, <code>&lt;em&gt;</code>, <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>, <code>&lt;br&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;ul&gt;</code>, <code>&lt;ol&gt;</code>, <code>&lt;li&gt;</code>, <code>&lt;a href&gt;</code> (http/https only).</small>
+      <div class="inline-between"><h3>Hero content</h3><button class="ghost" id="hero-visibility-toggle" type="button" data-enabled="${h.enabled === false ? 'false' : 'true'}">${h.enabled === false ? 'Show hero' : 'Hide hero'}</button></div><div class="form-grid"><div class="field"><label>Eyebrow</label><input id="appearance-hero-eyebrow" value="${escapeHtml(h.eyebrow || '')}"></div><div class="field"><label>Heading</label><input id="appearance-hero-heading" value="${escapeHtml(h.heading || '')}"></div><div class="field"><label>Subheading</label><small>Supported tags: <code>&lt;strong&gt;</code>, <code>&lt;em&gt;</code>, <code>&lt;b&gt;</code>, <code>&lt;i&gt;</code>, <code>&lt;code&gt;</code>, <code>&lt;br&gt;</code>, <code>&lt;p&gt;</code>, <code>&lt;ul&gt;</code>, <code>&lt;ol&gt;</code>, <code>&lt;li&gt;</code>, <code>&lt;a href&gt;</code> (http/https only).</small>
         <div class="rich-editor" id="subheading-rich-editor">
           <div class="rich-editor-toolbar">
             <div class="rich-editor-modes">
@@ -350,6 +350,22 @@ function bindLogHandlers() {
 }
 
 function bindSettingsHandlers() {
+  $('weather-visibility-toggle')?.addEventListener('click', () => {
+    const button = $('weather-visibility-toggle');
+    const enabled = button.dataset.enabled !== 'false';
+    const nextEnabled = !enabled;
+    button.disabled = true;
+    api('/api/weather/settings', { method: 'PUT', body: JSON.stringify({ enabled: nextEnabled, label: formValue('weather-label-input'), latitude: formValue('weather-lat'), longitude: formValue('weather-lon'), units: $('weather-units').value }) })
+      .then(async () => {
+        button.dataset.enabled = nextEnabled ? 'true' : 'false';
+        button.textContent = nextEnabled ? 'Hide weather' : 'Show weather';
+        await Promise.all([loadSettings(), nextEnabled ? loadWeather() : Promise.resolve(), loadAdminData()]);
+        render();
+        toast(nextEnabled ? 'Weather shown' : 'Weather hidden');
+      })
+      .catch((error) => toast(error.message))
+      .finally(() => { button.disabled = false; });
+  });
   $('weather-search')?.addEventListener('click', async () => {
     const data = await api(`/api/weather/search?q=${encodeURIComponent(formValue('weather-query'))}`);
     $('weather-results').innerHTML = data.results.map((r, i) => `<button class="ghost" type="button" data-result="${i}">${escapeHtml(r.label)}</button>`).join(' ');
@@ -361,7 +377,7 @@ function bindSettingsHandlers() {
   });
   $('admin-save-settings')?.addEventListener('click', async () => {
     await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ app_name: formValue('admin-app-name'), app_base_url: formValue('admin-base-url'), public_read_enabled: $('admin-public-read').checked }) });
-    await api('/api/weather/settings', { method: 'PUT', body: JSON.stringify({ label: formValue('weather-label-input'), latitude: formValue('weather-lat'), longitude: formValue('weather-lon'), units: $('weather-units').value }) });
+    await api('/api/weather/settings', { method: 'PUT', body: JSON.stringify({ enabled: $('weather-visibility-toggle')?.dataset.enabled !== 'false', label: formValue('weather-label-input'), latitude: formValue('weather-lat'), longitude: formValue('weather-lon'), units: $('weather-units').value }) });
     await Promise.all([loadSettings(), loadWeather(), loadAdminData()]);
     render(); toast('Settings saved');
   });
@@ -475,6 +491,7 @@ function readAppearanceForm() {
       footerNote: formValue('appearance-footer-note')
     },
     hero: {
+      enabled: $('hero-visibility-toggle')?.dataset.enabled !== 'false',
       eyebrow: formValue('appearance-hero-eyebrow'),
       heading: formValue('appearance-hero-heading'),
       subheading: (() => {
@@ -504,6 +521,25 @@ async function uploadAppearanceAsset(id) {
   return data.url;
 }
 function bindAppearanceHandlers(content) {
+  $('hero-visibility-toggle')?.addEventListener('click', () => {
+    const button = $('hero-visibility-toggle');
+    const enabled = button.dataset.enabled !== 'false';
+    const nextEnabled = !enabled;
+    button.disabled = true;
+    const appearance = readAppearanceForm();
+    appearance.hero.enabled = nextEnabled;
+    api('/api/admin/appearance', { method: 'PUT', body: JSON.stringify({ appearance }) })
+      .then(async (data) => {
+        button.dataset.enabled = nextEnabled ? 'true' : 'false';
+        button.textContent = nextEnabled ? 'Hide hero' : 'Show hero';
+        state.admin.appearance = data.appearance;
+        await Promise.all([loadSettings(), loadAdminData()]);
+        render();
+        toast(nextEnabled ? 'Hero shown' : 'Hero hidden');
+      })
+      .catch((error) => toast(error.message))
+      .finally(() => { button.disabled = false; });
+  });
   // Subheading rich editor tab switching and toolbar logic
   const visualBtn = $('rich-editor-btn-visual');
   const codeBtn = $('rich-editor-btn-code');

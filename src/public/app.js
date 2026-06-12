@@ -3,7 +3,8 @@ async function init() {
   const boot = await api('/api/bootstrap-status');
   if (boot.needsBootstrap) { showBootstrapModal(); return; }
   try {
-    await Promise.all([loadSettings(), loadServices(), loadPreferences(), loadWeather(), loadPluginSections()]);
+    await loadSettings();
+    await Promise.all([loadServices(), loadPreferences(), loadWeather(), loadPluginSections()]);
   } catch (error) {
     showAccessError(error);
   }
@@ -37,6 +38,7 @@ async function loadPreferences() {
   if (state.preferences.hideMetadata === undefined) {
     state.preferences.hideMetadata = !!state.preferences.hideHostnames;
   }
+  if (state.preferences.showWeather === undefined) state.preferences.showWeather = true;
 }
 async function saveFavorites() {
   if (state.user) await api('/api/me/preferences/favorites', { method: 'PUT', body: JSON.stringify({ value: state.favorites }) });
@@ -78,6 +80,7 @@ async function loadAdminData() {
 
 async function loadWeather() {
   const card = $('weather-card');
+  if (state.settings?.weather?.enabled === false) return;
   try {
     const data = await api('/api/weather');
     const current = data.weather.current || {};
@@ -151,21 +154,20 @@ function weatherDailyItemHtml(item) {
 
 function render() {
   const sessionText = state.user ? `${state.user.username} · ${roleLabel(state.user.role)}` : 'Anonymous';
-  $('user-label').textContent = state.user ? state.user.username : 'Anonymous';
-  $('access-label').textContent = state.user ? `${roleLabel(state.user.role)} access` : (state.settings?.publicReadEnabled ? 'Read-only public access' : 'Login required');
   $('session-button').textContent = sessionText;
   $('session-button').classList.toggle('signed-in', Boolean(state.user));
   $('login-button').hidden = Boolean(state.user);
   $('user-menu').hidden = !state.user;
-  $('side-profile-button').hidden = !state.user;
   $('admin-nav-link').hidden = !isAdmin();
   $('dropdown-admin-link').hidden = !isAdmin();
-  $('side-admin-link').hidden = !isAdmin();
   $('admin-panel').hidden = !isAdmin();
+  $('hero-card').hidden = state.settings?.appearance?.hero?.enabled === false;
+  $('weather-card').hidden = state.settings?.weather?.enabled === false || (Boolean(state.user) && state.preferences.showWeather === false);
+  $('weather-toggle-button').hidden = state.settings?.weather?.enabled === false;
+  $('weather-toggle-button').textContent = state.preferences.showWeather === false ? 'Show weather' : 'Hide weather';
   $('add-service-button').hidden = !canEditServices();
   $('settings-button').hidden = !isAdmin();
   $('users-button').hidden = !isAdmin();
-  $('plugin-manager-button').hidden = !isAdmin();
   renderServices();
   renderPluginSections();
   applyLayoutOrder();
@@ -176,14 +178,26 @@ function render() {
 function normalizeLayoutOrder(order = []) {
   const seen = new Set();
   const valid = [];
-  for (const id of Array.isArray(order) ? order : []) {
-    if (defaultLayoutOrder.includes(id) && !seen.has(id)) {
+  const requestedIds = Array.isArray(order) ? order : [];
+  const currentIds = [...document.querySelectorAll('#layout-root > [data-layout-id]')].map((item) => item.dataset.layoutId);
+  const validIds = new Set([...defaultLayoutOrder, ...currentIds.filter((id) => id.startsWith('plugin:')), ...requestedIds.filter((id) => String(id).startsWith('plugin:'))]);
+  for (const id of requestedIds) {
+    if (validIds.has(id) && !seen.has(id)) {
       seen.add(id);
       valid.push(id);
     }
   }
-  for (const id of defaultLayoutOrder) if (!seen.has(id)) valid.push(id);
+  for (const id of [...defaultLayoutOrder, ...currentIds.filter((id) => id.startsWith('plugin:'))]) {
+    if (!seen.has(id)) {
+      seen.add(id);
+      valid.push(id);
+    }
+  }
   return valid;
+}
+
+function layoutSafeId(value) {
+  return String(value || 'section').toLowerCase().replace(/[^a-z0-9_.:-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80) || 'section';
 }
 
 function applyLayoutOrder() {
@@ -333,22 +347,23 @@ function hexToRgba(hex, a) {
 }
 
 async function renderPluginSections() {
-  const wrapper = $('plugins');
   const host = $('plugin-sections');
-  const head = $('plugin-section-head');
-  host.innerHTML = '';
+  const root = $('layout-root');
+  document.querySelectorAll('[data-layout-id^="plugin:"]').forEach((section) => section.remove());
   document.querySelectorAll('script[data-plugin]').forEach((script) => script.remove());
-  const hasSections = state.pluginSections.length > 0;
-  wrapper.hidden = !hasSections && !isAdmin();
-  head.hidden = !hasSections && !isAdmin();
   window.HomeLabLauncher = { api, currentUser: state.user, registerPluginSection(section) {
-    wrapper.hidden = false;
-    head.hidden = false;
+    const pluginId = layoutSafeId(section.pluginId || document.currentScript?.dataset.plugin || 'plugin');
+    const layoutId = `plugin:${pluginId}:${layoutSafeId(section.id || section.title || 'section')}`;
     const el = document.createElement('section');
-    el.className = 'plugin-panel';
+    el.className = 'plugin-panel layout-item layout-item-full';
+    el.dataset.layoutId = layoutId;
+    layoutLabels[layoutId] = section.title || section.id || 'Plugin section';
+    el.setAttribute('aria-label', layoutLabels[layoutId]);
     el.innerHTML = `<h2>${escapeHtml(section.title || section.id)}</h2><div class="plugin-body"></div>`;
-    host.appendChild(el);
+    root.insertBefore(el, host);
     section.render({ container: el.querySelector('.plugin-body'), api, user: state.user });
+    applyLayoutOrder();
+    updateLayoutEditingUi();
   }};
   for (const section of state.pluginSections) {
     if (section.script) {
@@ -501,16 +516,22 @@ $('user-dropdown').addEventListener('click', async (event) => {
   const action = event.target.closest('[data-profile-action]')?.dataset.profileAction;
   if (action === 'profile') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); showProfileModal(); }
   if (action === 'layout') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); await setLayoutEditing(!state.layoutEditing); }
+  if (action === 'weather') {
+    $('user-dropdown').hidden = true;
+    $('session-button').setAttribute('aria-expanded', 'false');
+    state.preferences.showWeather = state.preferences.showWeather === false;
+    await saveLaunchpadPreferences();
+    render();
+    toast(state.preferences.showWeather === false ? 'Weather hidden' : 'Weather shown');
+  }
   if (action === 'logout') await logout();
 });
 document.addEventListener('click', (event) => { if (!$('user-menu').contains(event.target)) { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); } });
-$('side-profile-button').addEventListener('click', showProfileModal);
 async function logout() { await api('/api/auth/logout', { method: 'POST' }); location.reload(); }
 $('layout-done').addEventListener('click', () => setLayoutEditing(false));
 $('layout-reset').addEventListener('click', async () => { state.preferences.layoutOrder = [...defaultLayoutOrder]; applyLayoutOrder(); await persistLayoutOrder(); toast('Layout reset'); });
 $('settings-button').addEventListener('click', () => { location.hash = 'admin-panel'; state.adminTab = 'settings'; renderAdminConsole(); });
 $('users-button').addEventListener('click', () => { location.hash = 'admin-panel'; state.adminTab = 'users'; renderAdminConsole(); });
-$('plugin-manager-button').addEventListener('click', () => { location.hash = 'admin-panel'; state.adminTab = 'plugins'; renderAdminConsole(); });
 $('admin-refresh-button').addEventListener('click', loadAdminData);
 document.querySelectorAll('.admin-tab').forEach((tab) => {
   tab.addEventListener('click', () => { state.adminTab = tab.dataset.adminTab; renderAdminConsole(); });
@@ -865,7 +886,7 @@ async function showProfileModal() {
     try {
       if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
       else localStorage.removeItem('hll.launchpad');
-      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false };
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, showWeather: true };
       closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
     } catch (error) {
       showError(error.message);

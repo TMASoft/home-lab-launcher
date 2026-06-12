@@ -4,6 +4,25 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## Unreleased
+
+## [0.3.7] - 2026-06-12
+
+### Added
+
+- Added Admin controls to globally show/hide the weather widget from Settings and the hero section from Appearance.
+- Added guided Linux and macOS Docker Compose installer scripts with Docker prerequisite checks, interactive deployment prompts, generated `docker-compose.yml`/`.env` files, and README copy/paste install commands.
+- Added an optional bundled Nginx reverse-proxy service to the Linux and macOS installers for users without an existing host reverse proxy.
+- Added per-user weather visibility preferences for signed-in users.
+
+### Changed
+
+- Updated the dashboard layout so the hero and weather sections span the full content width, removed the current-user tile, and made plugin dashboard sections independently movable.
+
+### Fixed
+
+- Fixed first-admin setup so pressing Enter in modal fields cannot silently close the setup dialog without submitting.
+
 ## [0.3.6] - 2026-06-11
 
 ### Added

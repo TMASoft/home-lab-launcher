@@ -330,16 +330,18 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenCategories: ['Ops', 'Media'],
     viewMode: 'list',
     hideMetadata: false,
-    layoutOrder: ['hero', 'weather', 'profile', 'services', 'plugins']
+    showWeather: true,
+    layoutOrder: ['hero', 'weather', 'services']
   });
 
   await basic.request('/api/me/preferences/launchpad', {
     method: 'PUT',
     body: {
       value: {
-        layoutOrder: ['services', 'hero', 'weather', 'invalid-section', 'services'],
+        layoutOrder: ['services', 'plugin:demo:status', 'hero', 'weather', 'invalid-section', 'services'],
         viewMode: 'compact',
         hideMetadata: true,
+        showWeather: false,
         hiddenCategories: ['Media']
       }
     }
@@ -349,7 +351,8 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenCategories: ['Media'],
     viewMode: 'compact',
     hideMetadata: true,
-    layoutOrder: ['services', 'hero', 'weather', 'profile', 'plugins']
+    showWeather: false,
+    layoutOrder: ['services', 'plugin:demo:status', 'hero', 'weather']
   });
 
   await assert.rejects(() => basic.request('/api/me/preferences/adminTheme', { method: 'PUT', body: { value: true } }), /Unsupported preference key/);

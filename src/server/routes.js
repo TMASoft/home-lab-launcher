@@ -71,6 +71,7 @@ function publicSettings(db, req) {
       weather = rawWeather;
     } else {
       weather = {
+        enabled: rawWeather.enabled !== false,
         label: rawWeather.label || '',
         units: rawWeather.units || 'fahrenheit'
       };
@@ -193,6 +194,7 @@ function sanitizeAppearance(input = {}, { partial = false } = {}) {
       footerNote: cleanText(brand.footerNote, '', 180)
     },
     hero: {
+      enabled: hero.enabled !== false,
       eyebrow: cleanText(hero.eyebrow, DEFAULT_APPEARANCE.hero.eyebrow, 80),
       heading: cleanText(hero.heading, DEFAULT_APPEARANCE.hero.heading, 140),
       subheading: sanitizeHtml(cleanText(hero.subheading, DEFAULT_APPEARANCE.hero.subheading, 10000))

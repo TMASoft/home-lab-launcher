@@ -1,6 +1,6 @@
 {
   "name": "home-lab-launcher",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "private": true,
   "description": "Configurable home lab portal/launcher with roles, weather, and plugins.",
   "license": "MIT",
