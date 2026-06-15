@@ -101,9 +101,6 @@ services:
     image: ${APP_IMAGE:?Set APP_IMAGE in .env before starting}
     container_name: home-lab-launcher
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: true
     environment:
       PORT: 8080
       HOST: ${HOST:-0.0.0.0}
@@ -115,10 +112,6 @@ services:
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       PUBLIC_READ_ENABLED: ${PUBLIC_READ_ENABLED:-false}
-      WEATHER_LOCATION_LABEL: ${WEATHER_LOCATION_LABEL:-}
-      WEATHER_LATITUDE: ${WEATHER_LATITUDE:-}
-      WEATHER_LONGITUDE: ${WEATHER_LONGITUDE:-}
-      WEATHER_UNITS: ${WEATHER_UNITS:-fahrenheit}
       LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}
       SCHEDULED_BACKUP_LOCATION: ${SCHEDULED_BACKUP_LOCATION:-}
       DATA_DIR: /app/data
@@ -171,9 +164,6 @@ services:
     image: ${APP_IMAGE:?Set APP_IMAGE in .env before starting}
     container_name: home-lab-launcher
     restart: unless-stopped
-    env_file:
-      - path: .env
-        required: true
     environment:
       PORT: 8080
       HOST: ${HOST:-0.0.0.0}
@@ -185,10 +175,6 @@ services:
       BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
       BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
       PUBLIC_READ_ENABLED: ${PUBLIC_READ_ENABLED:-false}
-      WEATHER_LOCATION_LABEL: ${WEATHER_LOCATION_LABEL:-}
-      WEATHER_LATITUDE: ${WEATHER_LATITUDE:-}
-      WEATHER_LONGITUDE: ${WEATHER_LONGITUDE:-}
-      WEATHER_UNITS: ${WEATHER_UNITS:-fahrenheit}
       LOG_RETENTION_DAYS: ${LOG_RETENTION_DAYS:-90}
       SCHEDULED_BACKUP_LOCATION: ${SCHEDULED_BACKUP_LOCATION:-}
       DATA_DIR: /app/data
@@ -268,10 +254,6 @@ BOOTSTRAP_ADMIN_USERNAME=$bootstrap_username
 BOOTSTRAP_ADMIN_PASSWORD=$bootstrap_password
 
 PUBLIC_READ_ENABLED=$public_read_enabled
-WEATHER_LOCATION_LABEL=
-WEATHER_LATITUDE=
-WEATHER_LONGITUDE=
-WEATHER_UNITS=fahrenheit
 
 LOG_RETENTION_DAYS=90
 SCHEDULED_BACKUP_LOCATION=

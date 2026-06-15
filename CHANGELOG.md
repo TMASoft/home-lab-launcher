@@ -6,6 +6,13 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.3.8] - 2026-06-15
+
+### Changed
+
+- Removed the built-in weather widget and core weather API. Weather is now expected to be provided by an optional trusted plugin such as `hll-weather`.
+- Docker Compose templates now pass only explicitly supported environment variables into the container instead of forwarding every key from `.env`.
+
 ## [0.3.7] - 2026-06-12
 
 ### Added

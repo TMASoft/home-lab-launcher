@@ -277,7 +277,6 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
   assert.equal(lockedSettings.publicReadEnabled, false);
   await assert.rejects(() => anon.request('/api/services'), /Authentication required/);
   await assert.rejects(() => anon.request('/api/service-health'), /Authentication required/);
-  await assert.rejects(() => anon.request('/api/weather'), /Authentication required/);
 
   // Service icons and app assets access controls check
   const dummyFilename = '0000000000000000000000000000000000000000000000000000000000000000.png';
@@ -330,18 +329,16 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenCategories: ['Ops', 'Media'],
     viewMode: 'list',
     hideMetadata: false,
-    showWeather: true,
-    layoutOrder: ['hero', 'weather', 'services']
+    layoutOrder: ['hero', 'services']
   });
 
   await basic.request('/api/me/preferences/launchpad', {
     method: 'PUT',
     body: {
       value: {
-        layoutOrder: ['services', 'plugin:demo:status', 'hero', 'weather', 'invalid-section', 'services'],
+        layoutOrder: ['services', 'plugin:demo:status', 'hero', 'invalid-section', 'services'],
         viewMode: 'compact',
         hideMetadata: true,
-        showWeather: false,
         hiddenCategories: ['Media']
       }
     }
@@ -351,8 +348,7 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenCategories: ['Media'],
     viewMode: 'compact',
     hideMetadata: true,
-    showWeather: false,
-    layoutOrder: ['services', 'plugin:demo:status', 'hero', 'weather']
+    layoutOrder: ['services', 'plugin:demo:status', 'hero']
   });
 
   await assert.rejects(() => basic.request('/api/me/preferences/adminTheme', { method: 'PUT', body: { value: true } }), /Unsupported preference key/);
@@ -361,27 +357,11 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
   const unlockedSettings = await anon.request('/api/settings/public');
   assert.equal(unlockedSettings.publicReadEnabled, true);
 
-  // Set weather config first via admin
-  await admin.request('/api/weather/settings', {
-    method: 'PUT',
-    body: {
-      latitude: 40.7128,
-      longitude: -74.0060,
-      label: 'New York, NY',
-      units: 'celsius'
-    }
-  });
-
   const anonSettings = await anon.request('/api/settings/public');
-  assert.equal(anonSettings.weather.latitude, undefined);
-  assert.equal(anonSettings.weather.longitude, undefined);
-  assert.equal(anonSettings.weather.label, 'New York, NY');
-  assert.equal(anonSettings.weather.units, 'celsius');
+  assert.equal(anonSettings.weather, undefined);
 
   const adminSettings = await admin.request('/api/settings/public');
-  assert.equal(adminSettings.weather.latitude, 40.7128);
-  assert.equal(adminSettings.weather.longitude, -74.0060);
-  assert.equal(adminSettings.weather.label, 'New York, NY');
+  assert.equal(adminSettings.weather, undefined);
 
   const anonServices = await anon.request('/api/services');
   assert.ok(anonServices.services.length > 0);
@@ -423,7 +403,6 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     ['DELETE', '/api/users/999999'],
     ['PUT', '/api/me/preferences/favorites'],
     ['DELETE', '/api/me/preferences/favorites'],
-    ['PUT', '/api/weather/settings'],
     ['POST', '/api/plugins/reload'],
     ['POST', '/api/plugins/install'],
     ['POST', '/api/plugins/install-local'],

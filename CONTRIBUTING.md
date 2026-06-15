@@ -29,7 +29,7 @@ Set `DATA_DIR=/path/to/dev-data` to use a different development database. The re
 
 ## Code organization
 
-Backend route code is split between `src/server/routes.js` for shared helpers/core wiring and focused files under `src/server/route-modules/` for auth/profile, admin/settings, services/assets, users/preferences, weather, and plugin routes. Shared request coercion lives in `src/server/validation.js`, API response helpers live in `src/server/api-response.js`, and lifecycle-managed recurring work should be registered through `src/server/scheduler.js` rather than raw `setInterval` calls.
+Backend route code is split between `src/server/routes.js` for shared helpers/core wiring and focused files under `src/server/route-modules/` for auth/profile, admin/settings, services/assets, users/preferences, plugin, and preset routes. Shared request coercion lives in `src/server/validation.js`, API response helpers live in `src/server/api-response.js`, and lifecycle-managed recurring work should be registered through `src/server/scheduler.js` rather than raw `setInterval` calls.
 
 Frontend browser code is split into `src/public/core.js` for shared state/API/DOM helpers, `src/public/admin.js` for Admin console rendering/bindings, and `src/public/app.js` for launchpad flow and remaining modal/event wiring. When adding endpoints, prefer shared validators for booleans, URLs, numbers, colors, and bounded text; keep error responses in the `{ "error": "message" }` shape; and add new scheduled work through the scheduler so Admin health can list it and shutdown can stop it cleanly.
 

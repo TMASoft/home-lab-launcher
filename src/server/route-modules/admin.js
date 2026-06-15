@@ -186,7 +186,6 @@ function registerAdminRoutes(router, deps) {
 
 
   router.get('/admin/health', requireRole('admin'), (req, res) => {
-    const weather = getSetting(db, 'weather', {});
     res.json({
       ok: true,
       checkedAt: new Date().toISOString(),
@@ -203,7 +202,6 @@ function registerAdminRoutes(router, deps) {
         active: db.prepare('SELECT COUNT(*) AS count FROM sessions WHERE expires_at > ?').get(Date.now()).count
       },
       plugins: pluginManager.health(),
-      weatherProvider: { provider: 'Open-Meteo', configured: Number.isFinite(Number(weather.latitude)) && Number.isFinite(Number(weather.longitude)), location: weather.label || null },
       scheduledJobs: { core: scheduler ? scheduler.list() : [], plugins: pluginManager.health().jobs }
     });
   });

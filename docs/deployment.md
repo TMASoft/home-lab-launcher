@@ -40,7 +40,7 @@ macOS:
 curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/macos.sh | sh
 ```
 
-The installer prompts for the image tag, optional bundled Nginx reverse proxy, host port, direct-LAN versus existing same-host reverse-proxy binding, browser-facing `APP_BASE_URL`, anonymous read-only access, and first-admin setup mode. Browser first-admin setup remains the recommended default, weather values stay empty, and local plugin installs are disabled unless you edit the generated `.env` later.
+The installer prompts for the image tag, optional bundled Nginx reverse proxy, host port, direct-LAN versus existing same-host reverse-proxy binding, browser-facing `APP_BASE_URL`, anonymous read-only access, and first-admin setup mode. Browser first-admin setup remains the recommended default, and local plugin installs are disabled unless you edit the generated `.env` later.
 
 When bundled Nginx is selected, the generated Compose project includes an `nginx` service and `nginx/default.conf`. Only Nginx is published to the host; the launcher is exposed on the internal Docker network and receives traffic from the proxy. This option is HTTP-only and intended as a simple starter proxy for private LAN use. For shared or internet-exposed deployments, terminate HTTPS with a proper reverse proxy and set `APP_BASE_URL` to the external HTTPS URL.
 
@@ -350,7 +350,7 @@ docker compose build --no-cache launcher
 
 ## Public beta hardening notes
 
-Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, enable TOTP 2FA for Admin accounts, leave weather unset until the operator chooses a location, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings and documentation links for these items.
+Before exposing the launcher outside a private LAN, configure HTTPS at the reverse proxy, set `APP_BASE_URL` to the external HTTPS URL, use a long random `SESSION_SECRET`, remove default bootstrap credentials, enable TOTP 2FA for Admin accounts, and review whether anonymous read-only access should remain enabled. The Admin Overview shows beta readiness warnings and documentation links for these items.
 
 Remote service icons, branding images, URL tests, and service health checks are fetched by the server. This is useful in home labs because operators often monitor private dashboards, but it is also an SSRF boundary: a user who can trigger these fetches can ask the launcher host to contact network locations the user may not be able to reach directly.
 

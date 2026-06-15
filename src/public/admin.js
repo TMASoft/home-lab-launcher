@@ -23,14 +23,13 @@ function onboardingChecklistHtml() {
   const h = state.admin.health || {};
   const c = state.admin.config || {};
   const highWarnings = (o.warnings || []).filter((w) => w.level === 'high');
-  const weatherConfigured = Boolean(h.weatherProvider?.configured);
   const backupLocation = Boolean(c.scheduledBackupLocation);
   const docsBase = 'https://github.com/TMASoft/home-lab-launcher/blob/main';
   return `<div class="settings-card beta-card"><div class="inline-between"><div><h3>Beta readiness checklist</h3><p>Use these links during first-run deployment review before exposing the launcher beyond a private LAN.</p></div><a class="ghost checklist-docs" href="${docsBase}/docs/release-checklist.md" target="_blank" rel="noopener noreferrer">Release checklist</a></div><ul class="checklist">${[
     checklistItem(highWarnings.length === 0, 'Secure bootstrap configuration', highWarnings.length ? 'Resolve high-severity configuration warnings.' : 'No high-severity warnings detected.', `${docsBase}/docs/deployment.md#first-admin-bootstrap`),
     checklistItem(Boolean(c.urls?.appBaseUrlValid), 'Set application base URL', c.urls?.appBaseUrl || 'Base URL is not configured.', `${docsBase}/docs/deployment.md#deployment-patterns`),
     checklistItem((o.counts?.services || 0) > 0, 'Add launchpad services', `${o.counts?.services || 0} services configured.`, `${docsBase}/README.md#launchpad-personalization-and-health`),
-    checklistItem(weatherConfigured, 'Configure weather', h.weatherProvider?.location || 'Weather location is not configured.', `${docsBase}/README.md#configuration`),
+    checklistItem((h.plugins?.installed || 0) > 0, 'Review optional plugins', `${h.plugins?.installed || 0} plugins installed.`, `${docsBase}/docs/plugins.md`),
     checklistItem(backupLocation, 'Plan backups', backupLocation ? c.scheduledBackupLocation : 'Optional backup location is not configured yet.', `${docsBase}/docs/examples/backup-restore.md`),
     checklistItem(!c.security?.publicReadEnabled, 'Review public access', c.security?.publicReadEnabled ? 'Anonymous read-only access is enabled.' : 'Anonymous public read access is disabled.', `${docsBase}/docs/deployment.md#public-beta-hardening-notes`)
   ].join('')}</ul></div>`;
@@ -80,7 +79,6 @@ function adminSettingsHtml() {
 
   return `<div class="admin-stack">
     <div class="settings-card"><h3>General</h3><div class="form-grid"><div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"><small>Used for secure cookies, proxy checks, and beta readiness warnings.</small></div></div></div></div>
-    <div class="settings-card"><div class="inline-between"><h3>Weather</h3><button class="ghost" id="weather-visibility-toggle" type="button" data-enabled="${s.weather?.enabled === false ? 'false' : 'true'}">${s.weather?.enabled === false ? 'Show weather' : 'Hide weather'}</button></div><div class="form-grid"><div class="field"><label>Search ZIP or city</label><div class="inline-controls"><input id="weather-query" placeholder="ZIP code or city"><button class="ghost" id="weather-search" type="button">Search</button></div></div><div id="weather-results" class="result-list"></div><div class="row"><div class="field"><label>Latitude</label><input id="weather-lat" value="${escapeHtml(s.weather?.latitude || '')}"></div><div class="field"><label>Longitude</label><input id="weather-lon" value="${escapeHtml(s.weather?.longitude || '')}"></div></div><div class="row"><div class="field"><label>Weather label</label><input id="weather-label-input" value="${escapeHtml(s.weather?.label || '')}"></div><div class="field"><label>Units</label><select id="weather-units"><option value="fahrenheit" ${s.weather?.units !== 'celsius' ? 'selected' : ''}>Fahrenheit</option><option value="celsius" ${s.weather?.units === 'celsius' ? 'selected' : ''}>Celsius</option></select></div></div></div></div>
     <div class="settings-card"><h3>Access</h3><label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label><p>Review this before exposing the launcher outside your LAN.</p><button class="primary" id="admin-save-settings" type="button">Save settings</button></div>
     <div class="settings-card"><h3>Service preset catalog</h3><p>The preset catalog provides quick access to pre-configured service definitions when adding new services. Native presets are bundled with Home Lab Launcher. Heimdall presets are synced from the <a href="https://github.com/linuxserver/Heimdall-Apps" target="_blank" rel="noopener noreferrer">linuxserver/Heimdall-Apps</a> repository.</p><div class="stats-row">${statCard('Native presets', pc.counts?.local ?? '—')}${statCard('Heimdall presets', pc.counts?.heimdall ?? '—')}${statCard('Total presets', pc.counts?.total ?? '—')}</div><label class="check-line"><input id="admin-remote-presets" type="checkbox" ${pc.enableRemotePresets !== false ? 'checked' : ''}> Enable remote Heimdall presets</label><small>When disabled, only bundled native presets are available and the catalog will not sync from GitHub.</small><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="catalog-update" type="button" ${updateBtnDisabled}>${updateBtnText}</button><span id="catalog-update-status" class="test-result">${syncStatusHtml}</span></div><button class="primary" id="save-preset-settings" type="button" style="margin-top: 10px;">Save preset settings</button></div>
   </div>`;
@@ -163,7 +161,7 @@ function adminSecurityHtml() {
   const warnings = (h.warnings || []).map((w) => `<li><strong>${escapeHtml(w.level)}</strong> — ${escapeHtml(w.message)}</li>`).join('') || '<li>No security/config warnings detected.</li>';
   return `<div class="admin-stack"><div class="settings-card"><h3>Security posture</h3><ul class="warning-list">${warnings}</ul><div class="stats-row">${statCard('Active sessions', h.sessions?.active ?? '—')}${statCard('CSRF', state.csrfToken ? 'enabled' : 'missing')}${statCard('Headers', 'enabled')}${statCard('Cookie secure', c.security?.cookieSecure ? 'yes' : 'no')}</div><p>Security headers, CSRF checks, login throttling, and audit logging are enabled in this build.</p></div>
     <div class="settings-card"><h3>Effective configuration</h3><p><strong>Base URL valid:</strong> ${c.urls?.appBaseUrlValid ? 'yes' : 'no'} · <strong>Protocol:</strong> ${escapeHtml(c.urls?.appBaseUrlProtocol || 'unset')} · <strong>Behind proxy:</strong> ${c.urls?.behindProxy ? 'yes' : 'no'}</p><p><strong>Request:</strong> ${escapeHtml(c.urls?.requestProtocol || '')}://${escapeHtml(c.urls?.requestHost || '')} · <strong>Forwarded proto:</strong> ${escapeHtml(c.urls?.forwardedProto || 'none')}</p><p><strong>Log retention:</strong> ${escapeHtml(c.security?.logRetentionDays || 90)} days · <strong>Scheduled backup location:</strong> ${escapeHtml(c.scheduledBackupLocation || 'not configured')}</p></div>
-    <div class="settings-card"><h3>Plugin and job health</h3><div class="stats-row">${statCard('Plugin failures', h.plugins?.failures?.length ?? 0)}${statCard('Plugin jobs', h.scheduledJobs?.plugins?.length ?? 0)}${statCard('Weather provider', h.weatherProvider?.configured ? 'configured' : 'not configured')}</div><div class="log-list">${(h.scheduledJobs?.plugins || []).map((j) => `<article class="log-item"><strong>${escapeHtml(j.name)}</strong><span>${escapeHtml(j.pluginId)} · every ${Math.round(j.intervalMs / 1000)}s · ${escapeHtml(j.lastStatus)}</span>${j.lastError ? `<code>${escapeHtml(j.lastError)}</code>` : ''}</article>`).join('') || '<p>No scheduled plugin jobs registered.</p>'}</div></div></div>`;
+    <div class="settings-card"><h3>Plugin and job health</h3><div class="stats-row">${statCard('Plugin failures', h.plugins?.failures?.length ?? 0)}${statCard('Plugin jobs', h.scheduledJobs?.plugins?.length ?? 0)}</div><div class="log-list">${(h.scheduledJobs?.plugins || []).map((j) => `<article class="log-item"><strong>${escapeHtml(j.name)}</strong><span>${escapeHtml(j.pluginId)} · every ${Math.round(j.intervalMs / 1000)}s · ${escapeHtml(j.lastStatus)}</span>${j.lastError ? `<code>${escapeHtml(j.lastError)}</code>` : ''}</article>`).join('') || '<p>No scheduled plugin jobs registered.</p>'}</div></div></div>`;
 }
 
 function adminBackupsHtml() {
@@ -350,35 +348,9 @@ function bindLogHandlers() {
 }
 
 function bindSettingsHandlers() {
-  $('weather-visibility-toggle')?.addEventListener('click', () => {
-    const button = $('weather-visibility-toggle');
-    const enabled = button.dataset.enabled !== 'false';
-    const nextEnabled = !enabled;
-    button.disabled = true;
-    api('/api/weather/settings', { method: 'PUT', body: JSON.stringify({ enabled: nextEnabled, label: formValue('weather-label-input'), latitude: formValue('weather-lat'), longitude: formValue('weather-lon'), units: $('weather-units').value }) })
-      .then(async () => {
-        button.dataset.enabled = nextEnabled ? 'true' : 'false';
-        button.textContent = nextEnabled ? 'Hide weather' : 'Show weather';
-        await Promise.all([loadSettings(), nextEnabled ? loadWeather() : Promise.resolve(), loadAdminData()]);
-        render();
-        toast(nextEnabled ? 'Weather shown' : 'Weather hidden');
-      })
-      .catch((error) => toast(error.message))
-      .finally(() => { button.disabled = false; });
-  });
-  $('weather-search')?.addEventListener('click', async () => {
-    const data = await api(`/api/weather/search?q=${encodeURIComponent(formValue('weather-query'))}`);
-    $('weather-results').innerHTML = data.results.map((r, i) => `<button class="ghost" type="button" data-result="${i}">${escapeHtml(r.label)}</button>`).join(' ');
-    $('weather-results').onclick = (e) => {
-      const b = e.target.closest('[data-result]'); if (!b) return;
-      const r = data.results[Number(b.dataset.result)];
-      $('weather-lat').value = r.latitude; $('weather-lon').value = r.longitude; $('weather-label-input').value = r.label;
-    };
-  });
   $('admin-save-settings')?.addEventListener('click', async () => {
     await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ app_name: formValue('admin-app-name'), app_base_url: formValue('admin-base-url'), public_read_enabled: $('admin-public-read').checked }) });
-    await api('/api/weather/settings', { method: 'PUT', body: JSON.stringify({ enabled: $('weather-visibility-toggle')?.dataset.enabled !== 'false', label: formValue('weather-label-input'), latitude: formValue('weather-lat'), longitude: formValue('weather-lon'), units: $('weather-units').value }) });
-    await Promise.all([loadSettings(), loadWeather(), loadAdminData()]);
+    await Promise.all([loadSettings(), loadAdminData()]);
     render(); toast('Settings saved');
   });
   $('save-preset-settings')?.addEventListener('click', async () => {
@@ -464,7 +436,7 @@ function startSyncStatusPolling() {
         catalogSyncPollInterval = null;
 
         // Reload data and re-render the admin console
-        await Promise.all([loadSettings(), loadWeather(), loadAdminData()]);
+        await Promise.all([loadSettings(), loadAdminData()]);
         render();
       }
     } catch (err) {

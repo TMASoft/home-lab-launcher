@@ -4,9 +4,9 @@
 
 # Home Lab Launcher
 
-> A self-hosted, role-aware home portal for service links, weather, user favorites, admin settings, and trusted plugin-powered dashboard sections.
+> A self-hosted, role-aware home portal for service links, user favorites, admin settings, and trusted plugin-powered dashboard sections.
 
-Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple—service cards and weather—but is designed to grow through installable plugins such as RSS/news, status widgets, inventory panels, or custom household dashboards.
+Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple with service cards and is designed to grow through installable plugins such as weather, RSS/news, status widgets, inventory panels, or custom household dashboards.
 
 ![Status](https://img.shields.io/badge/status-public%20beta%20prep-ffd166?style=flat-square)
 ![Node](https://img.shields.io/badge/node-20%20%7C%2022-79f2c0?style=flat-square)
@@ -20,7 +20,6 @@ Home Lab Launcher is a small Docker-first web app for turning a home server, lab
 - **Personal favorites and layout** — logged-in users get saved favorites, favorite ordering, card/list/compact layout preferences, and hidden categories; anonymous users get browser-local preferences.
 - **Appearance and theme presets** — Admins can customize global branding, hero copy, colors, fonts, density, radius, favicons, and brand images, then export/import safe shareable theme JSON.
 - **Admin console** — manage users, services, app settings, health, effective config, backups/restores, plugins, and audit logs.
-- **Weather widget** — configurable by ZIP/city search or manual coordinates; refreshes every 5 minutes.
 - **Trusted plugin system** — install pinned plugin versions from GitHub releases/tags or plugin subdirectory tree URLs, review permissions/compatibility, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
 - **HTTP or HTTPS** — run directly over HTTP or place behind Nginx, Caddy, Traefik, or another reverse proxy.
 - **Portable by default** — no baked-in domain names or home-lab-specific assumptions.
@@ -32,7 +31,6 @@ The main page includes:
 
 - a service card grid,
 - quick favorites,
-- current weather,
 - a signed-in user menu,
 - optional plugin sections that can be moved independently in the dashboard layout, and
 - an admin console visible only to Admins.
@@ -228,14 +226,14 @@ Admins can choose whether anonymous visitors may view the portal. Disable anonym
 Logged-in Admins see an **Admin** link in the top navigation. The console includes:
 
 - **Overview** — service/user/plugin/log counts, runtime information, configuration warnings, and admin notices.
-- **Settings** — app name, base URL, public read-only access, and weather settings including global weather visibility.
+- **Settings** — app name, base URL, and public read-only access.
 - **Appearance** — branding, hero visibility/content, app assets, color/font/density controls, live preview, default restore, and theme preset import/export.
 - **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
 - **Users** — create users, change roles, reset passwords, reset user 2FA, and delete users.
-- **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, weather-provider status, and scheduled job status.
+- **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, and scheduled job status.
 - **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record a preferred backup path/operator note.
 - **Plugins** — discover GitHub versions, install pinned plugin releases/tags from repository roots or plugin subdirectory tree URLs, enable/disable, and remove plugins.
-- **Logs** — filtered audit log entries for login, settings, user, service, weather, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
+- **Logs** — filtered audit log entries for login, settings, user, service, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
 
 Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
 
@@ -259,9 +257,6 @@ Most runtime settings are environment variables on first boot, then editable in 
 | `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username; omit for browser first-admin setup | empty |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password; omit for browser first-admin setup | empty |
 | `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `false` |
-| `WEATHER_LOCATION_LABEL` | Initial weather label; leave empty until configured in Admin settings. The release default intentionally avoids personal or maintainer-specific locations | empty |
-| `WEATHER_LATITUDE` / `WEATHER_LONGITUDE` | Initial weather coordinates; leave empty until configured in Admin settings or for neutral demo installs | empty |
-| `WEATHER_UNITS` | `fahrenheit` or `celsius` | `fahrenheit` |
 | `LOG_RETENTION_DAYS` | Initial audit-log retention window | `90` |
 | `SCHEDULED_BACKUP_LOCATION` | Optional operator note for desired backup destination | empty |
 | `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` | Which roles may make arbitrary server-side fetches to private, loopback, link-local, or reserved addresses through service health checks and remote image downloads. Use `admin-editor`, `admin`, or `disabled` | `admin-editor` |
@@ -371,7 +366,7 @@ This project is in early development. The core app is functional, but plugin API
 
 ## Screenshots
 
-Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`: launchpad, service edit, appearance customization, admin overview, and mobile view. Use `npm run dev:seed` and leave weather unset or use neutral example coordinates; do not capture private hosts, personal weather locations, local paths, or tokens.
+Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`: launchpad, service edit, appearance customization, admin overview, and mobile view. Use `npm run dev:seed`; do not capture private hosts, personal plugin locations, local paths, or tokens.
 
 ## License
 

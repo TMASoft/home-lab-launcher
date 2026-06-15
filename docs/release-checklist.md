@@ -6,7 +6,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 
 - Confirm `package.json` has the intended version and that `CHANGELOG.md` has a release entry or an explicit Unreleased section for the tag.
 - Confirm the release tag will publish `ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z` through `.github/workflows/docker-publish.yml`.
-- Confirm public docs use neutral examples and do not include private domains, tokens, local filesystem paths, personal weather locations, certificates, or `.env` values.
+- Confirm public docs use neutral examples and do not include private domains, tokens, local filesystem paths, personal plugin configuration, certificates, or `.env` values.
 - Confirm `ROADMAP.md` and `AGENTS.md` remain local-only and excluded from Docker build context.
 
 ## 2. Back up data
@@ -24,7 +24,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 - Set `APP_BASE_URL` to the exact browser-facing URL.
 - Use `HOST_BIND_IP=127.0.0.1` and `TRUST_PROXY=loopback` when publishing only to a same-host reverse proxy.
 - Keep standard Docker bridge networking as the supported default; if a constrained Docker/LXC host requires host networking, use a local-only fallback with `HOST=127.0.0.1` behind a same-host reverse proxy.
-- Leave weather location values empty until an operator configures them, or use neutral demo values only for screenshots/tests.
+- Keep optional plugin configuration neutral for screenshots/tests.
 - Review public read-only access.
 - Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` or `disabled` for shared/public demos; keep `admin-editor` only when Editors are trusted to probe private network URLs.
 - Disable local plugin installs in production unless intentionally needed.
@@ -63,9 +63,6 @@ SESSION_SECRET=ci-session-secret-for-compose-validation-only \
 BOOTSTRAP_ADMIN_USERNAME= \
 BOOTSTRAP_ADMIN_PASSWORD= \
 PUBLIC_READ_ENABLED=false \
-WEATHER_LOCATION_LABEL= \
-WEATHER_LATITUDE= \
-WEATHER_LONGITUDE= \
 ENABLE_LOCAL_PLUGIN_INSTALL=false \
 LOCAL_PLUGIN_HOST_DIR=./local-plugins \
 docker compose config

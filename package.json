@@ -1,8 +1,8 @@
 {
   "name": "home-lab-launcher",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "private": true,
-  "description": "Configurable home lab portal/launcher with roles, weather, and plugins.",
+  "description": "Configurable home lab portal/launcher with roles and trusted plugins.",
   "license": "MIT",
   "author": "TMASoft",
   "homepage": "https://github.com/TMASoft/home-lab-launcher#readme",

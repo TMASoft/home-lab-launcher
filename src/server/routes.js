@@ -6,12 +6,11 @@ const packageJson = require('../../package.json');
 const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
 const { guardedFetch, serverFetchConfig, parsePrivateNetworkAccess } = require('./server-fetch');
 const { apiResponseMiddleware } = require('./api-response');
-const { servicePayload, settingsPayload, userPayload, preferencePayload, normalizeLaunchpad, weatherSettingsPayload, pluginInstallPayload } = require('./validation');
+const { servicePayload, settingsPayload, userPayload, preferencePayload, normalizeLaunchpad, pluginInstallPayload } = require('./validation');
 const { registerAuthRoutes } = require('./route-modules/auth');
 const { registerAdminRoutes } = require('./route-modules/admin');
 const { registerServiceRoutes } = require('./route-modules/services');
 const { registerUserRoutes } = require('./route-modules/users');
-const { registerWeatherRoutes } = require('./route-modules/weather');
 const { registerPluginRoutes } = require('./route-modules/plugins');
 const { registerPresetRoutes } = require('./route-modules/presets');
 const { startPresetCatalogScheduler } = require('./preset-catalog');
@@ -62,28 +61,13 @@ function logEvent(db, req, action, details = {}, level = 'info') {
 }
 
 function publicSettings(db, req) {
-  const rawWeather = getSetting(db, 'weather', null);
   const repositoryUrl = packageJson.homepage ? String(packageJson.homepage).replace(/#.*$/, '') : '';
-  let weather = null;
-  if (rawWeather) {
-    const isAdmin = req?.session?.user?.role === 'admin';
-    if (isAdmin) {
-      weather = rawWeather;
-    } else {
-      weather = {
-        enabled: rawWeather.enabled !== false,
-        label: rawWeather.label || '',
-        units: rawWeather.units || 'fahrenheit'
-      };
-    }
-  }
   return {
     appName: getSetting(db, 'app_name', 'Home Lab Launcher'),
     version: packageJson.version,
     repositoryUrl,
     appBaseUrl: getSetting(db, 'app_base_url', ''),
     publicReadEnabled: getSetting(db, 'public_read_enabled', true),
-    weather,
     appearance: getAppearance(db)
   };
 }
@@ -658,7 +642,6 @@ function effectiveConfig(db, req, { dataDir, pluginDir }) {
       publicReadEnabled: settings.publicReadEnabled,
       logRetentionDays: getSetting(db, 'log_retention_days', 90)
     },
-    weather: settings.weather,
     scheduledBackupLocation: getSetting(db, 'scheduled_backup_location', '')
   };
 }
@@ -763,8 +746,6 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   registerServiceRoutes(router, { db, dataDir, requireRole, canRead, logEvent, allServices, serviceFromRow, serviceSelectSql, serviceIconDir, appAssetDir, slug, uniqueServiceId, normalizeServiceIcon, validateUrl, guardedFetch, healthStatusFrom, checkServiceHealth, servicePayload, normalizeTags });
 
   registerUserRoutes(router, { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload, normalizeLaunchpad });
-
-  registerWeatherRoutes(router, { db, requireRole, canRead, logEvent, weatherSettingsPayload });
 
   registerPluginRoutes(router, { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload });
 

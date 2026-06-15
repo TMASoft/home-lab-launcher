@@ -230,13 +230,6 @@ function setSetting(db, key, value) {
   `).run(key, JSON.stringify(value));
 }
 
-function envNumber(name, fallback = null) {
-  const raw = process.env[name];
-  if (raw === undefined || raw === '') return fallback;
-  const value = Number(raw);
-  return Number.isFinite(value) ? value : fallback;
-}
-
 function seed(db) {
   const serviceCount = db.prepare('SELECT COUNT(*) AS count FROM services').get().count;
   if (serviceCount === 0) {
@@ -254,14 +247,6 @@ function seed(db) {
     app_name: process.env.APP_NAME || 'Home Lab Launcher',
     app_base_url: process.env.APP_BASE_URL || 'http://localhost:8080',
     public_read_enabled: process.env.PUBLIC_READ_ENABLED === 'true',
-    weather: {
-      enabled: true,
-      label: process.env.WEATHER_LOCATION_LABEL || '',
-      latitude: envNumber('WEATHER_LATITUDE'),
-      longitude: envNumber('WEATHER_LONGITUDE'),
-      units: process.env.WEATHER_UNITS || 'fahrenheit',
-      resolvedAt: null
-    },
     log_retention_days: Number(process.env.LOG_RETENTION_DAYS || 90),
     scheduled_backup_location: process.env.SCHEDULED_BACKUP_LOCATION || ''
   };

@@ -4,13 +4,12 @@ async function init() {
   if (boot.needsBootstrap) { showBootstrapModal(); return; }
   try {
     await loadSettings();
-    await Promise.all([loadServices(), loadPreferences(), loadWeather(), loadPluginSections()]);
+    await Promise.all([loadServices(), loadPreferences(), loadPluginSections()]);
   } catch (error) {
     showAccessError(error);
   }
   render();
   if (isAdmin()) await loadAdminData();
-  setInterval(loadWeather, 5 * 60 * 1000);
 }
 
 async function loadSession() {
@@ -38,7 +37,6 @@ async function loadPreferences() {
   if (state.preferences.hideMetadata === undefined) {
     state.preferences.hideMetadata = !!state.preferences.hideHostnames;
   }
-  if (state.preferences.showWeather === undefined) state.preferences.showWeather = true;
 }
 async function saveFavorites() {
   if (state.user) await api('/api/me/preferences/favorites', { method: 'PUT', body: JSON.stringify({ value: state.favorites }) });
@@ -78,80 +76,6 @@ async function loadAdminData() {
   renderAdminConsole();
 }
 
-async function loadWeather() {
-  const card = $('weather-card');
-  if (state.settings?.weather?.enabled === false) return;
-  try {
-    const data = await api('/api/weather');
-    const current = data.weather.current || {};
-    const daily = data.weather.daily || {};
-    const code = weatherCodes[current.weather_code] || ['Conditions unavailable', '🌤️', '🌙'];
-    const unit = data.location.units === 'celsius' ? 'C' : 'F';
-    card?.classList.remove('is-error');
-    const temp = Number(current.temperature_2m);
-    const feelsLike = Number(current.apparent_temperature);
-    const high = Number((daily.temperature_2m_max || [])[0]);
-    const low = Number((daily.temperature_2m_min || [])[0]);
-    $('weather-location').textContent = data.location.label || 'Weather';
-    $('weather-temp').textContent = Number.isFinite(temp) ? `${Math.round(temp)}°` : '—°';
-    $('weather-summary').textContent = `${code[0]} · Feels like ${Number.isFinite(feelsLike) ? Math.round(feelsLike) : '—'}°${unit}`;
-    $('weather-meta').textContent = `H ${Number.isFinite(high) ? Math.round(high) : '—'}° · L ${Number.isFinite(low) ? Math.round(low) : '—'}° · Updated ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
-    $('weather-icon').textContent = Number(current.is_day) === 1 ? code[1] : code[2];
-    renderWeatherForecasts(data.weather);
-  } catch (error) {
-    card?.classList.add('is-error');
-    $('weather-temp').textContent = '—°';
-    $('weather-summary').textContent = 'Weather unavailable';
-    $('weather-meta').textContent = `${error.message}. Retrying automatically every 5 minutes.`;
-    $('weather-icon').textContent = '⚠️';
-    $('weather-hourly').innerHTML = '';
-    $('weather-daily').innerHTML = '';
-  }
-}
-
-function renderWeatherForecasts(weather) {
-  const hourly = weather.hourly || {};
-  const daily = weather.daily || {};
-  const now = Date.now();
-  const hourlyItems = (hourly.time || [])
-    .map((time, index) => ({
-      time: new Date(time).getTime(),
-      label: hourFormatter.format(new Date(time)),
-      temp: Number((hourly.temperature_2m || [])[index]),
-      code: (hourly.weather_code || [])[index],
-      precip: Number((hourly.precipitation_probability || [])[index]),
-      isDay: Number((hourly.is_day || [])[index])
-    }))
-    .filter((item) => item.time >= now - 60 * 60 * 1000)
-    .slice(0, 8);
-  $('weather-hourly').innerHTML = hourlyItems.map(weatherHourlyItemHtml).join('');
-
-  const dailyItems = (daily.time || []).slice(0, 7).map((time, index) => ({
-    label: index === 0 ? 'Today' : dayFormatter.format(new Date(`${time}T12:00:00`)),
-    high: Number((daily.temperature_2m_max || [])[index]),
-    low: Number((daily.temperature_2m_min || [])[index]),
-    code: (daily.weather_code || [])[index],
-    precip: Number((daily.precipitation_probability_max || [])[index])
-  }));
-  $('weather-daily').innerHTML = dailyItems.map(weatherDailyItemHtml).join('');
-}
-
-function weatherHourlyItemHtml(item) {
-  const code = weatherCodes[item.code] || ['Forecast', '🌤️', '🌙'];
-  const icon = item.isDay === 0 ? code[2] : code[1];
-  const temp = Number.isFinite(item.temp) ? `${Math.round(item.temp)}°` : '—°';
-  const precip = Number.isFinite(item.precip) ? `${Math.round(item.precip)}%` : '—';
-  return `<article class="forecast-chip" title="${escapeHtml(code[0])}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(icon)} ${escapeHtml(temp)}</strong><small>${escapeHtml(precip)}</small></article>`;
-}
-
-function weatherDailyItemHtml(item) {
-  const code = weatherCodes[item.code] || ['Forecast', '🌤️', '🌙'];
-  const high = Number.isFinite(item.high) ? Math.round(item.high) : '—';
-  const low = Number.isFinite(item.low) ? Math.round(item.low) : '—';
-  const precip = Number.isFinite(item.precip) ? `${Math.round(item.precip)}%` : '—';
-  return `<article class="forecast-chip daily-chip" title="${escapeHtml(code[0])}"><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(code[1])} ${escapeHtml(high)}°/${escapeHtml(low)}°</strong><small>${escapeHtml(precip)}</small></article>`;
-}
-
 function render() {
   const sessionText = state.user ? `${state.user.username} · ${roleLabel(state.user.role)}` : 'Anonymous';
   $('session-button').textContent = sessionText;
@@ -162,9 +86,6 @@ function render() {
   $('dropdown-admin-link').hidden = !isAdmin();
   $('admin-panel').hidden = !isAdmin();
   $('hero-card').hidden = state.settings?.appearance?.hero?.enabled === false;
-  $('weather-card').hidden = state.settings?.weather?.enabled === false || (Boolean(state.user) && state.preferences.showWeather === false);
-  $('weather-toggle-button').hidden = state.settings?.weather?.enabled === false;
-  $('weather-toggle-button').textContent = state.preferences.showWeather === false ? 'Show weather' : 'Hide weather';
   $('add-service-button').hidden = !canEditServices();
   $('settings-button').hidden = !isAdmin();
   $('users-button').hidden = !isAdmin();
@@ -516,14 +437,6 @@ $('user-dropdown').addEventListener('click', async (event) => {
   const action = event.target.closest('[data-profile-action]')?.dataset.profileAction;
   if (action === 'profile') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); showProfileModal(); }
   if (action === 'layout') { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); await setLayoutEditing(!state.layoutEditing); }
-  if (action === 'weather') {
-    $('user-dropdown').hidden = true;
-    $('session-button').setAttribute('aria-expanded', 'false');
-    state.preferences.showWeather = state.preferences.showWeather === false;
-    await saveLaunchpadPreferences();
-    render();
-    toast(state.preferences.showWeather === false ? 'Weather hidden' : 'Weather shown');
-  }
   if (action === 'logout') await logout();
 });
 document.addEventListener('click', (event) => { if (!$('user-menu').contains(event.target)) { $('user-dropdown').hidden = true; $('session-button').setAttribute('aria-expanded', 'false'); } });
@@ -886,7 +799,7 @@ async function showProfileModal() {
     try {
       if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
       else localStorage.removeItem('hll.launchpad');
-      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, showWeather: true };
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false };
       closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
     } catch (error) {
       showError(error.message);

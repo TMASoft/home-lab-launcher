@@ -5,7 +5,7 @@ const path = require('path');
 
 test('frontend shell exposes expected landmarks and controls', () => {
   const html = fs.readFileSync(path.join(__dirname, '..', 'src/public/index.html'), 'utf8');
-  for (const id of ['brand-name', 'brand-subtitle', 'hero-heading', 'layout-root', 'layout-toolbar', 'site-note', 'weather-hourly', 'weather-daily', 'service-search', 'service-grid', 'admin-panel', 'modal', 'toast']) {
+  for (const id of ['brand-name', 'brand-subtitle', 'hero-heading', 'layout-root', 'layout-toolbar', 'site-note', 'service-search', 'service-grid', 'admin-panel', 'modal', 'toast']) {
     assert.match(html, new RegExp(`id="${id}"`));
   }
   assert.match(html, /role="tablist"/);
@@ -19,7 +19,7 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
     fs.readFileSync(path.join(__dirname, '..', 'src/public/admin.js'), 'utf8'),
     fs.readFileSync(path.join(__dirname, '..', 'src/public/app.js'), 'utf8')
   ].join('\n');
-  for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'renderWeatherForecasts(', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url', 'data-toggle-metadata', 'showServiceHostnames()', 'showServiceTags()', '/api/admin/presets/import', 'svc-preset-id']) {
+  for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url', 'data-toggle-metadata', 'showServiceHostnames()', 'showServiceTags()', '/api/admin/presets/import', 'svc-preset-id']) {
     assert.ok(js.includes(token), `missing ${token}`);
   }
   const accessibilityTokens = [

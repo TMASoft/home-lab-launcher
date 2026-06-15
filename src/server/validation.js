@@ -98,8 +98,7 @@ function normalizeLaunchpad(value) {
       hiddenCategories: [],
       viewMode: 'cards',
       hideMetadata: false,
-      showWeather: true,
-      layoutOrder: ['hero', 'weather', 'services']
+      layoutOrder: ['hero', 'services']
     };
   }
   const out = {};
@@ -131,13 +130,7 @@ function normalizeLaunchpad(value) {
     out.hideMetadata = false;
   }
 
-  if (Object.prototype.hasOwnProperty.call(value, 'showWeather')) {
-    out.showWeather = value.showWeather !== false;
-  } else {
-    out.showWeather = true;
-  }
-
-  const validSections = ['hero', 'weather', 'services'];
+  const validSections = ['hero', 'services'];
   const isValidSection = (item) => validSections.includes(item) || /^plugin:[a-z0-9][a-z0-9_.:-]{0,119}$/i.test(item);
   let layoutOrder = validSections;
   if (Object.prototype.hasOwnProperty.call(value, 'layoutOrder')) {
@@ -174,36 +167,6 @@ function preferencePayload(key, value) {
   return normalizeLaunchpad(value);
 }
 
-function coordinate(value, label, { min, max }) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n < min || n > max) throw new Error(`Valid ${label} is required`);
-  return n;
-}
-
-function weatherSettingsPayload(input = {}) {
-  const enabled = input.enabled !== false;
-  if (!enabled && (input.latitude === undefined || input.latitude === null || input.latitude === '' || input.longitude === undefined || input.longitude === null || input.longitude === '')) {
-    return {
-      enabled,
-      label: cleanText(input.label, '', 120),
-      latitude: null,
-      longitude: null,
-      units: input.units === 'celsius' ? 'celsius' : 'fahrenheit',
-      resolvedAt: new Date().toISOString()
-    };
-  }
-  const latitude = coordinate(input.latitude, 'latitude', { min: -90, max: 90 });
-  const longitude = coordinate(input.longitude, 'longitude', { min: -180, max: 180 });
-  return {
-    enabled,
-    label: cleanText(input.label, `${latitude}, ${longitude}`, 120),
-    latitude,
-    longitude,
-    units: input.units === 'celsius' ? 'celsius' : 'fahrenheit',
-    resolvedAt: new Date().toISOString()
-  };
-}
-
 function sha256(value) {
   const raw = cleanText(value, '', 64).toLowerCase();
   if (!raw) return '';
@@ -230,4 +193,4 @@ function settingsPayload(input = {}) {
   return out;
 }
 
-module.exports = { cleanText, bool, intInRange, httpUrl, optionalHttpUrl, color, stringList, slugId, servicePayload, settingsPayload, userPayload, preferencePayload, normalizeLaunchpad, weatherSettingsPayload, pluginInstallPayload, HEX_COLOR_RE };
+module.exports = { cleanText, bool, intInRange, httpUrl, optionalHttpUrl, color, stringList, slugId, servicePayload, settingsPayload, userPayload, preferencePayload, normalizeLaunchpad, pluginInstallPayload, HEX_COLOR_RE };

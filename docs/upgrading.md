@@ -22,7 +22,7 @@ For source checkouts, use `docker compose build --pull && docker compose up -d` 
 4. Confirm `.env` still contains a strong `SESSION_SECRET` and correct `APP_BASE_URL`.
 5. Confirm bootstrap credentials are empty unless you are intentionally doing a first-run non-interactive setup.
 6. Confirm database backup handling protects user TOTP secrets before enabling 2FA on upgraded accounts.
-7. Leave weather defaults empty unless the deployment intentionally uses a neutral demo location.
+7. Review installed plugins after upgrade and remove any that are no longer needed.
 
 ## After upgrading
 

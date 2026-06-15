@@ -30,7 +30,7 @@ Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intend
 | `DELETE` | `/api/me/sessions/:sid` | Session | Revokes one active session. |
 | `DELETE` | `/api/me/sessions` | Session | Revokes other sessions for the current user. |
 
-## Public settings, services, assets, and weather
+## Public settings, services, and assets
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
@@ -39,7 +39,6 @@ Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intend
 | `GET` | `/api/service-health` | Public if enabled, otherwise session | Lists service health rows. |
 | `GET` | `/api/service-icons/:filename` | Public/Session | Serves stored service icons. Requires launcher read access when public read is disabled. |
 | `GET` | `/api/app-assets/:filename` | Public | Serves stored branding assets. Treat branding assets as public. |
-| `GET` | `/api/weather` | Public if enabled, otherwise session | Returns configured weather data or disabled/unconfigured status. |
 
 ## Service management
 
@@ -76,7 +75,7 @@ Admin-only routes.
 | --- | --- | --- |
 | `PATCH` | `/api/settings` | Update app settings such as app name, base URL, public read, and backup note. |
 | `GET` | `/api/admin/overview` | Counts, runtime summary, warnings, notices, and readiness information. |
-| `GET` | `/api/admin/health` | Runtime, config, plugin, weather, and scheduled-job health. |
+| `GET` | `/api/admin/health` | Runtime, config, plugin, and scheduled-job health. |
 | `GET` | `/api/admin/config` | Effective non-secret configuration diagnostics. |
 | `GET` | `/api/admin/notices` | Current Admin notices. |
 | `GET` | `/api/admin/logs` | Filtered audit logs. |
@@ -116,13 +115,6 @@ Admin-only routes.
 | `POST` | `/api/users` | Create a user. |
 | `PATCH` | `/api/users/:id` | Change username, role, password, or reset the user's TOTP 2FA state with `resetTotp`. |
 | `DELETE` | `/api/users/:id` | Delete a user. |
-
-## Weather settings
-
-| Method | Path | Auth | Purpose |
-| --- | --- | --- | --- |
-| `GET` | `/api/weather/search` | Admin | Search geocoding candidates for Admin weather setup. |
-| `PUT` | `/api/weather/settings` | Admin | Save weather visibility, label, coordinates, and units. |
 
 ## Preset catalog
 
