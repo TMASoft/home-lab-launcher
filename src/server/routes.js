@@ -481,6 +481,20 @@ async function checkServiceHealth(db, service) {
   return db.prepare('SELECT status, status_code AS statusCode, response_ms AS responseMs, checked_at AS checkedAt, next_check_at AS nextCheckAt, error FROM service_health WHERE service_id = ?').get(service.id);
 }
 
+function logServiceHealthFailure(db, req, service, health, source) {
+  if (health.status !== 'down') return;
+  logEvent(db, req, 'service.health_check_failed', {
+    id: service.id,
+    name: service.name,
+    source,
+    url: service.healthCheckUrl || service.url,
+    status: health.status,
+    statusCode: health.statusCode,
+    responseMs: health.responseMs,
+    error: health.error || null
+  }, 'warn');
+}
+
 function servicesDueForHealthCheck(db) {
   return db.prepare(`${serviceSelectSql("WHERE s.enabled = 1 AND s.health_check_enabled = 1 AND (h.next_check_at IS NULL OR h.next_check_at <= CURRENT_TIMESTAMP)")}`).all().map(serviceFromRow);
 }
@@ -488,7 +502,9 @@ function servicesDueForHealthCheck(db) {
 function startServiceHealthScheduler(db, scheduler) {
   const run = async () => {
     for (const service of servicesDueForHealthCheck(db)) {
-      await checkServiceHealth(db, service).catch((error) => console.error(`Health check failed for ${service.id}:`, error));
+      await checkServiceHealth(db, service)
+        .then((health) => logServiceHealthFailure(db, {}, service, health, 'scheduled'))
+        .catch((error) => console.error(`Health check failed for ${service.id}:`, error));
     }
   };
   if (scheduler) {
@@ -743,7 +759,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
 
   registerAdminRoutes(router, { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, DEFAULT_APPEARANCE, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler });
 
-  registerServiceRoutes(router, { db, dataDir, requireRole, canRead, logEvent, allServices, serviceFromRow, serviceSelectSql, serviceIconDir, appAssetDir, slug, uniqueServiceId, normalizeServiceIcon, validateUrl, guardedFetch, healthStatusFrom, checkServiceHealth, servicePayload, normalizeTags });
+  registerServiceRoutes(router, { db, dataDir, requireRole, canRead, logEvent, allServices, serviceFromRow, serviceSelectSql, serviceIconDir, appAssetDir, slug, uniqueServiceId, normalizeServiceIcon, validateUrl, guardedFetch, healthStatusFrom, checkServiceHealth, logServiceHealthFailure, servicePayload, normalizeTags });
 
   registerUserRoutes(router, { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload, normalizeLaunchpad });
 

@@ -2,7 +2,7 @@ const express = require('express');
 const path = require('path');
 
 function registerServiceRoutes(router, deps) {
-  const { db, dataDir, requireRole, canRead, logEvent, allServices, serviceFromRow, serviceSelectSql, serviceIconDir, appAssetDir, slug, uniqueServiceId, normalizeServiceIcon, validateUrl, guardedFetch, healthStatusFrom, checkServiceHealth, servicePayload } = deps;
+  const { db, dataDir, requireRole, canRead, logEvent, allServices, serviceFromRow, serviceSelectSql, serviceIconDir, appAssetDir, slug, uniqueServiceId, normalizeServiceIcon, validateUrl, guardedFetch, healthStatusFrom, checkServiceHealth, logServiceHealthFailure, servicePayload } = deps;
   router.get('/service-icons/:filename', (req, res) => {
     if (!canRead(req, db)) return res.status(401).end();
     const filename = path.basename(req.params.filename || '');
@@ -121,6 +121,7 @@ function registerServiceRoutes(router, deps) {
     try {
       const health = await checkServiceHealth(db, serviceFromRow(row));
       logEvent(db, req, 'service.health_checked', { id: req.params.id, status: health.status, statusCode: health.statusCode });
+      logServiceHealthFailure(db, req, serviceFromRow(row), health, 'manual');
       res.json({ health });
     } catch (error) {
       res.status(400).json({ error: error.message });

@@ -6,6 +6,12 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.3.9] - 2026-06-15
+
+### Fixed
+
+- Failed service launchpad health checks now write warning entries to the Admin logs.
+
 ## [0.3.8] - 2026-06-15
 
 ### Changed

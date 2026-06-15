@@ -582,6 +582,14 @@ test('manual health checks persist down status for unresolved hosts', async (t) 
   const service = services.services.find((item) => item.id === 'bad-health-service');
   assert.equal(service.health.status, 'down');
   assert.match(service.health.error, /could not be resolved/i);
+
+  const logs = await admin.request('/api/admin/logs?limit=10');
+  const failureLog = logs.logs.find((entry) => entry.action === 'service.health_check_failed');
+  assert.ok(failureLog);
+  assert.equal(failureLog.level, 'warn');
+  assert.equal(failureLog.details.id, 'bad-health-service');
+  assert.equal(failureLog.details.source, 'manual');
+  assert.match(failureLog.details.error, /could not be resolved/i);
 });
 
 test('service creation stores remote SVG icons locally', async (t) => {
