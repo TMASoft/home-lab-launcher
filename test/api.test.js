@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const Database = require('better-sqlite3');
 const { startServer, Client } = require('./helpers');
 
 test('core API supports auth, services, settings, logs, and plugin health', async (t) => {
@@ -14,6 +15,9 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   assert.equal(typeof healthz.version, 'string');
   assert.equal(typeof healthz.uptimeSeconds, 'number');
   assert.deepEqual(Object.keys(healthz).sort(), ['ok', 'uptimeSeconds', 'version']);
+  const openapi = await anon.request('/api/openapi.json');
+  assert.equal(openapi.openapi, '3.1.0');
+  assert.ok(openapi.paths['/services']);
   const publicSettings = await anon.request('/api/settings/public');
   assert.equal(publicSettings.publicReadEnabled, true);
 
@@ -627,4 +631,153 @@ test('service creation stores remote SVG icons locally', async (t) => {
   const response = await fetch(`${server.baseUrl}${created.service.icon}`, { headers: { Cookie: admin.cookie } });
   assert.equal(response.status, 200);
   assert.match(response.headers.get('content-type') || '', /image\/svg\+xml/);
+});
+
+test('account security changes revalidate and revoke stale sessions', async (t) => {
+  const server = startServer({ port: 19109 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  await assert.rejects(
+    () => admin.request(`/api/users/${1}`, { method: 'PATCH', body: { username: 'admin', role: 'user' } }),
+    /At least one admin account is required/
+  );
+
+  await admin.request('/api/users', { method: 'POST', body: { username: 'target-admin', password: 'target-admin-password', role: 'admin' } });
+  await admin.request('/api/users', { method: 'POST', body: { username: 'target-user', password: 'target-user-password', role: 'user' } });
+  const users = await admin.request('/api/users');
+  const targetAdmin = users.users.find((user) => user.username === 'target-admin');
+  const targetUser = users.users.find((user) => user.username === 'target-user');
+
+  const staleAdmin = new Client(server.baseUrl);
+  await staleAdmin.request('/api/auth/login', { method: 'POST', body: { username: 'target-admin', password: 'target-admin-password' } });
+  await admin.request(`/api/users/${targetAdmin.id}`, { method: 'PATCH', body: { username: 'target-admin', role: 'user' } });
+  const staleSession = await staleAdmin.request('/api/auth/session');
+  assert.equal(staleSession.user, null);
+  await assert.rejects(() => staleAdmin.request('/api/users'), /Authentication required/);
+
+  const targetUserA = new Client(server.baseUrl);
+  const targetUserB = new Client(server.baseUrl);
+  await targetUserA.request('/api/auth/login', { method: 'POST', body: { username: 'target-user', password: 'target-user-password' } });
+  await targetUserB.request('/api/auth/login', { method: 'POST', body: { username: 'target-user', password: 'target-user-password' } });
+
+  const passwordReset = await admin.request(`/api/users/${targetUser.id}`, {
+    method: 'PATCH',
+    body: { username: 'target-user', role: 'user', password: 'target-user-password-2' }
+  });
+  assert.ok(passwordReset.revokedSessions >= 2);
+  await assert.rejects(() => targetUserA.request('/api/me'), /Authentication required/);
+  await assert.rejects(() => targetUserB.request('/api/me'), /Authentication required/);
+
+  const targetUserC = new Client(server.baseUrl);
+  const targetUserD = new Client(server.baseUrl);
+  await targetUserC.request('/api/auth/login', { method: 'POST', body: { username: 'target-user', password: 'target-user-password-2' } });
+  await targetUserD.request('/api/auth/login', { method: 'POST', body: { username: 'target-user', password: 'target-user-password-2' } });
+  const selfChange = await targetUserC.request('/api/me/password', {
+    method: 'PATCH',
+    body: { currentPassword: 'target-user-password-2', newPassword: 'target-user-password-3' }
+  });
+  assert.ok(selfChange.revokedSessions >= 1);
+  const currentMe = await targetUserC.request('/api/me');
+  assert.equal(currentMe.user.username, 'target-user');
+  await assert.rejects(() => targetUserD.request('/api/me'), /Authentication required/);
+
+  const deleteUser = new Client(server.baseUrl);
+  await deleteUser.request('/api/auth/login', { method: 'POST', body: { username: 'target-user', password: 'target-user-password-3' } });
+  await admin.request(`/api/users/${targetUser.id}`, { method: 'DELETE' });
+  await assert.rejects(() => deleteUser.request('/api/me'), /Authentication required/);
+});
+
+test('stale cached sessions are revalidated on read and profile routes', async (t) => {
+  const server = startServer({ port: 19111 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  await admin.request('/api/users', { method: 'POST', body: { username: 'stale-admin', password: 'stale-admin-password', role: 'admin' } });
+  await admin.request('/api/services', { method: 'POST', body: { id: 'hidden-service', name: 'Hidden Service', url: 'https://hidden.example.test', enabled: false } });
+
+  const users = await admin.request('/api/users');
+  const staleAdminUser = users.users.find((user) => user.username === 'stale-admin');
+  const staleAdmin = new Client(server.baseUrl);
+  await staleAdmin.request('/api/auth/login', { method: 'POST', body: { username: 'stale-admin', password: 'stale-admin-password' } });
+
+  const db = new Database(`${server.dataDir}/launcher.sqlite`);
+  t.after(() => db.close());
+  db.prepare("UPDATE users SET role = 'user', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(staleAdminUser.id);
+
+  const demotedServices = await staleAdmin.request('/api/services');
+  assert.equal(demotedServices.services.some((service) => service.id === 'hidden-service'), false);
+  await assert.rejects(() => staleAdmin.request('/api/users'), /Insufficient permissions/);
+
+  db.prepare('DELETE FROM users WHERE id = ?').run(staleAdminUser.id);
+  await assert.rejects(() => staleAdmin.request('/api/me'), /Authentication required/);
+  await assert.rejects(() => staleAdmin.request('/api/plugins'), /Authentication required/);
+  const publicServices = await staleAdmin.request('/api/services');
+  assert.equal(publicServices.services.some((service) => service.id === 'hidden-service'), false);
+});
+
+test('admin TOTP reset revokes sessions and preset imports validate URLs', async (t) => {
+  const server = startServer({ port: 19110 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  await admin.request('/api/users', { method: 'POST', body: { username: 'totp-user', password: 'totp-user-password', role: 'user' } });
+  const users = await admin.request('/api/users');
+  const target = users.users.find((user) => user.username === 'totp-user');
+
+  const targetA = new Client(server.baseUrl);
+  const targetB = new Client(server.baseUrl);
+  await targetA.request('/api/auth/login', { method: 'POST', body: { username: 'totp-user', password: 'totp-user-password' } });
+  await targetB.request('/api/auth/login', { method: 'POST', body: { username: 'totp-user', password: 'totp-user-password' } });
+  const reset = await admin.request(`/api/users/${target.id}`, { method: 'PATCH', body: { username: 'totp-user', role: 'user', resetTotp: true } });
+  assert.ok(reset.revokedSessions >= 2);
+  await assert.rejects(() => targetA.request('/api/me'), /Authentication required/);
+  await assert.rejects(() => targetB.request('/api/me'), /Authentication required/);
+
+  const db = new Database(`${server.dataDir}/launcher.sqlite`);
+  t.after(() => db.close());
+  db.prepare(`
+    INSERT INTO preset_cache (id, name, website, description, category, accent, icon_url, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run('no-url-preset', 'No URL Preset', '', 'Preset without a website fallback.', 'test', '#4de7ff', 'https://raw.githubusercontent.com/linuxserver/Heimdall-Apps/master/Plex/logo.png', 'local');
+
+  await assert.rejects(
+    () => admin.request('/api/admin/presets/import', { method: 'POST', body: { presetId: 'no-url-preset' } }),
+    /Service URL must be a valid URL/
+  );
+  await assert.rejects(
+    () => admin.request('/api/admin/presets/import', { method: 'POST', body: { presetId: 'no-url-preset', customUrl: '   ' } }),
+    /Service URL must be a valid URL/
+  );
+  const afterNoUrlReject = await admin.request('/api/services');
+  assert.equal(afterNoUrlReject.services.some((service) => service.name === 'No URL Preset'), false);
+
+  await assert.rejects(
+    () => admin.request('/api/admin/presets/import', { method: 'POST', body: { presetId: 'lidarr', customUrl: 'javascript:alert(1)' } }),
+    /Service URL must be http or https/
+  );
+  await assert.rejects(
+    () => admin.request('/api/admin/presets/import', { method: 'POST', body: { presetId: 'lidarr', customUrl: 'ftp://example.test' } }),
+    /Service URL must be http or https/
+  );
+  await assert.rejects(
+    () => admin.request('/api/admin/presets/import', { method: 'POST', body: { presetId: 'lidarr', customUrl: 'not a url' } }),
+    /Service URL must be a valid URL/
+  );
+  const imported = await admin.request('/api/admin/presets/import', { method: 'POST', body: { presetId: 'lidarr', customUrl: 'https://lidarr.example.test' } });
+  assert.equal(imported.ok, true);
+  const services = await admin.request('/api/services');
+  assert.ok(services.services.some((service) => service.id === imported.serviceId && service.url === 'https://lidarr.example.test/'));
+
+  const csrfProbe = new Client(server.baseUrl);
+  csrfProbe.cookie = admin.cookie;
+  csrfProbe.csrfToken = `${admin.csrfToken}x`;
+  await assert.rejects(() => csrfProbe.request('/api/settings', { method: 'PATCH', body: { app_name: 'Bad CSRF' } }), /Invalid CSRF token/);
 });

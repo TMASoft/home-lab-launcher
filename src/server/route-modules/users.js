@@ -3,6 +3,8 @@ const bcrypt = require('bcryptjs');
 
 function registerUserRoutes(router, deps) {
   const { db, requireAuth, requireRole, logEvent, userPayload, preferencePayload, normalizeLaunchpad } = deps;
+  const adminCountExcluding = (userId) => db.prepare('SELECT COUNT(*) AS count FROM users WHERE role = ? AND id != ?').get('admin', userId).count;
+
   router.get('/users', requireRole('admin'), (req, res) => {
     const users = db.prepare('SELECT id, username, role, totp_enabled AS totpEnabled, created_at AS createdAt FROM users ORDER BY username').all();
     res.json({ users });
@@ -26,6 +28,9 @@ function registerUserRoutes(router, deps) {
     try {
       const { username, password, role } = userPayload(req.body || {}, user);
       const resetTotp = Boolean(req.body.resetTotp);
+      if (user.role === 'admin' && role !== 'admin' && adminCountExcluding(req.params.id) < 1) {
+        return res.status(400).json({ error: 'At least one admin account is required' });
+      }
       if (password) {
         db.prepare('UPDATE users SET username = ?, role = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(username, role, bcrypt.hashSync(password, 12), req.params.id);
       } else {
@@ -35,9 +40,12 @@ function registerUserRoutes(router, deps) {
         db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?').run(req.params.id);
         logEvent(db, req, 'user.totp_reset', { id: Number(req.params.id), username });
       }
-      if (Number(req.params.id) === Number(req.session.user.id)) req.session.user = { ...req.session.user, username, role };
-      logEvent(db, req, 'user.updated', { id: Number(req.params.id), username, role, passwordChanged: Boolean(password), totpReset: resetTotp });
-      res.json({ ok: true });
+      const targetIsCurrentUser = Number(req.params.id) === Number(req.session.user.id);
+      const shouldRevokeSessions = Boolean(password) || resetTotp || user.role !== role;
+      const revokedSessions = shouldRevokeSessions ? req.sessionStore.destroyForUser(req.params.id, { exceptSid: targetIsCurrentUser ? req.sessionID : undefined }) : 0;
+      if (targetIsCurrentUser) req.session.user = { ...req.session.user, username, role };
+      logEvent(db, req, 'user.updated', { id: Number(req.params.id), username, role, passwordChanged: Boolean(password), totpReset: resetTotp, revokedSessions });
+      res.json({ ok: true, revokedSessions });
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
@@ -45,9 +53,13 @@ function registerUserRoutes(router, deps) {
 
   router.delete('/users/:id', requireRole('admin'), (req, res) => {
     if (Number(req.params.id) === Number(req.session.user.id)) return res.status(400).json({ error: 'Cannot delete your own account' });
+    const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (user.role === 'admin' && adminCountExcluding(req.params.id) < 1) return res.status(400).json({ error: 'At least one admin account is required' });
+    const revokedSessions = req.sessionStore.destroyForUser(req.params.id);
     db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-    logEvent(db, req, 'user.deleted', { id: Number(req.params.id) });
-    res.json({ ok: true });
+    logEvent(db, req, 'user.deleted', { id: Number(req.params.id), username: user.username, revokedSessions });
+    res.json({ ok: true, revokedSessions });
   });
 
   router.get('/me/preferences', requireAuth, (req, res) => {

@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
 const packageJson = require('../../package.json');
+const openapiJson = require('../../docs/openapi.json');
 const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
 const { guardedFetch, serverFetchConfig, parsePrivateNetworkAccess } = require('./server-fetch');
 const { apiResponseMiddleware } = require('./api-response');
@@ -685,21 +686,40 @@ function uniqueServiceId(db, base) {
   return id;
 }
 
+function revalidateSessionUser(req, db) {
+  if (!req.session?.user) return null;
+  if (!db) return req.session.user;
+  const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(req.session.user.id);
+  if (!user) {
+    req.session.user = null;
+    req.session.destroy(() => {});
+    return null;
+  }
+  req.session.user = { id: user.id, username: user.username, role: user.role };
+  return req.session.user;
+}
+
 function requireAuth(req, res, next) {
-  if (!req.session.user) return res.status(401).json({ error: 'Authentication required' });
+  const user = revalidateSessionUser(req, req.app.locals.db);
+  if (!user) return res.status(401).json({ error: 'Authentication required' });
   next();
 }
 
 function requireRole(...roles) {
   return (req, res, next) => {
-    if (!req.session.user) return res.status(401).json({ error: 'Authentication required' });
-    if (!roles.includes(req.session.user.role)) return res.status(403).json({ error: 'Insufficient permissions' });
+    const user = revalidateSessionUser(req, req.app.locals.db);
+    if (!user) return res.status(401).json({ error: 'Authentication required' });
+    if (!roles.includes(user.role)) return res.status(403).json({ error: 'Insufficient permissions' });
     next();
   };
 }
 
 function canRead(req, db) {
-  return Boolean(req.session.user) || getSetting(db, 'public_read_enabled', true) === true;
+  return Boolean(revalidateSessionUser(req, db)) || getSetting(db, 'public_read_enabled', true) === true;
+}
+
+function refreshSessionUser(req, db) {
+  return revalidateSessionUser(req, db);
 }
 
 
@@ -734,6 +754,7 @@ function clearLoginFailures(db, req, username) {
 }
 
 function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, scheduler }) {
+  app.locals.db = db;
   const router = express.Router();
   startServiceHealthScheduler(db, scheduler);
 
@@ -751,7 +772,11 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
     res.json({ ok: true, version: packageJson.version, uptimeSeconds: Math.round(process.uptime()) });
   });
 
-  registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures });
+  router.get('/openapi.json', (req, res) => {
+    res.json(openapiJson);
+  });
+
+  registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures, refreshSessionUser });
 
   router.get('/settings/public', (req, res) => {
     res.json(publicSettings(db, req));
@@ -765,7 +790,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
 
   registerPluginRoutes(router, { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload });
 
-  registerPresetRoutes(router, { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler });
+  registerPresetRoutes(router, { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler, servicePayload });
 
   startPresetCatalogScheduler(db, scheduler);
 

@@ -1,0 +1,478 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Home Lab Launcher API",
+    "version": "0.4.0",
+    "description": "Pre-1.0 JSON API for the bundled frontend, trusted plugins, and private-deployment automation. Mutating API routes require the session CSRF token in the X-CSRF-Token header, except /api/bootstrap and /api/auth/login."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "tags": [
+    { "name": "Health" },
+    { "name": "Auth" },
+    { "name": "Profile" },
+    { "name": "Settings" },
+    { "name": "Services" },
+    { "name": "Admin" },
+    { "name": "Appearance" },
+    { "name": "Users" },
+    { "name": "Presets" },
+    { "name": "Plugins" },
+    { "name": "Assets" }
+  ],
+  "security": [
+    { "sessionCookie": [] }
+  ],
+  "paths": {
+    "/healthz": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Minimal health check",
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/Healthz" } }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Read the OpenAPI contract",
+        "security": [],
+        "responses": { "200": { "description": "OpenAPI 3.1 contract", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericObject" } } } } }
+      }
+    },
+    "/bootstrap-status": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Check whether first-admin setup is required",
+        "security": [],
+        "responses": { "200": { "description": "Bootstrap status", "content": { "application/json": { "schema": { "type": "object", "required": ["needsBootstrap"], "properties": { "needsBootstrap": { "type": "boolean" } } } } } } }
+      }
+    },
+    "/bootstrap": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Create the first Admin account",
+        "description": "Available only while no users exist. CSRF is not required for this bootstrap route.",
+        "security": [],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BootstrapRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/UserEnvelope" }, "400": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "Start a session",
+        "description": "Returns a user and CSRF token, or requiresTotp=true after valid password authentication for a TOTP-enabled user. CSRF is not required for this login route.",
+        "security": [],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Login" }, "401": { "$ref": "#/components/responses/Error" }, "429": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "tags": ["Auth"],
+        "summary": "End the current session",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/auth/session": {
+      "get": {
+        "tags": ["Auth"],
+        "summary": "Read current session state",
+        "security": [],
+        "responses": { "200": { "description": "Session state", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SessionState" } } } } }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": ["Profile"],
+        "summary": "Read current user profile",
+        "responses": { "200": { "$ref": "#/components/responses/UserEnvelope" }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/password": {
+      "patch": {
+        "tags": ["Profile"],
+        "summary": "Change current user's password",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PasswordChangeRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/RevocationOk" }, "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/sessions": {
+      "get": {
+        "tags": ["Profile"],
+        "summary": "List current user's sessions",
+        "responses": { "200": { "description": "Session list", "content": { "application/json": { "schema": { "type": "object", "required": ["sessions"], "properties": { "sessions": { "type": "array", "items": { "$ref": "#/components/schemas/UserSession" } } } } } } }, "401": { "$ref": "#/components/responses/Error" } }
+      },
+      "delete": {
+        "tags": ["Profile"],
+        "summary": "Revoke other sessions for current user",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "responses": { "200": { "description": "Revocation count", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Ok" }, { "type": "object", "properties": { "count": { "type": "integer" } } }] } } } }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/sessions/{sid}": {
+      "delete": {
+        "tags": ["Profile"],
+        "summary": "Revoke one current-user session",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/Sid" }],
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/totp/setup": {
+      "post": {
+        "tags": ["Profile"],
+        "summary": "Generate a TOTP setup secret",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "responses": { "200": { "description": "Generated secret", "content": { "application/json": { "schema": { "type": "object", "required": ["secret"], "properties": { "secret": { "type": "string" } } } } } }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/totp/enable": {
+      "post": {
+        "tags": ["Profile"],
+        "summary": "Enable TOTP 2FA for current user",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TotpEnableRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/totp/disable": {
+      "post": {
+        "tags": ["Profile"],
+        "summary": "Disable TOTP 2FA for current user",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TotpDisableRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/settings/public": {
+      "get": {
+        "tags": ["Settings"],
+        "summary": "Read public settings and appearance",
+        "security": [],
+        "responses": { "200": { "description": "Public settings", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PublicSettings" } } } } }
+      }
+    },
+    "/settings": {
+      "patch": {
+        "tags": ["Settings"],
+        "summary": "Update admin settings",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SettingsUpdateRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "List services visible to the current actor",
+        "description": "Anonymous access depends on public_read_enabled.",
+        "security": [],
+        "responses": { "200": { "$ref": "#/components/responses/Services" }, "401": { "$ref": "#/components/responses/Error" } }
+      },
+      "post": {
+        "tags": ["Services"],
+        "summary": "Create a service",
+        "description": "Admin or Editor. Remote icon downloads are subject to server-side fetch policy.",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServiceWriteRequest" } } } },
+        "responses": { "201": { "$ref": "#/components/responses/Service" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/{id}": {
+      "patch": {
+        "tags": ["Services"],
+        "summary": "Update a service",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServiceWriteRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Service" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      },
+      "delete": {
+        "tags": ["Services"],
+        "summary": "Delete a service",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/reorder": {
+      "patch": {
+        "tags": ["Services"],
+        "summary": "Persist service sort order",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["ids"], "properties": { "ids": { "type": "array", "items": { "type": "string" } } } } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/{id}/duplicate": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Duplicate a service",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "requestBody": { "content": { "application/json": { "schema": { "type": "object", "properties": { "name": { "type": "string" }, "sortOrder": { "type": "integer" } } } } } },
+        "responses": { "201": { "$ref": "#/components/responses/Service" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/bulk": {
+      "patch": {
+        "tags": ["Services"],
+        "summary": "Run a bulk service action",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServiceBulkRequest" } } } },
+        "responses": { "200": { "description": "Bulk action result", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Ok" }, { "type": "object", "properties": { "changed": { "type": "integer" }, "action": { "type": "string" } } }] } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/test-url": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Test a URL from the server",
+        "description": "Admin or Editor. The response is HTTP 200 even when the target is down; inspect ok/status/error.",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string", "format": "uri" } } } } } },
+        "responses": { "200": { "description": "URL test result", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UrlTestResult" } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/{id}/check": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Run one health check now",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/Id" }],
+        "responses": { "200": { "description": "Health result", "content": { "application/json": { "schema": { "type": "object", "properties": { "health": { "$ref": "#/components/schemas/ServiceHealth" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/service-health": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "List persisted service health rows",
+        "security": [],
+        "responses": { "200": { "description": "Health rows", "content": { "application/json": { "schema": { "type": "object", "required": ["health"], "properties": { "health": { "type": "array", "items": { "$ref": "#/components/schemas/ServiceHealth" } } } } } } }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/export": {
+      "get": {
+        "tags": ["Services"],
+        "summary": "Export services",
+        "responses": { "200": { "description": "Service export", "content": { "application/json": { "schema": { "type": "object", "properties": { "exportedAt": { "type": "string", "format": "date-time" }, "services": { "type": "array", "items": { "$ref": "#/components/schemas/Service" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/services/import": {
+      "post": {
+        "tags": ["Services"],
+        "summary": "Import services",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ServiceImportRequest" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/service-icons/{filename}": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Serve stored service icon",
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/Filename" }],
+        "responses": { "200": { "description": "Image file" }, "401": { "description": "Read access required" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/app-assets/{filename}": {
+      "get": {
+        "tags": ["Assets"],
+        "summary": "Serve stored branding asset",
+        "security": [],
+        "parameters": [{ "$ref": "#/components/parameters/Filename" }],
+        "responses": { "200": { "description": "Image file" }, "404": { "description": "Not found" } }
+      }
+    },
+    "/app-assets": {
+      "post": {
+        "tags": ["Assets", "Appearance"],
+        "summary": "Upload or download a branding asset",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AppAssetRequest" } } } },
+        "responses": { "201": { "description": "Created asset", "content": { "application/json": { "schema": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/preferences": {
+      "get": {
+        "tags": ["Profile"],
+        "summary": "Read current user's preferences",
+        "responses": { "200": { "description": "Preferences", "content": { "application/json": { "schema": { "type": "object", "properties": { "preferences": { "$ref": "#/components/schemas/Preferences" } } } } } }, "401": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/preferences/{key}": {
+      "put": {
+        "tags": ["Profile"],
+        "summary": "Save one preference",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PreferenceKey" }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["value"], "properties": { "value": true } } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      },
+      "delete": {
+        "tags": ["Profile"],
+        "summary": "Delete one preference",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "$ref": "#/components/parameters/PreferenceKey" }],
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/admin/overview": { "get": { "tags": ["Admin"], "summary": "Read admin overview", "responses": { "200": { "description": "Admin overview", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminOverview" } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/health": { "get": { "tags": ["Admin"], "summary": "Read management-plane health", "responses": { "200": { "description": "Admin health", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericObject" } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/config": { "get": { "tags": ["Admin"], "summary": "Read effective non-secret config", "responses": { "200": { "description": "Effective config", "content": { "application/json": { "schema": { "type": "object", "properties": { "config": { "$ref": "#/components/schemas/GenericObject" } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/notices": { "get": { "tags": ["Admin"], "summary": "Read admin notices", "responses": { "200": { "description": "Notices", "content": { "application/json": { "schema": { "type": "object", "properties": { "notices": { "type": "array", "items": { "$ref": "#/components/schemas/Notice" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/backup": { "get": { "tags": ["Admin"], "summary": "Export portable config backup", "responses": { "200": { "description": "Backup JSON", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Backup" } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/database/export": { "get": { "tags": ["Admin"], "summary": "Download SQLite database export", "responses": { "200": { "description": "SQLite database file" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/restore": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Restore supported settings and services from backup JSON",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "parameters": [{ "name": "preview", "in": "query", "schema": { "type": "boolean" }, "description": "When true, return preview only." }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Backup" } } } },
+        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/admin/restore/preview": {
+      "post": {
+        "tags": ["Admin"],
+        "summary": "Preview a config restore",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Backup" } } } },
+        "responses": { "200": { "description": "Restore preview", "content": { "application/json": { "schema": { "type": "object", "properties": { "preview": { "$ref": "#/components/schemas/GenericObject" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/admin/logs": {
+      "get": {
+        "tags": ["Admin"],
+        "summary": "Search audit logs",
+        "parameters": [
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 500 } },
+          { "name": "level", "in": "query", "schema": { "type": "string" } },
+          { "name": "action", "in": "query", "schema": { "type": "string" } },
+          { "name": "actor", "in": "query", "schema": { "type": "string" } },
+          { "name": "q", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Audit logs", "content": { "application/json": { "schema": { "type": "object", "properties": { "logs": { "type": "array", "items": { "$ref": "#/components/schemas/AuditLog" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/admin/logs/export": { "get": { "tags": ["Admin"], "summary": "Export audit logs", "responses": { "200": { "description": "Audit log export", "content": { "application/json": { "schema": { "type": "object", "properties": { "exportedAt": { "type": "string", "format": "date-time" }, "logs": { "type": "array", "items": { "$ref": "#/components/schemas/AuditLog" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/logs/retention": { "patch": { "tags": ["Admin"], "summary": "Update audit-log retention", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "days": { "type": "integer", "minimum": 1, "maximum": 3650 } } } } } }, "responses": { "200": { "description": "Retention", "content": { "application/json": { "schema": { "type": "object", "properties": { "days": { "type": "integer" } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/logs/prune": { "post": { "tags": ["Admin"], "summary": "Prune old audit logs", "security": [{ "sessionCookie": [], "csrfToken": [] }], "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/appearance": {
+      "get": { "tags": ["Appearance"], "summary": "Read appearance settings", "responses": { "200": { "description": "Appearance", "content": { "application/json": { "schema": { "type": "object", "properties": { "appearance": { "$ref": "#/components/schemas/Appearance" }, "presets": { "type": "array", "items": { "$ref": "#/components/schemas/ThemePreset" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } },
+      "put": { "tags": ["Appearance"], "summary": "Replace appearance settings", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "appearance": { "$ref": "#/components/schemas/Appearance" } } } } } }, "responses": { "200": { "description": "Appearance", "content": { "application/json": { "schema": { "type": "object", "properties": { "appearance": { "$ref": "#/components/schemas/Appearance" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/admin/appearance/reset": { "post": { "tags": ["Appearance"], "summary": "Reset appearance settings", "security": [{ "sessionCookie": [], "csrfToken": [] }], "responses": { "200": { "description": "Appearance", "content": { "application/json": { "schema": { "type": "object", "properties": { "appearance": { "$ref": "#/components/schemas/Appearance" } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/theme-presets": {
+      "get": { "tags": ["Appearance"], "summary": "List theme presets", "responses": { "200": { "description": "Theme presets", "content": { "application/json": { "schema": { "type": "object", "properties": { "presets": { "type": "array", "items": { "$ref": "#/components/schemas/ThemePreset" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } },
+      "post": { "tags": ["Appearance"], "summary": "Create a theme preset", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThemePresetWriteRequest" } } } }, "responses": { "201": { "description": "Theme preset", "content": { "application/json": { "schema": { "type": "object", "properties": { "preset": { "$ref": "#/components/schemas/ThemePreset" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/admin/theme-presets/{id}": {
+      "patch": { "tags": ["Appearance"], "summary": "Update a theme preset", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThemePresetWriteRequest" } } } }, "responses": { "200": { "description": "Theme preset", "content": { "application/json": { "schema": { "type": "object", "properties": { "preset": { "$ref": "#/components/schemas/ThemePreset" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } },
+      "delete": { "tags": ["Appearance"], "summary": "Delete a theme preset", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/admin/theme-presets/{id}/apply": { "post": { "tags": ["Appearance"], "summary": "Apply a theme preset", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Appearance", "content": { "application/json": { "schema": { "type": "object", "properties": { "appearance": { "$ref": "#/components/schemas/Appearance" } } } } } }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/theme-presets/{id}/export": { "get": { "tags": ["Appearance"], "summary": "Export a theme preset", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Theme preset export", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThemePresetExport" } } } }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/theme-presets/import": { "post": { "tags": ["Appearance"], "summary": "Import a theme preset", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ThemePresetExport" } } } }, "responses": { "201": { "description": "Theme preset", "content": { "application/json": { "schema": { "type": "object", "properties": { "preset": { "$ref": "#/components/schemas/ThemePreset" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/users": {
+      "get": { "tags": ["Users"], "summary": "List users", "responses": { "200": { "description": "Users", "content": { "application/json": { "schema": { "type": "object", "properties": { "users": { "type": "array", "items": { "$ref": "#/components/schemas/User" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } },
+      "post": { "tags": ["Users"], "summary": "Create a user", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserWriteRequest" } } } }, "responses": { "201": { "$ref": "#/components/responses/UserEnvelope" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/users/{id}": {
+      "patch": { "tags": ["Users"], "summary": "Update a user", "description": "Changing password, resetting TOTP, or changing role revokes target-user sessions. At least one Admin account must remain.", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/UserWriteRequest" } } } }, "responses": { "200": { "$ref": "#/components/responses/RevocationOk" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } },
+      "delete": { "tags": ["Users"], "summary": "Delete a user", "description": "Deleting a user revokes that user's sessions. At least one Admin account must remain.", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/RevocationOk" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/admin/presets/search": { "get": { "tags": ["Presets"], "summary": "Search preset catalog", "parameters": [{ "name": "q", "in": "query", "schema": { "type": "string" } }], "responses": { "200": { "description": "Preset results", "content": { "application/json": { "schema": { "type": "object", "properties": { "presets": { "type": "array", "items": { "$ref": "#/components/schemas/Preset" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/presets/import": { "post": { "tags": ["Presets", "Services"], "summary": "Import a preset as a service", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PresetImportRequest" } } } }, "responses": { "200": { "description": "Imported preset", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Ok" }, { "type": "object", "properties": { "serviceId": { "type": "string" } } }] } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/presets/update": { "post": { "tags": ["Presets"], "summary": "Start manual preset catalog sync", "security": [{ "sessionCookie": [], "csrfToken": [] }], "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" }, "429": { "$ref": "#/components/responses/Error" } } } },
+    "/admin/presets/settings": {
+      "get": { "tags": ["Presets"], "summary": "Read preset catalog settings", "responses": { "200": { "description": "Preset settings", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericObject" } } } }, "403": { "$ref": "#/components/responses/Error" } } },
+      "put": { "tags": ["Presets"], "summary": "Update preset catalog settings", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "enableRemotePresets": { "type": "boolean" } } } } } }, "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/plugins": { "get": { "tags": ["Plugins"], "summary": "List installed plugins", "parameters": [{ "name": "updates", "in": "query", "schema": { "type": "string", "enum": ["1"] }, "description": "Admins may request update discovery with updates=1." }], "responses": { "200": { "description": "Plugins", "content": { "application/json": { "schema": { "type": "object", "properties": { "plugins": { "type": "array", "items": { "$ref": "#/components/schemas/Plugin" } } } } } } }, "401": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/enabled-sections": { "get": { "tags": ["Plugins"], "summary": "List enabled plugin dashboard sections", "security": [], "responses": { "200": { "description": "Plugin sections", "content": { "application/json": { "schema": { "type": "object", "properties": { "sections": { "type": "array", "items": { "$ref": "#/components/schemas/GenericObject" } } } } } } }, "401": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/{id}/logs": { "get": { "tags": ["Plugins"], "summary": "List plugin logs", "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "description": "Plugin logs", "content": { "application/json": { "schema": { "type": "object", "properties": { "logs": { "type": "array", "items": { "$ref": "#/components/schemas/AuditLog" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/reload": { "post": { "tags": ["Plugins"], "summary": "Reload installed plugins", "security": [{ "sessionCookie": [], "csrfToken": [] }], "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugin-sources/github/versions": { "get": { "tags": ["Plugins"], "summary": "Discover GitHub plugin versions", "parameters": [{ "name": "repo", "in": "query", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Version list", "content": { "application/json": { "schema": { "type": "object", "properties": { "versions": { "type": "array", "items": { "$ref": "#/components/schemas/GenericObject" } } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugin-sources/updates": { "get": { "tags": ["Plugins"], "summary": "Check plugin updates", "responses": { "200": { "description": "Updates", "content": { "application/json": { "schema": { "type": "object", "properties": { "updates": { "type": "array", "items": { "$ref": "#/components/schemas/GenericObject" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugin-sources/local/status": { "get": { "tags": ["Plugins"], "summary": "Read local plugin install status", "responses": { "200": { "description": "Local plugin status", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericObject" } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/install": { "post": { "tags": ["Plugins"], "summary": "Install a trusted GitHub plugin", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginInstallRequest" } } } }, "responses": { "201": { "description": "Installed plugin", "content": { "application/json": { "schema": { "type": "object", "properties": { "plugin": { "$ref": "#/components/schemas/Plugin" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/install-local": { "post": { "tags": ["Plugins"], "summary": "Install a trusted local plugin", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginLocalInstallRequest" } } } }, "responses": { "201": { "description": "Installed plugin", "content": { "application/json": { "schema": { "type": "object", "properties": { "plugin": { "$ref": "#/components/schemas/Plugin" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/{id}/update": { "post": { "tags": ["Plugins"], "summary": "Update a GitHub plugin", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/PluginInstallRequest" } } } }, "responses": { "200": { "description": "Updated plugin", "content": { "application/json": { "schema": { "type": "object", "properties": { "plugin": { "$ref": "#/components/schemas/Plugin" }, "rolledBack": { "type": "boolean" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } } },
+    "/plugins/{id}": {
+      "patch": { "tags": ["Plugins"], "summary": "Enable or disable a plugin", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "enabled": { "type": "boolean" } } } } } }, "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } },
+      "delete": { "tags": ["Plugins"], "summary": "Delete a plugin", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/plugins/{id}/config": { "put": { "tags": ["Plugins"], "summary": "Update scoped plugin config fields", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "config": { "$ref": "#/components/schemas/GenericObject" } } } } } }, "responses": { "200": { "description": "Config update result", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Ok" }, { "type": "object", "properties": { "updatedFields": { "type": "array", "items": { "type": "string" } }, "rejectedFields": { "type": "array", "items": { "type": "string" } } } }] } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } } }
+  },
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "hll.sid" },
+      "csrfToken": { "type": "apiKey", "in": "header", "name": "X-CSRF-Token" }
+    },
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
+      "Sid": { "name": "sid", "in": "path", "required": true, "schema": { "type": "string" } },
+      "Filename": { "name": "filename", "in": "path", "required": true, "schema": { "type": "string" } },
+      "PreferenceKey": { "name": "key", "in": "path", "required": true, "schema": { "type": "string", "enum": ["favorites", "launchpad"] } }
+    },
+    "responses": {
+      "Ok": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } } },
+      "RevocationOk": { "description": "Success with session revocation count", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RevocationOk" } } } },
+      "Error": { "description": "Error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Healthz": { "description": "Health response", "content": { "application/json": { "schema": { "type": "object", "required": ["ok", "version", "uptimeSeconds"], "properties": { "ok": { "type": "boolean" }, "version": { "type": "string" }, "uptimeSeconds": { "type": "integer" } } } } } },
+      "Login": { "description": "Login response", "content": { "application/json": { "schema": { "oneOf": [{ "type": "object", "required": ["user", "csrfToken"], "properties": { "user": { "$ref": "#/components/schemas/User" }, "csrfToken": { "type": "string" } } }, { "type": "object", "required": ["requiresTotp"], "properties": { "requiresTotp": { "type": "boolean", "const": true } } }] } } } },
+      "UserEnvelope": { "description": "User envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["user"], "properties": { "user": { "$ref": "#/components/schemas/User" } } } } } },
+      "Service": { "description": "Service envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["service"], "properties": { "service": { "$ref": "#/components/schemas/Service" } } } } } },
+      "Services": { "description": "Services envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["services"], "properties": { "services": { "type": "array", "items": { "$ref": "#/components/schemas/Service" } } } } } } }
+    },
+    "schemas": {
+      "Ok": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } }, "additionalProperties": true },
+      "RevocationOk": { "allOf": [{ "$ref": "#/components/schemas/Ok" }, { "type": "object", "properties": { "revokedSessions": { "type": "integer", "minimum": 0 } } }] },
+      "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } }, "additionalProperties": true },
+      "GenericObject": { "type": "object", "additionalProperties": true },
+      "Role": { "type": "string", "enum": ["admin", "editor", "user"] },
+      "User": { "type": "object", "properties": { "id": { "type": "integer" }, "username": { "type": "string" }, "role": { "$ref": "#/components/schemas/Role" }, "totpEnabled": { "type": ["boolean", "integer"] }, "createdAt": { "type": "string" }, "updatedAt": { "type": "string" } }, "additionalProperties": true },
+      "BootstrapRequest": { "type": "object", "required": ["username", "password"], "properties": { "username": { "type": "string", "minLength": 3 }, "password": { "type": "string", "minLength": 10 }, "totpSecret": { "type": "string" }, "totpCode": { "type": "string" } } },
+      "LoginRequest": { "type": "object", "required": ["username", "password"], "properties": { "username": { "type": "string" }, "password": { "type": "string" }, "code": { "type": "string" } } },
+      "SessionState": { "type": "object", "required": ["user", "publicReadEnabled", "csrfToken"], "properties": { "user": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "type": "null" }] }, "publicReadEnabled": { "type": "boolean" }, "csrfToken": { "type": ["string", "null"] } } },
+      "PasswordChangeRequest": { "type": "object", "required": ["currentPassword", "newPassword"], "properties": { "currentPassword": { "type": "string" }, "newPassword": { "type": "string", "minLength": 10 } } },
+      "TotpEnableRequest": { "type": "object", "required": ["secret", "code"], "properties": { "secret": { "type": "string" }, "code": { "type": "string" } } },
+      "TotpDisableRequest": { "type": "object", "required": ["password"], "properties": { "password": { "type": "string" }, "code": { "type": "string" } } },
+      "UserSession": { "type": "object", "properties": { "sid": { "type": "string" }, "userAgent": { "type": "string" }, "ip": { "type": "string" }, "createdAt": { "type": ["string", "null"] }, "expiresAt": { "type": "string" }, "current": { "type": "boolean" } }, "additionalProperties": true },
+      "Appearance": { "type": "object", "properties": { "version": { "type": "integer" }, "brand": { "$ref": "#/components/schemas/GenericObject" }, "hero": { "$ref": "#/components/schemas/GenericObject" }, "theme": { "$ref": "#/components/schemas/GenericObject" } }, "additionalProperties": true },
+      "PublicSettings": { "type": "object", "properties": { "appName": { "type": "string" }, "version": { "type": "string" }, "repositoryUrl": { "type": "string" }, "appBaseUrl": { "type": "string" }, "publicReadEnabled": { "type": "boolean" }, "appearance": { "$ref": "#/components/schemas/Appearance" } }, "additionalProperties": true },
+      "SettingsUpdateRequest": { "type": "object", "properties": { "app_name": { "type": "string" }, "app_base_url": { "type": "string" }, "public_read_enabled": { "type": "boolean" }, "scheduled_backup_location": { "type": "string" } }, "additionalProperties": false },
+      "ServiceHealth": { "type": "object", "properties": { "serviceId": { "type": "string" }, "status": { "type": "string", "enum": ["up", "down", "unknown"] }, "statusCode": { "type": ["integer", "null"] }, "responseMs": { "type": ["integer", "null"] }, "checkedAt": { "type": ["string", "null"] }, "nextCheckAt": { "type": ["string", "null"] }, "error": { "type": ["string", "null"] } }, "additionalProperties": true },
+      "Service": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "icon": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "category": { "type": "string" }, "accent": { "type": "string" }, "description": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } }, "sortOrder": { "type": "integer" }, "featured": { "type": "boolean" }, "enabled": { "type": "boolean" }, "healthCheckEnabled": { "type": "boolean" }, "healthCheckUrl": { "type": "string" }, "healthCheckIntervalMinutes": { "type": "integer" }, "health": { "oneOf": [{ "$ref": "#/components/schemas/ServiceHealth" }, { "type": "null" }] } }, "additionalProperties": true },
+      "ServiceWriteRequest": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "icon": { "type": "string" }, "iconImageData": { "type": "string", "description": "Data URL for uploaded icon image." }, "category": { "type": "string" }, "accent": { "type": "string" }, "description": { "type": "string" }, "tags": { "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "type": "string" }] }, "sortOrder": { "type": "integer" }, "featured": { "type": "boolean" }, "enabled": { "type": "boolean" }, "healthCheckEnabled": { "type": "boolean" }, "healthCheckUrl": { "type": "string", "format": "uri" }, "healthCheckIntervalMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 } }, "additionalProperties": true },
+      "ServiceBulkRequest": { "type": "object", "required": ["ids", "action"], "properties": { "ids": { "type": "array", "items": { "type": "string" } }, "action": { "type": "string", "enum": ["enable", "disable", "feature", "unfeature", "delete"] } } },
+      "UrlTestResult": { "type": "object", "properties": { "ok": { "type": "boolean" }, "status": { "type": "string" }, "statusCode": { "type": "integer" }, "responseMs": { "type": "integer" }, "url": { "type": "string" }, "error": { "type": "string" } }, "additionalProperties": true },
+      "ServiceImportRequest": { "type": "object", "required": ["services"], "properties": { "services": { "type": "array", "items": { "$ref": "#/components/schemas/ServiceWriteRequest" } }, "mode": { "type": "string", "enum": ["upsert", "replace"], "default": "upsert" } } },
+      "AppAssetRequest": { "type": "object", "properties": { "assetData": { "type": "string", "description": "Data URL for uploaded image." }, "url": { "type": "string", "format": "uri", "description": "Remote image URL to download." }, "name": { "type": "string" } }, "additionalProperties": true },
+      "Preferences": { "type": "object", "properties": { "favorites": { "type": "array", "items": { "type": "string" } }, "launchpad": { "$ref": "#/components/schemas/LaunchpadPreferences" } }, "additionalProperties": true },
+      "LaunchpadPreferences": { "type": "object", "properties": { "hiddenCategories": { "type": "array", "items": { "type": "string" } }, "viewMode": { "type": "string", "enum": ["cards", "compact", "list"] }, "hideMetadata": { "type": "boolean" }, "layoutOrder": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false },
+      "Notice": { "type": "object", "properties": { "level": { "type": "string" }, "source": { "type": "string" }, "title": { "type": "string" }, "message": { "type": "string" }, "createdAt": { "type": "string" } }, "additionalProperties": true },
+      "AdminOverview": { "type": "object", "properties": { "settings": { "$ref": "#/components/schemas/PublicSettings" }, "counts": { "$ref": "#/components/schemas/GenericObject" }, "runtime": { "$ref": "#/components/schemas/GenericObject" }, "warnings": { "type": "array", "items": { "$ref": "#/components/schemas/Notice" } }, "notices": { "type": "array", "items": { "$ref": "#/components/schemas/Notice" } } }, "additionalProperties": true },
+      "Backup": { "type": "object", "properties": { "exportedAt": { "type": "string" }, "format": { "type": "string", "const": "home-lab-launcher-config-v1" }, "appVersion": { "type": "string" }, "settings": { "$ref": "#/components/schemas/GenericObject" }, "services": { "type": "array", "items": { "$ref": "#/components/schemas/Service" } }, "users": { "type": "array", "items": { "$ref": "#/components/schemas/User" } }, "plugins": { "type": "array", "items": { "$ref": "#/components/schemas/Plugin" } } }, "additionalProperties": true },
+      "AuditLog": { "type": "object", "properties": { "id": { "type": "integer" }, "level": { "type": "string" }, "action": { "type": "string" }, "actorUserId": { "type": ["integer", "null"] }, "actorUsername": { "type": ["string", "null"] }, "ip": { "type": ["string", "null"] }, "details": { "$ref": "#/components/schemas/GenericObject" }, "createdAt": { "type": "string" } }, "additionalProperties": true },
+      "ThemePreset": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" }, "appearance": { "$ref": "#/components/schemas/Appearance" }, "createdAt": { "type": "string" }, "updatedAt": { "type": "string" } }, "additionalProperties": true },
+      "ThemePresetWriteRequest": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" }, "appearance": { "$ref": "#/components/schemas/Appearance" } }, "additionalProperties": true },
+      "ThemePresetExport": { "type": "object", "required": ["format", "name", "appearance"], "properties": { "format": { "type": "string", "const": "home-lab-launcher-theme-v1" }, "name": { "type": "string" }, "description": { "type": "string" }, "appearance": { "$ref": "#/components/schemas/Appearance" } }, "additionalProperties": true },
+      "UserWriteRequest": { "type": "object", "properties": { "username": { "type": "string", "minLength": 3 }, "password": { "type": "string", "minLength": 10 }, "role": { "$ref": "#/components/schemas/Role" }, "resetTotp": { "type": "boolean" } }, "additionalProperties": false },
+      "Preset": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "description": { "type": "string" }, "website": { "type": "string" }, "category": { "type": "string" }, "accent": { "type": "string" }, "iconUrl": { "type": "string" }, "source": { "type": "string" } }, "additionalProperties": true },
+      "PresetImportRequest": { "type": "object", "required": ["presetId"], "properties": { "presetId": { "type": "string" }, "customUrl": { "type": "string", "format": "uri", "description": "Optional service URL override. Required when the selected preset has no website fallback." } } },
+      "Plugin": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "sourceUrl": { "type": "string" }, "sourceType": { "type": "string" }, "version": { "type": "string" }, "enabled": { "type": "boolean" }, "manifest": { "$ref": "#/components/schemas/GenericObject" }, "config": { "$ref": "#/components/schemas/GenericObject" }, "installedHash": { "type": "string" }, "lifecycle": { "type": "string" }, "lastError": { "type": ["string", "null"] } }, "additionalProperties": true },
+      "PluginInstallRequest": { "type": "object", "required": ["repoUrl", "version", "trustConfirmed"], "properties": { "repoUrl": { "type": "string" }, "version": { "type": "string" }, "expectedSha256": { "type": "string" }, "trustConfirmed": { "type": "boolean", "const": true } }, "additionalProperties": false },
+      "PluginLocalInstallRequest": { "type": "object", "required": ["path", "trustConfirmed"], "properties": { "path": { "type": "string" }, "trustConfirmed": { "type": "boolean", "const": true } }, "additionalProperties": false }
+    }
+  }
+}

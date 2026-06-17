@@ -3,7 +3,7 @@ const { getSetting, setSetting } = require('../db');
 const { syncHeimdallPresets, canUpdateCatalog, catalogCooldownRemaining, searchPresets, getPreset, HEIMDALL_RAW_RE } = require('../preset-catalog');
 
 function registerPresetRoutes(router, deps) {
-  const { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler } = deps;
+  const { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler, servicePayload } = deps;
 
   // Search presets
   router.get('/admin/presets/search', requireRole('admin', 'editor'), (req, res) => {
@@ -33,8 +33,20 @@ function registerPresetRoutes(router, deps) {
       const preset = getPreset(db, presetId);
       if (!preset) return res.status(404).json({ error: 'Preset not found' });
 
-      // Download and cache the icon locally
-      let icon = '🔗';
+      const selectedUrl = String(customUrl || '').trim() || String(preset.website || '').trim();
+      if (!selectedUrl) throw new Error('Service URL must be a valid URL');
+      const serviceId = uniqueServiceId(db, slug(preset.name));
+      const normalized = servicePayload({
+        name: preset.name,
+        url: selectedUrl,
+        icon: '🔗',
+        category: preset.category || 'general',
+        accent: preset.accent || '#4de7ff',
+        description: preset.description || ''
+      });
+
+      // Download and cache the icon only after the service payload is valid.
+      let icon = normalized.icon;
       if (preset.icon_url) {
         try {
           icon = await downloadPresetIcon(preset.icon_url, dataDir, deps);
@@ -44,13 +56,10 @@ function registerPresetRoutes(router, deps) {
         }
       }
 
-      const serviceId = uniqueServiceId(db, slug(preset.name));
-      const url = customUrl || preset.website || 'http://localhost';
-
       db.prepare(`
         INSERT INTO services (id, name, icon, url, category, accent, description, tags_json, sort_order, featured, enabled)
         VALUES (?, ?, ?, ?, ?, ?, ?, '[]', 0, 0, 1)
-      `).run(serviceId, preset.name, icon, url, preset.category || 'general', preset.accent || '#4de7ff', preset.description || '');
+      `).run(serviceId, normalized.name, icon, normalized.url, normalized.category, normalized.accent, normalized.description);
 
       logEvent(db, req, 'preset.imported', { presetId: preset.id, serviceId, source: preset.source });
       res.json({ ok: true, serviceId });

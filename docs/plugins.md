@@ -4,7 +4,7 @@ Plugins let Home Lab Launcher add optional dynamic sections without baking every
 
 > **Security model:** plugins are trusted Admin-installed code. They run in the launcher process with application privileges, can create routes, run scheduled jobs, access the launcher database, and make server-side network requests. Do not install or update plugins from sources you do not trust. The Admin UI requires explicit acknowledgement of this trust boundary before install/update.
 
-Core plugin-management API routes are listed in [api.md](api.md#plugin-management-api). This guide covers the trusted plugin extension API and manifest contract.
+Core plugin-management API routes are listed in [api.md](api.md#plugin-management-api) and the machine-readable contract at `/api/openapi.json`. This guide covers the trusted plugin extension API and manifest contract.
 
 ## What plugins can do
 
@@ -142,6 +142,7 @@ Core and plugin APIs should keep responses predictable for frontend and plugin a
 - Resource reads and writes return a named resource envelope such as `{ "service": { ... } }`, `{ "plugins": [ ... ] }`, or `{ "config": { ... } }`.
 - Errors return HTTP 4xx/5xx with `{ "error": "human-readable message" }`; routes may include extra machine-readable details beside `error` when useful, but should not replace that field before a stable v1 API is designed.
 - Mutating requests after login must include the CSRF token returned by `/api/auth/login` or `/api/auth/session`.
+- Authenticated and read-gated plugin API routes revalidate the session user against the database before using role-specific behavior.
 
 Use the shared server helpers in `src/server/api-response.js` for new core routes so the current convention remains consistent.
 

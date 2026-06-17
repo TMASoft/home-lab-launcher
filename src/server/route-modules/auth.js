@@ -4,7 +4,7 @@ const { getSetting } = require('../db');
 const { issueCsrfToken } = require('../security');
 const totp = require('../totp');
 
-function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures }) {
+function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures, refreshSessionUser }) {
   router.get('/bootstrap-status', (req, res) => {
     const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
     res.json({ needsBootstrap: count === 0 });
@@ -84,7 +84,11 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
   });
 
   router.get('/auth/session', (req, res) => {
-    res.json({ user: req.session.user || null, publicReadEnabled: getSetting(db, 'public_read_enabled', true), csrfToken: req.session.user ? issueCsrfToken(req) : null });
+    const user = refreshSessionUser(req, db);
+    if (req.session.user && !user) {
+      return req.session.destroy(() => res.json({ user: null, publicReadEnabled: getSetting(db, 'public_read_enabled', true), csrfToken: null }));
+    }
+    res.json({ user, publicReadEnabled: getSetting(db, 'public_read_enabled', true), csrfToken: user ? issueCsrfToken(req) : null });
   });
 
   router.get('/me', requireAuth, (req, res) => {
@@ -99,8 +103,9 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
     if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) return res.apiError(401, 'Current password is incorrect');
     db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(bcrypt.hashSync(newPassword, 12), user.id);
-    logEvent(db, req, 'profile.password_changed');
-    res.apiOk();
+    const revokedSessions = req.sessionStore.destroyForUser(user.id, { exceptSid: req.sessionID });
+    logEvent(db, req, 'profile.password_changed', { revokedSessions });
+    res.apiOk({ revokedSessions });
   });
 
   router.get('/me/sessions', requireAuth, (req, res) => {

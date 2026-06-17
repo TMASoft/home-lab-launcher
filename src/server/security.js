@@ -34,7 +34,9 @@ function csrfProtection(req, res, next) {
   if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
   const expected = req.session?.csrfToken;
   const actual = req.get('x-csrf-token');
-  if (!expected || !actual || actual !== expected) return res.status(403).json({ error: 'Invalid CSRF token' });
+  const expectedBuffer = Buffer.from(String(expected || ''), 'utf8');
+  const actualBuffer = Buffer.from(String(actual || ''), 'utf8');
+  if (!expected || !actual || expectedBuffer.length !== actualBuffer.length || !crypto.timingSafeEqual(expectedBuffer, actualBuffer)) return res.status(403).json({ error: 'Invalid CSRF token' });
   next();
 }
 

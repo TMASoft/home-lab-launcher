@@ -310,6 +310,8 @@ It implements an optional Uptime Kuma dashboard section for surfacing monitor st
 
 Native development should use an active Node.js LTS release supported by `better-sqlite3` and the Docker image. This beta supports Node.js 20 and 22; newer current/non-LTS releases may not have compatible native SQLite bindings yet.
 
+The API overview is documented in [`docs/api.md`](docs/api.md), and the machine-readable OpenAPI 3.1 contract is maintained in [`docs/openapi.json`](docs/openapi.json) and served at `/api/openapi.json`. Update both when changing endpoint behavior, request/response shapes, authentication, or CSRF requirements.
+
 `better-sqlite3` may compile a native binding during `npm install`. Install the usual native build prerequisites first: a C/C++ compiler toolchain, Python 3, `make`, and SQLite development headers/libraries from your OS package manager.
 
 ```bash
@@ -347,7 +349,8 @@ The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the i
 - Change `SESSION_SECRET` before deployment.
 - Change or remove the bootstrap password after first login.
 - Enable TOTP 2FA from the first-admin setup or the profile menu when the deployment is reachable beyond a trusted private LAN. Disabling TOTP requires current password verification plus the current TOTP code when 2FA is enabled, and revokes other active sessions. TOTP secrets are stored in the application database; include the SQLite database in backup planning and protect database backups accordingly.
-- CSRF protection is enabled for mutating API routes after login.
+- CSRF protection is enabled for mutating API routes after login, using the `X-CSRF-Token` returned by login/session endpoints.
+- Authenticated and read-gated API requests revalidate the session user against the database, so deleted accounts and role changes take effect immediately even on service/plugin read paths. Password changes, Admin password resets, Admin TOTP resets, role downgrades, and account deletion revoke affected sessions; at least one Admin account must remain.
 - Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
 - Security headers are set by the application; still use HTTPS for real deployments.
 - Keep `TRUST_PROXY=false` for direct exposure. Set `TRUST_PROXY=loopback` or `TRUST_PROXY=1` only when a trusted reverse proxy supplies forwarded headers.

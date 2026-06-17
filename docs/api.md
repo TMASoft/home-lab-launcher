@@ -2,12 +2,16 @@
 
 Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intended for the bundled frontend, trusted plugins, and operator automation on private deployments.
 
+The machine-readable API contract lives in [`docs/openapi.json`](openapi.json) and is served by the app at `/api/openapi.json`. Treat that contract as the canonical endpoint inventory for tooling, client generation, and contract review. This Markdown page remains the human overview and should be updated alongside the OpenAPI document whenever routes, request bodies, response envelopes, auth rules, or CSRF behavior change.
+
 ## Conventions
 
 - JSON request bodies use `Content-Type: application/json`.
 - Successful responses use a resource envelope such as `{ "service": ... }`, `{ "services": [...] }`, or endpoint-specific status fields.
 - Errors use `{ "error": "message" }` with an appropriate HTTP status.
 - Mutating routes require the session CSRF token in `X-CSRF-Token` after login. `/api/auth/login` returns the token.
+- The OpenAPI spec models the session cookie as `hll.sid` and mutating authenticated routes with `X-CSRF-Token` security.
+- Authenticated and read-gated requests revalidate the session user against the database before trusting cached session identity. Deleted users are rejected, role changes take effect immediately, and account security changes revoke affected sessions.
 - Role names are `admin`, `editor`, and `user`. Anonymous access to read routes depends on `PUBLIC_READ_ENABLED` / Admin settings.
 - Server-side URL tests, health checks, and image downloads apply the configured private-network SSRF policy.
 
@@ -16,13 +20,14 @@ Home Lab Launcher exposes a JSON API under `/api`. The API is pre-1.0 and intend
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/healthz` | Public | Minimal health check with `{ ok, version, uptimeSeconds }`. |
+| `GET` | `/api/openapi.json` | Public | Machine-readable OpenAPI 3.1 API contract. |
 | `GET` | `/api/bootstrap-status` | Public | Reports whether first-admin setup is still required. |
 | `POST` | `/api/bootstrap` | Public until bootstrapped | Creates the first Admin account when no users exist; optional `totpSecret` + six-digit `totpCode` enables 2FA immediately. |
 | `POST` | `/api/auth/login` | Public | Starts a session and returns `{ user, csrfToken }`, or `{ requiresTotp: true }` when a valid password needs a TOTP code. |
 | `POST` | `/api/auth/logout` | Session | Ends the current session. |
 | `GET` | `/api/auth/session` | Public | Returns current session user, if any. |
 | `GET` | `/api/me` | Session | Returns the current user. |
-| `PATCH` | `/api/me/password` | Session | Changes the current user's password. |
+| `PATCH` | `/api/me/password` | Session | Changes the current user's password and revokes other active sessions. |
 | `POST` | `/api/me/totp/setup` | Session | Generates a new Base32 TOTP secret for the current user's authenticator app. |
 | `POST` | `/api/me/totp/enable` | Session | Verifies a six-digit TOTP code and enables 2FA for the current user. |
 | `POST` | `/api/me/totp/disable` | Session | Disables 2FA for the current user. Requires `{ password }` and, when 2FA is enabled, `{ code }`; other sessions are revoked after disable. |
@@ -113,15 +118,15 @@ Admin-only routes.
 | --- | --- | --- |
 | `GET` | `/api/users` | List users. |
 | `POST` | `/api/users` | Create a user. |
-| `PATCH` | `/api/users/:id` | Change username, role, password, or reset the user's TOTP 2FA state with `resetTotp`. |
-| `DELETE` | `/api/users/:id` | Delete a user. |
+| `PATCH` | `/api/users/:id` | Change username, role, password, or reset the user's TOTP 2FA state with `resetTotp`. Password changes, role changes, and TOTP resets revoke target-user sessions. The last Admin cannot be demoted. |
+| `DELETE` | `/api/users/:id` | Delete a user and revoke their sessions. The last Admin cannot be deleted. |
 
 ## Preset catalog
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/admin/presets/search` | Admin or Editor | Search cached local and remote presets by name, description, or category. |
-| `POST` | `/api/admin/presets/import` | Admin or Editor | Import a preset by ID, downloading and caching its icon, and creating a new service. |
+| `POST` | `/api/admin/presets/import` | Admin or Editor | Import a preset by ID, validating the selected or preset-provided URL with normal service URL rules, then downloading/caching its icon and creating a new service. Presets without a website require a non-empty `customUrl`. |
 | `POST` | `/api/admin/presets/update` | Admin | Trigger an asynchronous manual catalog update crawl with a 60-second cooldown rate-limit. |
 | `GET` | `/api/admin/presets/settings` | Admin | Read preset catalog settings, statistics, and sync cooldown state. |
 | `PUT` | `/api/admin/presets/settings` | Admin | Update preset catalog settings, such as enabling or disabling remote presets. |
@@ -157,3 +162,49 @@ Trusted plugins run server-side and may extend the API through the plugin contex
 - contribute dashboard sections returned by `/api/plugins/enabled-sections`.
 
 Plugin authors should keep route responses consistent with the core convention: resource envelopes for success and `{ "error": "message" }` for failures. Document every plugin-provided route in the plugin README because plugin routes are not enumerated by the core API reference.
+
+## Operator examples
+
+Login and capture the CSRF token and session cookie:
+
+```bash
+curl -i -sS -X POST http://localhost:8080/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"change-me"}'
+```
+
+Create a service with the returned `hll.sid` cookie and `csrfToken`:
+
+```bash
+curl -sS -X POST http://localhost:8080/api/services \
+  -H 'Content-Type: application/json' \
+  -H 'Cookie: hll.sid=SESSION_COOKIE_VALUE' \
+  -H 'X-CSRF-Token: CSRF_TOKEN_VALUE' \
+  -d '{"name":"Grafana","url":"https://grafana.example.test","category":"monitoring"}'
+```
+
+Update public-read settings:
+
+```bash
+curl -sS -X PATCH http://localhost:8080/api/settings \
+  -H 'Content-Type: application/json' \
+  -H 'Cookie: hll.sid=SESSION_COOKIE_VALUE' \
+  -H 'X-CSRF-Token: CSRF_TOKEN_VALUE' \
+  -d '{"public_read_enabled":false}'
+```
+
+Export a portable config backup:
+
+```bash
+curl -sS http://localhost:8080/api/admin/backup \
+  -H 'Cookie: hll.sid=SESSION_COOKIE_VALUE' \
+  -o home-lab-launcher-backup.json
+```
+
+Revoke other sessions for the current user:
+
+```bash
+curl -sS -X DELETE http://localhost:8080/api/me/sessions \
+  -H 'Cookie: hll.sid=SESSION_COOKIE_VALUE' \
+  -H 'X-CSRF-Token: CSRF_TOKEN_VALUE'
+```

@@ -166,7 +166,7 @@ test('Preset Catalog API & Logic', async (t) => {
   const mockSvc = servicesResMock.services.find(s => s.id === importMockRes.serviceId);
   assert.ok(mockSvc);
   assert.equal(mockSvc.name, 'MockApp');
-  assert.equal(mockSvc.url, 'http://my-mock.local:8082');
+  assert.equal(mockSvc.url, 'http://my-mock.local:8082/');
   assert.equal(mockSvc.category, 'testing');
   assert.equal(mockSvc.accent, '#123456');
   assert.equal(mockSvc.description, 'A mock application');
@@ -195,7 +195,7 @@ test('Preset Catalog API & Logic', async (t) => {
   const importedSvc = servicesRes.services.find(s => s.id === importRes.serviceId);
   assert.ok(importedSvc);
   assert.equal(importedSvc.name, 'Lidarr');
-  assert.equal(importedSvc.url, 'http://lidarr.local:8686');
+  assert.equal(importedSvc.url, 'http://lidarr.local:8686/');
   assert.equal(importedSvc.category, 'media');
   assert.equal(importedSvc.accent, '#1db954');
   // 6b. Import a preset with an invalid/malicious icon URL (must catch error and fallback to default '🔗' icon)

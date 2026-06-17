@@ -173,7 +173,7 @@ function adminBackupsHtml() {
 function adminUsersHtml() {
   return `<div class="settings-card"><h3>User management</h3><div class="table-wrap"><table><thead><tr><th>User</th><th>Role</th><th>2FA</th><th>New password</th><th>Actions</th></tr></thead><tbody>${state.admin.users.map((u) => `
     <tr><td><input data-user-name="${u.id}" value="${escapeHtml(u.username)}"></td><td><select data-user-role="${u.id}"><option value="user" ${u.role === 'user' ? 'selected' : ''}>Basic User</option><option value="editor" ${u.role === 'editor' ? 'selected' : ''}>Editor</option><option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option></select></td><td><span class="status-badge ${u.totpEnabled ? 'success' : ''}">${u.totpEnabled ? 'Enabled' : 'Disabled'}</span></td><td><input data-user-pass="${u.id}" type="password" placeholder="leave unchanged"></td><td><button class="ghost" data-user-save="${u.id}" type="button">Save</button>${u.totpEnabled ? `<button class="ghost warning" data-user-reset-2fa="${u.id}" type="button">Reset 2FA</button>` : ''}${u.id !== state.user.id ? `<button class="ghost danger" data-user-delete="${u.id}" type="button">Delete</button>` : ''}</td></tr>`).join('')}</tbody></table></div>
-    <h3>Add user</h3><div class="row"><input id="new-user" placeholder="username"><select id="new-role"><option value="user">Basic User</option><option value="editor">Editor</option><option value="admin">Admin</option></select></div><div class="row"><input id="new-pass" type="password" placeholder="temporary password, 10+ characters"><button class="primary" id="add-user" type="button">Add user</button></div></div>`;
+    <h3>Add user</h3><div class="row"><input id="new-user" placeholder="username"><select id="new-role"><option value="user">Basic User</option><option value="editor">Editor</option><option value="admin">Admin</option></select></div><div class="row"><input id="new-pass" type="password" placeholder="temporary password, 10+ characters"><button class="primary" id="add-user" type="button" disabled>Add user</button></div><div id="add-user-error" class="form-error-banner" style="display: none;"></div></div>`;
 }
 function renderConfigFields(plugin) {
   const schema = plugin.manifest?.configSchema || {};
@@ -640,9 +640,41 @@ function bindAppearanceHandlers(content) {
   }));
 }
 function bindUserHandlers(content) {
+  const newUserInput = content.querySelector('#new-user');
+  const newPassInput = content.querySelector('#new-pass');
+  const addUserButton = content.querySelector('#add-user');
+  const addUserError = content.querySelector('#add-user-error');
+  const setAddUserError = (message) => {
+    if (!addUserError) return;
+    addUserError.textContent = message || '';
+    addUserError.style.display = message ? 'flex' : 'none';
+  };
+  const addUserValidationMessage = () => {
+    if ((newUserInput?.value || '').trim().length < 3) return 'Username must be at least 3 characters.';
+    if ((newPassInput?.value || '').length < 10) return 'Password must be at least 10 characters.';
+    return '';
+  };
+  const updateAddUserState = () => {
+    const message = addUserValidationMessage();
+    if (addUserButton) addUserButton.disabled = Boolean(message);
+    setAddUserError(message && (newUserInput?.value || newPassInput?.value) ? message : '');
+  };
+  [newUserInput, newPassInput].forEach((input) => input?.addEventListener('input', updateAddUserState));
+  updateAddUserState();
   content.querySelector('#add-user')?.addEventListener('click', async () => {
-    await api('/api/users', { method: 'POST', body: JSON.stringify({ username: formValue('new-user'), password: formValue('new-pass'), role: $('new-role').value }) });
-    await loadAdminData(); toast('User added');
+    const validationMessage = addUserValidationMessage();
+    if (validationMessage) {
+      setAddUserError(validationMessage);
+      toast(validationMessage);
+      return;
+    }
+    try {
+      await api('/api/users', { method: 'POST', body: JSON.stringify({ username: formValue('new-user'), password: formValue('new-pass'), role: $('new-role').value }) });
+      await loadAdminData(); toast('User added');
+    } catch (error) {
+      setAddUserError(error.message);
+      toast(error.message);
+    }
   });
   content.querySelectorAll('[data-user-save]').forEach((button) => button.addEventListener('click', async () => {
     const id = button.dataset.userSave;

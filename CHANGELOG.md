@@ -4,7 +4,23 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
-## Unreleased
+## [0.4.0] - 2026-06-17
+
+### Added
+
+- Added a machine-readable OpenAPI 3.1 contract in `docs/openapi.json` and linked it from the API/development docs.
+- Added `/api/openapi.json` and an `npm run openapi:check` validation gate for the API contract.
+
+### Changed
+
+- Authenticated and read-gated requests now revalidate session users against the database so deleted accounts and role changes take effect immediately.
+- Account security changes now revoke affected sessions, including password changes, Admin password resets, Admin TOTP resets, role downgrades, and account deletion.
+- User management now prevents removing the last Admin account.
+- Preset imports now validate service URLs with the same HTTP/HTTPS rules as normal service creation, reject entries with no selected URL or preset website fallback, and validate before caching icons.
+
+### Security
+
+- Hardened CSRF token checks with timing-safe comparison while preserving the existing error response shape.
 
 ## [0.3.9] - 2026-06-15
 

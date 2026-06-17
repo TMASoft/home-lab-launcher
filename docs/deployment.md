@@ -336,9 +336,9 @@ Admins can inspect health, warnings, effective configuration, reverse-proxy/HTTP
 
 ### CSRF and sessions
 
-Mutating API requests after login require the `X-CSRF-Token` header returned by `/api/auth/session` or `/api/auth/login`. The bundled frontend handles this automatically. If you build external clients, fetch a session first and reuse the returned token.
+Mutating API requests after login require the `X-CSRF-Token` header returned by `/api/auth/session` or `/api/auth/login`. The bundled frontend handles this automatically. If you build external clients, fetch a session first and reuse the returned token. The machine-readable API contract is served at `/api/openapi.json`.
 
-Users can enable TOTP 2FA from the profile menu. After 2FA is enabled, password login returns a `requiresTotp` challenge until a valid six-digit code is submitted. Admins can reset another user's 2FA from **Admin → Users** when account recovery is needed.
+Authenticated and read-gated requests revalidate the session user against the database before trusting cached session identity. Deleted accounts are rejected, role changes take effect immediately on both mutating and read paths, and account security changes revoke affected sessions. Users can enable TOTP 2FA from the profile menu. After 2FA is enabled, password login returns a `requiresTotp` challenge until a valid six-digit code is submitted. Admins can reset another user's 2FA from **Admin → Users** when account recovery is needed, which revokes that user's active sessions.
 
 ### Native SQLite module errors
 
