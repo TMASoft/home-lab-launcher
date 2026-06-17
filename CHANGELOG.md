@@ -4,6 +4,17 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.4.1] - 2026-06-17
+
+### Changed
+
+- Updated developer guidelines in `AGENTS.md` to reference the new local tracking directory `dev/`.
+
+### Removed
+
+- Cleaned up development workspace directories by purging completed roadmap/todo files (`docs/v0.4.0/todo.md`, `dev/minor-release-3.md`, `dev/minor-release-3-cleanup.md`, `dev/bug-preset-catalog-update-status.md`, `dev/catalog.md`, and root `ROADMAP.md`).
+- Purged local temporary/development database files (`:memory/launcher.sqlite` and `data/launcher.sqlite`) and local `.env` file from the workspace root.
+
 ## [0.4.0] - 2026-06-17
 
 ### Added
