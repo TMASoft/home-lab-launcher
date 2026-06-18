@@ -87,6 +87,7 @@ function render() {
   $('admin-panel').hidden = !isAdmin();
   $('hero-card').hidden = state.settings?.appearance?.hero?.enabled === false;
   $('add-service-button').hidden = !canEditServices();
+  $('add-service-shortcut-button').hidden = !canEditServices();
   $('settings-button').hidden = !isAdmin();
   $('users-button').hidden = !isAdmin();
   renderServices();
@@ -536,6 +537,7 @@ async function persistServiceOrder() {
 
 $('services-empty').addEventListener('click', (event) => { if (event.target.closest('[data-empty-add-service]')) showServiceModal(); });
 $('add-service-button').addEventListener('click', () => showServiceModal());
+$('add-service-shortcut-button').addEventListener('click', () => showServiceModal());
 $('login-button').addEventListener('click', showLoginModal);
 $('session-button').addEventListener('click', () => { const dd = $('user-dropdown'); const open = dd.hidden; dd.hidden = !open; $('session-button').setAttribute('aria-expanded', String(open)); });
 $('user-dropdown').addEventListener('click', async (event) => {

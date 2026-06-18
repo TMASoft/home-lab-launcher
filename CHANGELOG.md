@@ -4,6 +4,12 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.5.1] - 2026-06-18
+
+### Added
+
+- Added an "Add Service" shortcut button (+) next to the search box in the Service Launchpad.
+
 ## [0.5.0] - 2026-06-18
 
 ### Changed
