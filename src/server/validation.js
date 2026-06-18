@@ -98,7 +98,9 @@ function normalizeLaunchpad(value) {
       hiddenCategories: [],
       viewMode: 'cards',
       hideMetadata: false,
-      layoutOrder: ['hero', 'services']
+      layoutOrder: ['hero', 'services'],
+      sortBy: 'custom',
+      servicesOrder: []
     };
   }
   const out = {};
@@ -152,6 +154,20 @@ function normalizeLaunchpad(value) {
     }
   }
   out.layoutOrder = validOrder;
+
+  let sortBy = 'custom';
+  if (Object.prototype.hasOwnProperty.call(value, 'sortBy')) {
+    if (['custom', 'alphabetical', 'category'].includes(value.sortBy)) {
+      sortBy = value.sortBy;
+    }
+  }
+  out.sortBy = sortBy;
+
+  let servicesOrder = [];
+  if (Object.prototype.hasOwnProperty.call(value, 'servicesOrder') && Array.isArray(value.servicesOrder)) {
+    servicesOrder = value.servicesOrder.map((id) => slugId(id, '')).filter(Boolean).slice(0, 500);
+  }
+  out.servicesOrder = servicesOrder;
 
   return out;
 }

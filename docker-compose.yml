@@ -2,7 +2,7 @@ services:
   launcher:
     image: ${APP_IMAGE:-home-lab-launcher:local}
     build: .
-    container_name: home-lab-launcher
+    container_name: ${CONTAINER_NAME:-home-lab-launcher}
     restart: unless-stopped
     environment:
       PORT: 8080

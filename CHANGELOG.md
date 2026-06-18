@@ -4,6 +4,18 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.4.2] - 2026-06-18
+
+### Added
+
+- Added per-user launchpad sort preferences for custom, alphabetical, and category service ordering.
+- Added a `CONTAINER_NAME` Docker Compose override for isolated local test deployments while preserving the default `home-lab-launcher` container name.
+
+### Fixed
+
+- Improved browser first-admin setup validation so short usernames/passwords and incomplete TOTP setup are explained inline before submitting.
+- Preserved non-visible services in the saved custom service order when cards are dragged while search or category filters are active.
+
 ## [0.4.1] - 2026-06-17
 
 ### Changed

@@ -1498,3 +1498,67 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   line-height: 1.5;
   outline: none !important;
 }
+
+/* Sorting Controls and Card Dragging Styles */
+.launchpad-controls select {
+  cursor: pointer;
+  min-height: 36px;
+  padding: 0 24px 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  background: transparent;
+  font-size: .875rem;
+  font-weight: 560;
+  line-height: 1;
+  outline: none;
+  transition: background-color .14s ease, border-color .14s ease, color .14s ease;
+  appearance: auto;
+  -webkit-appearance: auto;
+}
+.launchpad-controls select:hover {
+  border-color: var(--line-strong);
+  background: var(--surface-2);
+}
+.launchpad-controls select option {
+  background: var(--surface);
+  color: var(--ink);
+}
+.view-compact:not(.has-groups) {
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+}
+.view-list .service-group-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+}
+.view-list .service-group {
+  display: grid;
+  gap: 6px;
+}
+.view-list .service-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0;
+}
+.view-list .service-group-head h3 {
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--muted);
+  letter-spacing: -.015em;
+  text-transform: capitalize;
+}
+.service-card[draggable="true"] {
+  cursor: grab;
+}
+.service-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+.service-card.is-dragging-card {
+  opacity: 0.45;
+  transform: scale(0.99);
+  outline: 1px dashed rgba(143, 211, 255, 0.55);
+}

@@ -333,7 +333,9 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenCategories: ['Ops', 'Media'],
     viewMode: 'list',
     hideMetadata: false,
-    layoutOrder: ['hero', 'services']
+    layoutOrder: ['hero', 'services'],
+    sortBy: 'custom',
+    servicesOrder: []
   });
 
   await basic.request('/api/me/preferences/launchpad', {
@@ -352,8 +354,30 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenCategories: ['Media'],
     viewMode: 'compact',
     hideMetadata: true,
-    layoutOrder: ['services', 'plugin:demo:status', 'hero']
+    layoutOrder: ['services', 'plugin:demo:status', 'hero'],
+    sortBy: 'custom',
+    servicesOrder: []
   });
+
+  await basic.request('/api/me/preferences/launchpad', {
+    method: 'PUT',
+    body: {
+      value: {
+        viewMode: 'cards',
+        sortBy: 'category',
+        servicesOrder: ['editor-created-service', 'Bad ID With Spaces', '', ...Array.from({ length: 505 }, (_, i) => `service-${i}`)]
+      }
+    }
+  });
+  launchpadPrefs = await basic.request('/api/me/preferences');
+  assert.equal(launchpadPrefs.preferences.launchpad.sortBy, 'category');
+  assert.equal(launchpadPrefs.preferences.launchpad.servicesOrder.length, 500);
+  assert.deepEqual(launchpadPrefs.preferences.launchpad.servicesOrder.slice(0, 2), ['editor-created-service', 'bad-id-with-spaces']);
+
+  await basic.request('/api/me/preferences/launchpad', { method: 'PUT', body: { value: { sortBy: 'invalid', servicesOrder: 'not-array' } } });
+  launchpadPrefs = await basic.request('/api/me/preferences');
+  assert.equal(launchpadPrefs.preferences.launchpad.sortBy, 'custom');
+  assert.deepEqual(launchpadPrefs.preferences.launchpad.servicesOrder, []);
 
   await assert.rejects(() => basic.request('/api/me/preferences/adminTheme', { method: 'PUT', body: { value: true } }), /Unsupported preference key/);
 
