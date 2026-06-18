@@ -173,13 +173,39 @@ function showAccessError(error) {
   $('services-empty').textContent = error.message === 'Authentication required' ? 'Login required to view this launcher.' : error.message;
 }
 
+function sortServices(services) {
+  const sortBy = state.preferences.sortBy || 'custom';
+  if (sortBy === 'alphabetical') {
+    return [...services].sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sortBy === 'category') {
+    return sortServicesByCustom(services);
+  } else {
+    return sortServicesByCustom(services);
+  }
+}
+
+function sortServicesByCustom(services) {
+  const order = state.preferences.servicesOrder || [];
+  if (order.length === 0) return services;
+  const orderMap = new Map();
+  order.forEach((id, idx) => orderMap.set(id, idx));
+  return [...services].sort((a, b) => {
+    const idxA = orderMap.has(a.id) ? orderMap.get(a.id) : Infinity;
+    const idxB = orderMap.has(b.id) ? orderMap.get(b.id) : Infinity;
+    if (idxA !== idxB) return idxA - idxB;
+    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+    return a.name.localeCompare(b.name);
+  });
+}
+
 function renderServices() {
   const q = $('service-search').value.trim().toLowerCase();
   const categories = [...new Set(state.services.map((s) => s.category || 'general'))].sort();
   const hidden = new Set(state.preferences.hiddenCategories || []);
   const controls = $('launchpad-controls');
   if (controls) {
-    controls.innerHTML = `<div class="control-group" aria-label="Category filters"><button class="ghost service-category-chip ${!state.selectedCategory ? 'active-filter' : ''}" type="button" data-launch-category="">All</button>${categories.map((cat) => `<button class="ghost service-category-chip ${state.selectedCategory === cat ? 'active-filter' : ''} ${hidden.has(cat) ? 'muted-filter' : ''}" type="button" data-launch-category="${escapeHtml(cat)}">${hidden.has(cat) ? 'Hidden: ' : ''}${escapeHtml(cat)}</button>`).join('')}</div><div class="control-group" aria-label="Layout"><button class="ghost ${state.preferences.viewMode === 'cards' ? 'active-filter' : ''}" type="button" data-view-mode="cards">Cards</button><button class="ghost ${state.preferences.viewMode === 'compact' ? 'active-filter' : ''}" type="button" data-view-mode="compact">Compact</button><button class="ghost ${state.preferences.viewMode === 'list' ? 'active-filter' : ''}" type="button" data-view-mode="list">List</button></div><div class="control-group" aria-label="Options"><button class="ghost ${state.preferences.hideMetadata ? 'active-filter' : ''}" type="button" data-toggle-metadata>${state.preferences.hideMetadata ? 'Show Metadata' : 'Hide Metadata'}</button></div>`;
+    const sortBy = state.preferences.sortBy || 'custom';
+    controls.innerHTML = `<div class="control-group" aria-label="Category filters"><button class="ghost service-category-chip ${!state.selectedCategory ? 'active-filter' : ''}" type="button" data-launch-category="">All</button>${categories.map((cat) => `<button class="ghost service-category-chip ${state.selectedCategory === cat ? 'active-filter' : ''} ${hidden.has(cat) ? 'muted-filter' : ''}" type="button" data-launch-category="${escapeHtml(cat)}">${hidden.has(cat) ? 'Hidden: ' : ''}${escapeHtml(cat)}</button>`).join('')}</div><div class="control-group" aria-label="Layout"><button class="ghost ${state.preferences.viewMode === 'cards' ? 'active-filter' : ''}" type="button" data-view-mode="cards">Cards</button><button class="ghost ${state.preferences.viewMode === 'compact' ? 'active-filter' : ''}" type="button" data-view-mode="compact">Compact</button><button class="ghost ${state.preferences.viewMode === 'list' ? 'active-filter' : ''}" type="button" data-view-mode="list">List</button></div><div class="control-group" aria-label="Sorting"><select id="service-sort-by" aria-label="Sort by"><option value="custom" ${sortBy === 'custom' ? 'selected' : ''}>Sort: Custom</option><option value="alphabetical" ${sortBy === 'alphabetical' ? 'selected' : ''}>Sort: Alphabetical</option><option value="category" ${sortBy === 'category' ? 'selected' : ''}>Sort: Category</option></select></div><div class="control-group" aria-label="Options"><button class="ghost ${state.preferences.hideMetadata ? 'active-filter' : ''}" type="button" data-toggle-metadata>${state.preferences.hideMetadata ? 'Show Metadata' : 'Hide Metadata'}</button></div>`;
   }
   const visible = state.services.filter((s) => {
     const category = s.category || 'general';
@@ -203,10 +229,13 @@ function renderServices() {
       <span class="favorite-actions"><button class="icon-btn" data-fav-move="up" data-fav-id="${escapeHtml(s.id)}" ${index === 0 ? 'disabled' : ''} aria-label="Move favorite up">↑</button><button class="icon-btn" data-fav-move="down" data-fav-id="${escapeHtml(s.id)}" ${index === favoriteServices.length - 1 ? 'disabled' : ''} aria-label="Move favorite down">↓</button></span>
     </article>`).join('');
 
+  const sortedVisible = sortServices(visible);
   const grid = $('service-grid');
-  grid.className = `grid view-${escapeHtml(state.preferences.viewMode || 'cards')}`;
-  if (state.preferences.viewMode === 'compact') grid.innerHTML = renderGroupedServices(visible);
-  else grid.innerHTML = visible.map(serviceCardHtml).join('');
+  const sortBy = state.preferences.sortBy || 'custom';
+  const hasGroups = sortBy === 'category';
+  grid.className = `grid view-${escapeHtml(state.preferences.viewMode || 'cards')} ${hasGroups ? 'has-groups' : ''}`;
+  if (hasGroups) grid.innerHTML = renderGroupedServices(sortedVisible);
+  else grid.innerHTML = sortedVisible.map(serviceCardHtml).join('');
   const empty = $('services-empty');
   empty.hidden = visible.length > 0;
   if (!visible.length) {
@@ -229,7 +258,8 @@ function renderGroupedServices(services) {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(service);
   }
-  return [...groups.entries()].map(([category, items]) => `<section class="service-group"><div class="service-group-head"><h3>${escapeHtml(category)}</h3><button class="ghost" type="button" data-hide-category="${escapeHtml(category)}">Hide category</button></div><div class="service-group-grid">${items.map(serviceCardHtml).join('')}</div></section>`).join('');
+  const sortedGroups = [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  return sortedGroups.map(([category, items]) => `<section class="service-group"><div class="service-group-head"><h3>${escapeHtml(category)}</h3></div><div class="service-group-grid">${items.map(serviceCardHtml).join('')}</div></section>`).join('');
 }
 function healthBadgeHtml(health) {
   if (!health) return '';
@@ -250,7 +280,9 @@ function serviceCardHtml(s) {
     s.healthCheckEnabled ? healthBadgeHtml(s.health) || '<span class="status-badge warning">Pending check</span>' : '',
     disabled ? '<span class="status-badge danger">Disabled</span>' : ''
   ].filter(Boolean).join('');
-  return `<article class="service-card ${disabled ? 'is-disabled' : ''}" style="--accent:${hexToRgba(s.accent, .1)}">
+  const sortBy = state.preferences.sortBy || 'custom';
+  const isDraggable = sortBy === 'custom' ? 'draggable="true"' : '';
+  return `<article class="service-card ${disabled ? 'is-disabled' : ''}" data-service-id="${escapeHtml(s.id)}" ${isDraggable} style="--accent:${hexToRgba(s.accent, .1)}">
     <div><div class="card-top">${iconHtml(s.icon, s.name)}<span class="actions">
       <button class="icon-btn" data-copy="${escapeHtml(s.url)}" title="Copy URL" aria-label="Copy ${escapeHtml(s.name)} URL">⧉</button>
       <button class="icon-btn ${state.favorites.includes(s.id) ? 'active' : ''}" data-fav="${escapeHtml(s.id)}" title="Favorite" aria-label="${state.favorites.includes(s.id) ? 'Remove from' : 'Add to'} favorites">★</button>
@@ -391,6 +423,18 @@ $('launchpad-controls').addEventListener('click', async (event) => {
     }
   }
 });
+$('launchpad-controls').addEventListener('change', async (event) => {
+  const sortBySelect = event.target.closest('#service-sort-by');
+  if (sortBySelect) {
+    state.preferences.sortBy = sortBySelect.value;
+    try {
+      await saveLaunchpadPreferences();
+    } catch (error) {
+      toast(`Could not save launchpad preferences: ${error.message}`);
+    }
+    renderServices();
+  }
+});
 $('favorites').addEventListener('click', async (event) => {
   const button = event.target.closest('[data-fav-move]');
   if (!button) return;
@@ -429,6 +473,67 @@ $('service-grid').addEventListener('click', async (e) => {
     }
   }
 });
+
+$('service-grid').addEventListener('dragstart', (event) => {
+  const card = event.target.closest('[data-service-id]');
+  if (!card) return;
+  state.draggedServiceId = card.dataset.serviceId;
+  card.classList.add('is-dragging-card');
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', state.draggedServiceId);
+});
+
+$('service-grid').addEventListener('dragover', (event) => {
+  const sortBy = state.preferences.sortBy || 'custom';
+  if (sortBy !== 'custom' || !state.draggedServiceId) return;
+  const target = event.target.closest('[data-service-id]');
+  if (!target || target.dataset.serviceId === state.draggedServiceId) return;
+  event.preventDefault();
+  const dragged = document.querySelector(`[data-service-id="${CSS.escape(state.draggedServiceId)}"]`);
+  if (!dragged) return;
+  const rect = target.getBoundingClientRect();
+  const after = event.clientY > rect.top + rect.height / 2 || (Math.abs(event.clientY - (rect.top + rect.height / 2)) < 20 && event.clientX > rect.left + rect.width / 2);
+  target.parentNode.insertBefore(dragged, after ? target.nextSibling : target);
+});
+
+$('service-grid').addEventListener('drop', (event) => {
+  event.preventDefault();
+});
+
+$('service-grid').addEventListener('dragend', async () => {
+  document.querySelectorAll('.is-dragging-card').forEach((item) => item.classList.remove('is-dragging-card'));
+  if (state.draggedServiceId) {
+    state.draggedServiceId = '';
+    const sortBy = state.preferences.sortBy || 'custom';
+    if (sortBy === 'custom') {
+      await persistServiceOrder();
+    }
+  }
+});
+
+async function persistServiceOrder() {
+  const grid = $('service-grid');
+  if (!grid) return;
+  const visibleOrder = [...grid.querySelectorAll('[data-service-id]')].map((item) => item.dataset.serviceId);
+  const visibleIds = new Set(visibleOrder);
+  const knownIds = new Set(state.services.map((service) => service.id));
+  const baseOrder = [];
+  const seenIds = new Set();
+  const addBaseId = (id) => {
+    if (knownIds.has(id) && !seenIds.has(id)) {
+      seenIds.add(id);
+      baseOrder.push(id);
+    }
+  };
+  (state.preferences.servicesOrder || []).forEach(addBaseId);
+  state.services.forEach((service) => addBaseId(service.id));
+  let visibleIndex = 0;
+  const newOrder = baseOrder.map((id) => visibleIds.has(id) ? visibleOrder[visibleIndex++] : id);
+  state.preferences.servicesOrder = newOrder;
+  await saveLaunchpadPreferences();
+  toast('Service order saved');
+}
+
 $('services-empty').addEventListener('click', (event) => { if (event.target.closest('[data-empty-add-service]')) showServiceModal(); });
 $('add-service-button').addEventListener('click', () => showServiceModal());
 $('login-button').addEventListener('click', showLoginModal);
@@ -640,7 +745,7 @@ function showBootstrapModal() {
   let generatedSecret = '';
   for (let i = 0; i < bytes.length; i++) generatedSecret += alphabet[bytes[i] % 32];
   const formattedSecret = generatedSecret.match(/.{1,4}/g).join(' ');
-  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username"></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters"></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div></div><div id="boot-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
+  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username" autocomplete="username" minlength="3" required><small>Use at least 3 characters.</small></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters" autocomplete="new-password" minlength="10" required><small>Use at least 10 characters.</small></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app, then enter the current 6-digit code before creating the account:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"><small>Leave 2FA unchecked if you are not setting up an authenticator app now.</small></div></div><div id="boot-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
   $('boot-enable-totp').addEventListener('change', (e) => { $('boot-totp-setup').hidden = !e.target.checked; });
   $('boot-submit').onclick = async () => {
     const username = formValue('boot-username');
@@ -653,13 +758,22 @@ function showBootstrapModal() {
       errorEl.textContent = '';
       errorEl.style.display = 'none';
     }
+    if (username.length < 3 || password.length < 10) {
+      if (errorEl) {
+        errorEl.textContent = 'Username must be at least 3 characters and password must be at least 10 characters.';
+        errorEl.style.display = 'flex';
+      } else {
+        toast('Username must be at least 3 characters and password must be at least 10 characters.');
+      }
+      return;
+    }
     if (enableTotp) {
-      if (!totpCode) {
+      if (!/^\d{6}$/.test(totpCode)) {
         if (errorEl) {
-          errorEl.textContent = 'Please enter the 2FA code to verify setup';
+          errorEl.textContent = 'Enter the current 6-digit 2FA code from your authenticator app, or leave 2FA unchecked for initial setup.';
           errorEl.style.display = 'flex';
         } else {
-          toast('Please enter the 2FA code to verify setup');
+          toast('Enter the current 6-digit 2FA code, or leave 2FA unchecked.');
         }
         return;
       }
@@ -799,7 +913,7 @@ async function showProfileModal() {
     try {
       if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
       else localStorage.removeItem('hll.launchpad');
-      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false };
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, sortBy: 'custom', servicesOrder: [] };
       closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
     } catch (error) {
       showError(error.message);

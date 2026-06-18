@@ -88,6 +88,8 @@ Choose one first-admin setup path:
 - **Browser setup, recommended for most installs:** leave `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` empty or remove them from `.env`; the first page load prompts you to create the Admin account and can enable TOTP 2FA immediately.
 - **Environment bootstrap:** set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` before the first start when you need non-interactive setup. Change or remove the bootstrap password after first login.
 
+Admin usernames must be at least 3 characters and passwords must be at least 10 characters. If you enable TOTP during browser setup, add the displayed secret to an authenticator app and enter the current 6-digit code before submitting; otherwise leave 2FA unchecked and enable it later from the profile menu.
+
 ### 2. Start with Docker Compose
 
 For a tagged public release, prefer the official GHCR image and skip a local build:
@@ -120,6 +122,8 @@ curl -fsS http://localhost:8080/api/bootstrap-status
 
 `/api/healthz` returns only `{ ok, version, uptimeSeconds }`. `/api/bootstrap-status` reports whether first-admin setup is still needed.
 
+Docker named volumes persist across rebuilds and container recreation. If you are intentionally repeating a clean local first-launch test, stop the app and remove the Compose volume first with `docker compose down -v`; do not do this on a real deployment unless you want to erase application data.
+
 ### 3. Optional port and reverse-proxy binding
 
 The container listens on port `8080` internally. To use a different host port, set `HOST_PORT` and update `APP_BASE_URL`:
@@ -144,7 +148,7 @@ If you do not already have a reverse proxy, the installer can generate a basic N
 
 ## Launchpad personalization and health
 
-The launchpad supports card, compact grouped, and list views. Logged-in users can save their layout preference, reorder favorites, hide categories, and toggle launchpad metadata visibility. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled.
+The launchpad supports card, compact, and list views with custom, alphabetical, and category sorting. Logged-in users can save their layout preference, drag service cards to customize order, reorder favorites, hide categories, and toggle launchpad metadata visibility. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled. Dragging cards while a search or category filter is active updates the visible cards without discarding the saved order of non-visible services.
 
 Service hostnames in the launchpad are shown only to Admins. The metadata toggle hides both hostnames and tags for Admins, while non-admin viewers can use the same toggle to hide or show tags only.
 
@@ -158,7 +162,7 @@ Supported image formats are JPEG, PNG, GIF, and WebP. Animated GIF/WebP files an
 
 ## Appearance customization and theme packs
 
-Admins control the global look of the launcher from **Admin console → Appearance**. Basic Users keep personal launchpad preferences such as favorites, favorite order, view mode, and hidden categories, but cannot change the site-wide theme.
+Admins control the global look of the launcher from **Admin console → Appearance**. Basic Users keep personal launchpad preferences such as favorites, favorite order, view mode, sort mode, custom service order, and hidden categories, but cannot change the site-wide theme.
 
 Appearance settings include:
 

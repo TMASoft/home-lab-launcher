@@ -68,6 +68,7 @@ The default Compose file:
 - can use a published image through `APP_IMAGE` or build the local app image for source checkouts,
 - runs the application as a non-root `node` user in the container,
 - stores runtime data in the `launcher-data` volume,
+- names the container `home-lab-launcher` by default, with `CONTAINER_NAME` available for isolated test or multi-checkout runs,
 - exposes `HOST_PORT` on `HOST_BIND_IP`, defaulting to `0.0.0.0:8080`,
 - drops all capabilities (`cap_drop: ["ALL"]`) and prevents privilege escalation (`no-new-privileges: true`), and
 - registers a healthcheck targeting `/api/healthz`.
@@ -234,7 +235,9 @@ BOOTSTRAP_ADMIN_USERNAME=
 BOOTSTRAP_ADMIN_PASSWORD=
 ```
 
-On first page load, the UI prompts you to create the first Admin. This avoids storing an initial password in the project directory. You may also enable TOTP 2FA during this browser setup; the generated secret is shown once for entry into an authenticator app.
+On first page load, the UI prompts you to create the first Admin. This avoids storing an initial password in the project directory. Usernames must be at least 3 characters and passwords must be at least 10 characters. You may also enable TOTP 2FA during this browser setup; the generated secret is shown once for entry into an authenticator app, and the current 6-digit code must be entered before the account is created. Leave 2FA unchecked if you want to enable it later from the profile menu.
+
+Docker named volumes persist across image rebuilds, `docker compose up --build`, and container recreation. Reusing the same Compose project name is not a clean first launch unless the previous volume is removed. For disposable local testing only, reset first-run state with `docker compose down -v`; do not remove volumes on real deployments unless you intend to erase the launcher database.
 
 ### Environment bootstrap
 
