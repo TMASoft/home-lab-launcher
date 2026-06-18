@@ -404,6 +404,27 @@ td select,
   width: min(420px, 100%);
   min-height: 42px;
 }
+.search-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(420px, 100%);
+}
+.search-container .search {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+}
+.search-container .primary {
+  width: 42px !important;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+}
 textarea { resize: vertical; }
 .search:focus,
 .field input:focus,
