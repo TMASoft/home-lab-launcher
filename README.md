@@ -312,7 +312,7 @@ It implements an optional Uptime Kuma dashboard section for surfacing monitor st
 
 ## Development
 
-Native development should use an active Node.js LTS release supported by `better-sqlite3` and the Docker image. This beta supports Node.js 20 and 22; newer current/non-LTS releases may not have compatible native SQLite bindings yet.
+Native development should use Node.js 22, the active LTS release supported by `better-sqlite3` and the Docker image. Newer current/non-LTS releases may not have compatible native SQLite bindings yet.
 
 The API overview is documented in [`docs/api.md`](docs/api.md), and the machine-readable OpenAPI 3.1 contract is maintained in [`docs/openapi.json`](docs/openapi.json) and served at `/api/openapi.json`. Update both when changing endpoint behavior, request/response shapes, authentication, or CSRF requirements.
 

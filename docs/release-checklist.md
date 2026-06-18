@@ -55,7 +55,7 @@ npm run audit:ci
 ```
 
 When a tag matching `v*.*.*` is pushed, the release pipeline will:
-1. Run the quality gate checks on both Node 20 and 22.
+1. Run the quality gate checks on Node 22.
 2. Build and push a multi-platform Docker image supporting both `linux/amd64` and `linux/arm64` targets.
 3. Automatically apply semantic tags (`vX.Y.Z`, `vX.Y`, `vX`, and `latest`).
 

@@ -1,5 +1,5 @@
 # Stage 1: Build native dependencies
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
@@ -8,7 +8,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 # Stage 2: Clean runtime environment
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -22,4 +22,3 @@ USER node
 
 EXPOSE 8080
 CMD ["npm", "start"]
-

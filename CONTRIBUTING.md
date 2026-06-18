@@ -4,7 +4,7 @@ Thanks for helping improve Home Lab Launcher.
 
 ## Development setup
 
-Use Node.js 20 or 22. `better-sqlite3` is a native dependency, so local installs need a C/C++ compiler toolchain, Python 3, `make`, and SQLite development headers/libraries. Package names vary by OS; examples include `build-essential python3 make libsqlite3-dev` on Debian/Ubuntu and `base-devel python sqlite` on Arch Linux.
+Use Node.js 22. `better-sqlite3` is a native dependency, so local installs need a C/C++ compiler toolchain, Python 3, `make`, and SQLite development headers/libraries. Package names vary by OS; examples include `build-essential python3 make libsqlite3-dev` on Debian/Ubuntu and `base-devel python sqlite` on Arch Linux.
 
 ```bash
 npm install
@@ -13,7 +13,7 @@ npm test
 npm run dev
 ```
 
-The app supports active Node.js LTS versions 20 and 22 for native development. Docker Compose is the preferred deployment target.
+The app supports Node.js 22 for native development. Docker Compose is the preferred deployment target.
 
 Useful local data commands:
 
