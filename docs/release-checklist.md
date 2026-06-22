@@ -8,6 +8,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 - Confirm the release tag will publish `ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z` through `.github/workflows/docker-publish.yml`.
 - Confirm public docs use neutral examples and do not include private domains, tokens, local filesystem paths, personal plugin configuration, certificates, or `.env` values.
 - Confirm `docs/openapi.json`, `/api/openapi.json`, and `docs/api.md` reflect any route, auth, CSRF, request-body, response-envelope, or status-code changes.
+- Confirm mobile launchpad and Admin console formatting still works on narrow screens, including Admin tab scrolling, modal sizing, and long log/URL wrapping.
 - Confirm session lifecycle tests cover stale cached users on authenticated, role-protected, and read-gated routes.
 - Confirm preset/service import tests cover invalid URL schemes, malformed URLs, and missing `customUrl` when a preset has no website fallback.
 - Confirm `ROADMAP.md` and `AGENTS.md` remain local-only and excluded from Docker build context.

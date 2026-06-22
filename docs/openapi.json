@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Home Lab Launcher API",
-    "version": "0.4.1",
+    "version": "0.5.2",
     "description": "Pre-1.0 JSON API for the bundled frontend, trusted plugins, and private-deployment automation. Mutating API routes require the session CSRF token in the X-CSRF-Token header, except /api/bootstrap and /api/auth/login."
   },
   "servers": [

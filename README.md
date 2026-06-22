@@ -9,7 +9,7 @@
 Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple with service cards and is designed to grow through installable plugins such as weather, RSS/news, status widgets, inventory panels, or custom household dashboards.
 
 ![Status](https://img.shields.io/badge/status-public%20beta%20prep-ffd166?style=flat-square)
-![Node](https://img.shields.io/badge/node-20%20%7C%2022-79f2c0?style=flat-square)
+![Node](https://img.shields.io/badge/node-22-79f2c0?style=flat-square)
 ![SQLite](https://img.shields.io/badge/storage-SQLite-4de7ff?style=flat-square)
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
 
@@ -36,6 +36,8 @@ The main page includes:
 - an admin console visible only to Admins.
 
 The UI intentionally hides empty plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
+
+The launchpad and Admin console are responsive for phone and tablet use. On narrow screens, Admin tabs become a horizontal scroll menu, dialogs use the available viewport height, and long service URLs, plugin paths, and audit-log entries wrap instead of forcing page-wide scrolling.
 
 ## Public beta quick start
 
@@ -95,8 +97,8 @@ Admin usernames must be at least 3 characters and passwords must be at least 10 
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.3.7 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.5.2 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.5.2 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -149,6 +151,8 @@ If you do not already have a reverse proxy, the installer can generate a basic N
 ## Launchpad personalization and health
 
 The launchpad supports card, compact, and list views with custom, alphabetical, and category sorting. Logged-in users can save their layout preference, drag service cards to customize order, reorder favorites, hide categories, and toggle launchpad metadata visibility. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled. Dragging cards while a search or category filter is active updates the visible cards without discarding the saved order of non-visible services.
+
+On mobile screens, launchpad filters and view controls stack into touch-friendly rows while service cards, favorites, grouped services, and search remain single-column to avoid horizontal scrolling.
 
 Service hostnames in the launchpad are shown only to Admins. The metadata toggle hides both hostnames and tags for Admins, while non-admin viewers can use the same toggle to hide or show tags only.
 
@@ -242,6 +246,8 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 - **Logs** — filtered audit log entries for login, settings, user, service, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
 
 Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
+
+On mobile screens, the Admin section tabs are displayed as a horizontally scrollable tab bar so every Admin area remains reachable without compressing labels or forcing the whole page wider than the viewport.
 
 ## Configuration
 
