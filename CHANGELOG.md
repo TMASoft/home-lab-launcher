@@ -6,6 +6,13 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.5.2] - 2026-06-22
+
+### Changed
+
+- Improved mobile formatting for the launchpad and Admin console, including horizontally scrollable Admin tabs, safer narrow-screen header behavior, better dialog sizing, and long-content wrapping for logs, URLs, plugin paths, and service management rows.
+- Updated release documentation and image examples for the current `v0.5.2` patch release and Node 22 runtime baseline.
+
 ### Added
 
 - Added a generic per-user plugin preferences namespace so trusted plugins can persist display preferences such as plugin-local themes.

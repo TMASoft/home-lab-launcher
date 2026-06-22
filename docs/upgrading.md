@@ -30,9 +30,10 @@ For source checkouts, use `docker compose build --pull && docker compose up -d` 
 2. Check `curl -fsS http://localhost:8080/api/healthz` and `/api/bootstrap-status`.
 3. Open **Admin → Overview** and review beta readiness checklist links/warnings.
 4. Open **Admin → Security** and check effective configuration warnings.
-5. Have Admin users enable TOTP 2FA from the profile menu when the deployment is reachable beyond a trusted private LAN.
-6. Open **Admin → Plugins** and reload plugins if needed.
-7. Review plugin lifecycle states for failed or incompatible plugins.
+5. On a mobile-width browser or device, confirm the Admin tabs scroll horizontally and service/admin dialogs fit inside the viewport.
+6. Have Admin users enable TOTP 2FA from the profile menu when the deployment is reachable beyond a trusted private LAN.
+7. Open **Admin → Plugins** and reload plugins if needed.
+8. Review plugin lifecycle states for failed or incompatible plugins.
 
 ## Public beta backup-before-upgrade checklist
 
