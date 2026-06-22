@@ -225,6 +225,8 @@ Theme preset JSON never includes users, services, sessions, secrets, plugin conf
 
 Admins can choose whether anonymous visitors may view the portal. Disable anonymous read-only access in **Admin console → Settings** to require login for all page views.
 
+Trusted plugins can expose per-user display preferences such as plugin-local themes, filters, and panel state. Signed-in users store those preferences with their account; anonymous public-read viewers store them in browser local storage.
+
 ## Admin console
 
 Logged-in Admins see an **Admin** link in the top navigation. The console includes:

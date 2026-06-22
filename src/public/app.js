@@ -30,9 +30,11 @@ async function loadPreferences() {
     const prefs = (await api('/api/me/preferences')).preferences;
     state.favorites = prefs.favorites || [];
     state.preferences = { ...state.preferences, ...(prefs.launchpad || {}) };
+    state.preferences.plugins = prefs.plugins || {};
   } else {
     state.favorites = JSON.parse(localStorage.getItem('hll.favorites') || '[]');
     state.preferences = { ...state.preferences, ...JSON.parse(localStorage.getItem('hll.launchpad') || '{}') };
+    state.preferences.plugins = JSON.parse(localStorage.getItem('hll.plugins') || '{}');
   }
   if (state.preferences.hideMetadata === undefined) {
     state.preferences.hideMetadata = !!state.preferences.hideHostnames;
@@ -43,8 +45,20 @@ async function saveFavorites() {
   else localStorage.setItem('hll.favorites', JSON.stringify(state.favorites));
 }
 async function saveLaunchpadPreferences() {
-  if (state.user) await api('/api/me/preferences/launchpad', { method: 'PUT', body: JSON.stringify({ value: state.preferences }) });
-  else localStorage.setItem('hll.launchpad', JSON.stringify(state.preferences));
+  const { plugins, ...launchpad } = state.preferences;
+  if (state.user) await api('/api/me/preferences/launchpad', { method: 'PUT', body: JSON.stringify({ value: launchpad }) });
+  else localStorage.setItem('hll.launchpad', JSON.stringify(launchpad));
+}
+async function savePluginPreferences() {
+  if (state.user) await api('/api/me/preferences/plugins', { method: 'PUT', body: JSON.stringify({ value: state.preferences.plugins || {} }) });
+  else localStorage.setItem('hll.plugins', JSON.stringify(state.preferences.plugins || {}));
+}
+async function setPluginPreference(pluginId, key, value) {
+  const safePluginId = layoutSafeId(pluginId || 'plugin');
+  const safeKey = layoutSafeId(key || 'preference');
+  state.preferences.plugins = state.preferences.plugins || {};
+  state.preferences.plugins[safePluginId] = { ...(state.preferences.plugins[safePluginId] || {}), [safeKey]: value };
+  await savePluginPreferences();
 }
 async function loadPluginSections() {
   try { state.pluginSections = (await api('/api/plugins/enabled-sections')).sections || []; }
@@ -315,7 +329,13 @@ async function renderPluginSections() {
     el.setAttribute('aria-label', layoutLabels[layoutId]);
     el.innerHTML = `<h2>${escapeHtml(section.title || section.id)}</h2><div class="plugin-body"></div>`;
     root.insertBefore(el, host);
-    section.render({ container: el.querySelector('.plugin-body'), api, user: state.user });
+    section.render({
+      container: el.querySelector('.plugin-body'),
+      api,
+      user: state.user,
+      preferences: state.preferences.plugins?.[pluginId] || {},
+      setPluginPreference: (key, value) => setPluginPreference(pluginId, key, value)
+    });
     applyLayoutOrder();
     updateLayoutEditingUi();
   }};
@@ -915,7 +935,7 @@ async function showProfileModal() {
     try {
       if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
       else localStorage.removeItem('hll.launchpad');
-      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, sortBy: 'custom', servicesOrder: [] };
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, sortBy: 'custom', servicesOrder: [], plugins: state.preferences.plugins || {} };
       closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
     } catch (error) {
       showError(error.message);

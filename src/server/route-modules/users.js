@@ -88,7 +88,7 @@ function registerUserRoutes(router, deps) {
   });
 
   router.delete('/me/preferences/:key', requireAuth, (req, res) => {
-    const allowed = new Set(['favorites', 'launchpad']);
+    const allowed = new Set(['favorites', 'launchpad', 'plugins']);
     if (!allowed.has(req.params.key)) return res.status(400).json({ error: 'Unsupported preference key' });
     const result = db.prepare('DELETE FROM user_preferences WHERE user_id = ? AND key = ?').run(req.session.user.id, req.params.key);
     logEvent(db, req, 'profile.preferences_reset', { key: req.params.key, changed: result.changes });

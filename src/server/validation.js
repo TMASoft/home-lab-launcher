@@ -173,14 +173,38 @@ function normalizeLaunchpad(value) {
 }
 
 function preferencePayload(key, value) {
-  const allowed = new Set(['favorites', 'launchpad']);
+  const allowed = new Set(['favorites', 'launchpad', 'plugins']);
   if (!allowed.has(key)) throw new Error('Unsupported preference key');
   if (key === 'favorites') {
     if (!Array.isArray(value)) throw new Error('Favorites preference must be an array');
     return value.map((item) => slugId(item, '')).filter(Boolean).slice(0, 500);
   }
+  if (key === 'plugins') return normalizePluginPreferences(value);
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Launchpad preference must be an object');
   return normalizeLaunchpad(value);
+}
+
+function normalizePluginPreferenceValue(value) {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'number') return Number.isFinite(value) ? value : '';
+  return cleanText(value, '', 120);
+}
+
+function normalizePluginPreferences(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Plugin preferences must be an object');
+  const out = {};
+  for (const [rawPluginId, rawPrefs] of Object.entries(value).slice(0, 50)) {
+    const pluginId = slugId(rawPluginId, '');
+    if (!pluginId || !rawPrefs || typeof rawPrefs !== 'object' || Array.isArray(rawPrefs)) continue;
+    const prefs = {};
+    for (const [rawKey, rawValue] of Object.entries(rawPrefs).slice(0, 50)) {
+      const prefKey = slugId(rawKey, '');
+      if (!prefKey) continue;
+      prefs[prefKey] = normalizePluginPreferenceValue(rawValue);
+    }
+    if (Object.keys(prefs).length) out[pluginId] = prefs;
+  }
+  return out;
 }
 
 function sha256(value) {

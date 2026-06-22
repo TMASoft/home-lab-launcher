@@ -422,7 +422,7 @@
       "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
       "Sid": { "name": "sid", "in": "path", "required": true, "schema": { "type": "string" } },
       "Filename": { "name": "filename", "in": "path", "required": true, "schema": { "type": "string" } },
-      "PreferenceKey": { "name": "key", "in": "path", "required": true, "schema": { "type": "string", "enum": ["favorites", "launchpad"] } }
+      "PreferenceKey": { "name": "key", "in": "path", "required": true, "schema": { "type": "string", "enum": ["favorites", "launchpad", "plugins"] } }
     },
     "responses": {
       "Ok": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Ok" } } } },
@@ -458,7 +458,8 @@
       "UrlTestResult": { "type": "object", "properties": { "ok": { "type": "boolean" }, "status": { "type": "string" }, "statusCode": { "type": "integer" }, "responseMs": { "type": "integer" }, "url": { "type": "string" }, "error": { "type": "string" } }, "additionalProperties": true },
       "ServiceImportRequest": { "type": "object", "required": ["services"], "properties": { "services": { "type": "array", "items": { "$ref": "#/components/schemas/ServiceWriteRequest" } }, "mode": { "type": "string", "enum": ["upsert", "replace"], "default": "upsert" } } },
       "AppAssetRequest": { "type": "object", "properties": { "assetData": { "type": "string", "description": "Data URL for uploaded image." }, "url": { "type": "string", "format": "uri", "description": "Remote image URL to download." }, "name": { "type": "string" } }, "additionalProperties": true },
-      "Preferences": { "type": "object", "properties": { "favorites": { "type": "array", "items": { "type": "string" } }, "launchpad": { "$ref": "#/components/schemas/LaunchpadPreferences" } }, "additionalProperties": true },
+      "Preferences": { "type": "object", "properties": { "favorites": { "type": "array", "items": { "type": "string" } }, "launchpad": { "$ref": "#/components/schemas/LaunchpadPreferences" }, "plugins": { "$ref": "#/components/schemas/PluginPreferences" } }, "additionalProperties": true },
+      "PluginPreferences": { "type": "object", "additionalProperties": { "type": "object", "additionalProperties": { "oneOf": [{ "type": "string" }, { "type": "number" }, { "type": "boolean" }] } } },
       "LaunchpadPreferences": { "type": "object", "properties": { "hiddenCategories": { "type": "array", "items": { "type": "string" } }, "viewMode": { "type": "string", "enum": ["cards", "compact", "list"] }, "hideMetadata": { "type": "boolean" }, "layoutOrder": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false },
       "Notice": { "type": "object", "properties": { "level": { "type": "string" }, "source": { "type": "string" }, "title": { "type": "string" }, "message": { "type": "string" }, "createdAt": { "type": "string" } }, "additionalProperties": true },
       "AdminOverview": { "type": "object", "properties": { "settings": { "$ref": "#/components/schemas/PublicSettings" }, "counts": { "$ref": "#/components/schemas/GenericObject" }, "runtime": { "$ref": "#/components/schemas/GenericObject" }, "warnings": { "type": "array", "items": { "$ref": "#/components/schemas/Notice" } }, "notices": { "type": "array", "items": { "$ref": "#/components/schemas/Notice" } } }, "additionalProperties": true },

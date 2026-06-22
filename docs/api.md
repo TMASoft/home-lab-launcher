@@ -64,13 +64,15 @@ Admins and Editors can manage services.
 
 ## User preferences
 
-Logged-in users can manage their own preferences. Basic Users are limited to personal launchpad state such as favorites, favorite order, view mode, and hidden categories.
+Logged-in users can manage their own preferences. Basic Users are limited to personal launchpad state such as favorites, favorite order, view mode, hidden categories, and trusted plugin preferences stored under the `plugins` namespace.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
 | `GET` | `/api/me/preferences` | List current user's preferences. |
 | `PUT` | `/api/me/preferences/:key` | Save one allowed preference. |
 | `DELETE` | `/api/me/preferences/:key` | Delete one preference. |
+
+Allowed preference keys are `favorites`, `launchpad`, and `plugins`. Plugin preferences are stored as a bounded object keyed by plugin ID, for example `{ "hll-weather": { "theme": "pixel" } }`.
 
 ## Admin settings and management plane
 

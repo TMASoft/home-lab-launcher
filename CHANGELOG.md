@@ -4,6 +4,13 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## Unreleased
+
+### Added
+
+- Added a generic per-user plugin preferences namespace so trusted plugins can persist display preferences such as plugin-local themes.
+- Added plugin development guidance for responsive dashboard sections, launcher design tokens, reduced-motion behavior, and plugin-local themes.
+
 ## [0.5.1] - 2026-06-18
 
 ### Added

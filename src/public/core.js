@@ -2,7 +2,7 @@ const state = {
   user: null,
   services: [],
   favorites: [],
-  preferences: { viewMode: 'cards', hiddenCategories: [], hideMetadata: false, sortBy: 'custom', servicesOrder: [] },
+  preferences: { viewMode: 'cards', hiddenCategories: [], hideMetadata: false, sortBy: 'custom', servicesOrder: [], plugins: {} },
   selectedCategory: '',
   settings: null,
   version: '',

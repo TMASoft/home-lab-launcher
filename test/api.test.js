@@ -379,6 +379,21 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
   assert.equal(launchpadPrefs.preferences.launchpad.sortBy, 'custom');
   assert.deepEqual(launchpadPrefs.preferences.launchpad.servicesOrder, []);
 
+  await basic.request('/api/me/preferences/plugins', {
+    method: 'PUT',
+    body: {
+      value: {
+        'hll-weather': { theme: 'pixel', animations: true, 'bad key': '<script>' },
+        'Bad Plugin ID': { theme: 'default' },
+        nope: ['not', 'object']
+      }
+    }
+  });
+  const pluginPrefs = await basic.request('/api/me/preferences');
+  assert.deepEqual(pluginPrefs.preferences.plugins['hll-weather'], { theme: 'pixel', animations: true, 'bad-key': '<script>' });
+  assert.deepEqual(pluginPrefs.preferences.plugins['bad-plugin-id'], { theme: 'default' });
+  assert.equal(pluginPrefs.preferences.plugins.nope, undefined);
+
   await assert.rejects(() => basic.request('/api/me/preferences/adminTheme', { method: 'PUT', body: { value: true } }), /Unsupported preference key/);
 
   await admin.request('/api/settings', { method: 'PATCH', body: { public_read_enabled: true } });

@@ -175,7 +175,7 @@ A plugin frontend script registers one or more dashboard sections:
 window.HomeLabLauncher.registerPluginSection({
   id: 'example',
   title: 'Example',
-  render: async ({ container, api, user }) => {
+  render: async ({ container, api, user, preferences, setPluginPreference }) => {
     const data = await api('/api/plugins/example/items');
     container.innerHTML = data.items.map((item) => `<p>${escapeHtml(item.title)}</p>`).join('');
   }
@@ -183,6 +183,40 @@ window.HomeLabLauncher.registerPluginSection({
 ```
 
 The frontend `api` helper sends same-origin requests and throws on non-2xx responses.
+
+Plugin render functions also receive the current signed-in user, the current plugin's per-user `preferences` object, and `setPluginPreference(key, value)`. Use plugin preferences for display-only choices such as theme, density, hidden panels, and local filters. Preferences are stored under `/api/me/preferences/plugins` for signed-in users and in browser local storage for anonymous public-read viewers.
+
+Example per-user theme preference:
+
+```js
+window.HomeLabLauncher.registerPluginSection({
+  id: 'status',
+  title: 'Status',
+  render: async ({ container, preferences = {}, setPluginPreference }) => {
+    const theme = preferences.theme === 'pixel' ? 'pixel' : 'default';
+    container.innerHTML = `<select id="theme"><option value="default">Default</option><option value="pixel">Pixel</option></select>`;
+    container.querySelector('#theme').value = theme;
+    container.querySelector('#theme').addEventListener('change', async (event) => {
+      await setPluginPreference('theme', event.target.value);
+    });
+  }
+});
+```
+
+## Frontend styling and responsive layout
+
+Plugin sections are inserted as full-width dashboard panels. Each plugin should own its internal layout and remain usable at desktop, tablet, and phone widths.
+
+Recommended conventions:
+
+- Prefix plugin CSS selectors with the plugin ID or a stable shorthand, such as `.hll-weather-*`, to avoid leaking styles into the launcher or other plugins.
+- Use launcher design tokens instead of hard-coded app chrome colors where possible: `--surface`, `--surface-2`, `--surface-3`, `--ink`, `--muted`, `--line`, `--line-strong`, `--primary`, `--primary-ink`, `--success`, `--warning`, `--danger`, `--focus`, `--radius-sm`, `--radius`, and `--radius-lg`.
+- Treat plugin themes as plugin-local display preferences unless they affect server-side authority. Use `setPluginPreference()` for per-user themes and plugin config fields for admin/editor operational settings.
+- Test at approximately `860px`, `720px`, and `520px` widths. Stack major columns by tablet width and avoid horizontal page overflow on phones.
+- Prefer touch targets around 44px high for interactive controls and make action rows wrap or stack on narrow screens.
+- Use horizontal scroll rails for dense forecast/timeline/card strips instead of shrinking content until it becomes unreadable.
+- Respect `@media (prefers-reduced-motion: reduce)` for animations, skeletons, and decorative effects.
+- Keep bundled assets under the plugin's `public/` directory and reference them through `/plugins/:pluginId/...`.
 
 ## Dashboard visibility
 
