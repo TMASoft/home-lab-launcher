@@ -12,10 +12,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: ['22']
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -23,11 +20,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies from lockfile
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Release file hygiene check
         run: npm run release:check
@@ -44,6 +41,7 @@ jobs:
   publish:
     needs: validate
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout
         uses: actions/checkout@v5

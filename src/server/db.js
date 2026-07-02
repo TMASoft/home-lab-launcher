@@ -189,6 +189,13 @@ const MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_preset_cache_name ON preset_cache(name);
       `);
     }
+  },
+  {
+    id: 6,
+    name: 'totp-replay-protection',
+    up(db) {
+      addColumnIfMissing(db, 'users', 'totp_last_counter', 'INTEGER');
+    }
   }
 ];
 

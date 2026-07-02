@@ -39,25 +39,29 @@ function formatToken(value) {
   return String(value).padStart(6, '0');
 }
 
-function verifyTOTP(secretBase32, token, window = 1) {
+function verifyTOTPWithCounter(secretBase32, token, window = 1) {
   try {
-    if (!secretBase32) return false;
+    if (!secretBase32) return null;
     const secretBuffer = decodeBase32(secretBase32);
     const epoch = Math.floor(Date.now() / 1000);
     const currentCounter = Math.floor(epoch / 30);
     const cleanToken = String(token).replace(/\s+/g, '');
-    if (!/^\d{6}$/.test(cleanToken)) return false;
+    if (!/^\d{6}$/.test(cleanToken)) return null;
 
     for (let i = -window; i <= window; i++) {
       const computed = generateHOTP(secretBuffer, currentCounter + i);
       if (formatToken(computed) === cleanToken) {
-        return true;
+        return { counter: currentCounter + i };
       }
     }
   } catch (e) {
-    return false;
+    return null;
   }
-  return false;
+  return null;
+}
+
+function verifyTOTP(secretBase32, token, window = 1) {
+  return Boolean(verifyTOTPWithCounter(secretBase32, token, window));
 }
 
 function generateSecret() {
@@ -75,5 +79,6 @@ module.exports = {
   formatToken,
   generateHOTP,
   verifyTOTP,
+  verifyTOTPWithCounter,
   generateSecret
 };

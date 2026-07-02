@@ -7,12 +7,19 @@ function registerServiceRoutes(router, deps) {
     if (!canRead(req, db)) return res.status(401).end();
     const filename = path.basename(req.params.filename || '');
     if (!/^[a-f0-9]{64}\.(jpg|png|gif|webp|svg)$/.test(filename)) return res.status(404).end();
+    // Icons may be SVG; the sandbox CSP prevents any embedded script from running
+    // if the file is opened directly, and CORP keeps it same-origin only.
+    res.setHeader('Content-Security-Policy', 'sandbox');
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
     res.sendFile(path.join(serviceIconDir(dataDir), filename));
   });
 
   router.get('/app-assets/:filename', (req, res) => {
     const filename = path.basename(req.params.filename || '');
     if (!/^[a-f0-9]{64}\.(jpg|png|gif|webp)$/.test(filename)) return res.status(404).end();
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.sendFile(path.join(appAssetDir(dataDir), filename));
   });
 

@@ -517,6 +517,50 @@ function startServiceHealthScheduler(db, scheduler) {
   return { stop: () => { clearTimeout(timeout); clearInterval(interval); } };
 }
 
+const SCHEDULED_BACKUP_RETENTION_FILES = 14;
+const SCHEDULED_BACKUP_FILE_RE = /^home-lab-launcher-backup-\d{4}-\d{2}-\d{2}\.json$/;
+
+function pruneExpiredSessions(db) {
+  return db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now()).changes;
+}
+
+function pruneAppLogsByRetention(db) {
+  const days = Math.min(3650, Math.max(1, Number(getSetting(db, 'log_retention_days', 90))));
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return db.prepare('DELETE FROM app_logs WHERE created_at < ?').run(cutoff).changes;
+}
+
+function runScheduledConfigBackup(db) {
+  const location = String(getSetting(db, 'scheduled_backup_location', '') || '').trim();
+  if (!location) return { skipped: true };
+  fs.mkdirSync(location, { recursive: true });
+  const filename = `home-lab-launcher-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  const target = path.join(location, filename);
+  fs.writeFileSync(target, JSON.stringify(buildBackup(db), null, 2));
+  const backups = fs.readdirSync(location).filter((name) => SCHEDULED_BACKUP_FILE_RE.test(name)).sort();
+  const excess = backups.slice(0, Math.max(0, backups.length - SCHEDULED_BACKUP_RETENTION_FILES));
+  for (const name of excess) fs.rmSync(path.join(location, name), { force: true });
+  return { file: target, pruned: excess.length };
+}
+
+function startMaintenanceScheduler(db, scheduler) {
+  if (!scheduler) return;
+  scheduler.addInterval('session-prune', () => { pruneExpiredSessions(db); }, { intervalMs: 60 * 60 * 1000, initialDelayMs: 60 * 1000 });
+  scheduler.addInterval('log-retention-prune', () => {
+    const deleted = pruneAppLogsByRetention(db);
+    if (deleted > 0) logEvent(db, {}, 'logs.pruned', { deleted, source: 'scheduled' });
+  }, { intervalMs: 24 * 60 * 60 * 1000, initialDelayMs: 5 * 60 * 1000 });
+  scheduler.addInterval('scheduled-config-backup', () => {
+    try {
+      const result = runScheduledConfigBackup(db);
+      if (!result.skipped) logEvent(db, {}, 'backup.scheduled_completed', { file: result.file, pruned: result.pruned });
+    } catch (error) {
+      logEvent(db, {}, 'backup.scheduled_failed', { error: error.message }, 'error');
+      throw error;
+    }
+  }, { intervalMs: 24 * 60 * 60 * 1000, initialDelayMs: 10 * 60 * 1000 });
+}
+
 function buildBackup(db) {
   return {
     exportedAt: new Date().toISOString(),
@@ -725,9 +769,14 @@ function refreshSessionUser(req, db) {
 
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const LOGIN_MAX_FAILURES = 5;
+const LOGIN_MAX_FAILURES_PER_IP = 20;
 
 function loginKey(req, username) {
   return `${req.ip || 'unknown'}:${String(username || '').toLowerCase()}`;
+}
+
+function loginIpKey(req) {
+  return `ip-total:${req.ip || 'unknown'}`;
 }
 
 function pruneExpiredLoginFailures(db) {
@@ -737,19 +786,26 @@ function pruneExpiredLoginFailures(db) {
 function isLoginLimited(db, req, username) {
   pruneExpiredLoginFailures(db);
   const item = db.prepare('SELECT count, reset_at AS resetAt FROM login_throttle WHERE key = ?').get(loginKey(req, username));
-  return Boolean(item && item.count >= LOGIN_MAX_FAILURES);
+  if (item && item.count >= LOGIN_MAX_FAILURES) return true;
+  const ipItem = db.prepare('SELECT count, reset_at AS resetAt FROM login_throttle WHERE key = ?').get(loginIpKey(req));
+  return Boolean(ipItem && ipItem.count >= LOGIN_MAX_FAILURES_PER_IP);
 }
 
-function recordLoginFailure(db, req, username) {
-  pruneExpiredLoginFailures(db);
-  const key = loginKey(req, username);
-  const resetAt = Date.now() + LOGIN_WINDOW_MS;
+function bumpLoginFailureKey(db, key, resetAt) {
   const item = db.prepare('SELECT count, reset_at AS resetAt FROM login_throttle WHERE key = ?').get(key);
   if (!item) db.prepare('INSERT INTO login_throttle (key, count, reset_at) VALUES (?, 1, ?)').run(key, resetAt);
   else db.prepare('UPDATE login_throttle SET count = ?, reset_at = ? WHERE key = ?').run(Number(item.count || 0) + 1, item.resetAt > Date.now() ? item.resetAt : resetAt, key);
 }
 
+function recordLoginFailure(db, req, username) {
+  pruneExpiredLoginFailures(db);
+  const resetAt = Date.now() + LOGIN_WINDOW_MS;
+  bumpLoginFailureKey(db, loginKey(req, username), resetAt);
+  bumpLoginFailureKey(db, loginIpKey(req), resetAt);
+}
+
 function clearLoginFailures(db, req, username) {
+  // The per-IP spray counter is intentionally left in place; it expires on its own.
   db.prepare('DELETE FROM login_throttle WHERE key = ?').run(loginKey(req, username));
 }
 
@@ -757,6 +813,7 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   app.locals.db = db;
   const router = express.Router();
   startServiceHealthScheduler(db, scheduler);
+  startMaintenanceScheduler(db, scheduler);
 
   router.use(apiResponseMiddleware);
   router.use((req, res, next) => {

@@ -4,6 +4,8 @@ const crypto = require('crypto');
 const express = require('express');
 const tar = require('tar');
 const { XMLParser } = require('fast-xml-parser');
+const { getSetting } = require('./db');
+const { guardedFetch } = require('./server-fetch');
 
 const LAUNCHER_PLUGIN_API_VERSION = 1;
 const MAX_PLUGIN_TARBALL_BYTES = 25 * 1024 * 1024;
@@ -98,6 +100,19 @@ function coerceConfigValue(key, spec = {}, value) {
     return number;
   }
   return String(value ?? '');
+}
+
+function redactPluginConfigForRole(manifest, config, role) {
+  const source = config && typeof config === 'object' && !Array.isArray(config) ? config : {};
+  if (role === 'admin') return source;
+  const schema = manifest?.configSchema && typeof manifest.configSchema === 'object' ? manifest.configSchema : {};
+  const out = {};
+  for (const [key, value] of Object.entries(source)) {
+    const spec = schema[key];
+    if (!spec) continue; // fields without a declared scope are admin-only
+    if (canRoleWriteConfigScope(role, configFieldScope(spec))) out[key] = value;
+  }
+  return out;
 }
 
 function applyPluginConfigUpdate(manifest, existingConfig, incomingConfig, actorRole) {
@@ -297,6 +312,8 @@ class PluginManager {
   async load(row) {
     const manifest = safeJson(row.manifest_json, {});
     validateManifest(manifest);
+    if (manifest.frontend) validateTarEntryPath(String(manifest.frontend));
+    if (manifest.backend) validateTarEntryPath(String(manifest.backend));
     const pluginId = manifest.id || row.id;
     const publicScriptUrl = manifest.frontend ? `/plugins/${pluginId}/${manifest.frontend.replace(/^public\//, '')}` : null;
     if (manifest.frontend) {
@@ -313,6 +330,16 @@ class PluginManager {
       launcherApiVersion: LAUNCHER_PLUGIN_API_VERSION,
       db: this.db,
       fetch,
+      // SSRF-guarded fetch with size limits, timeouts, and pinned-IP redirects.
+      // Plugins should prefer this over the raw fetch for URLs from config or users.
+      guardedFetch: (input, options = {}, guard = {}) => guardedFetch(input, options, { actorRole: 'admin', label: 'Plugin URL', ...guard }),
+      canRead: (req) => Boolean(req.session?.user) || getSetting(this.db, 'public_read_enabled', true) === true,
+      requireRole: (...roles) => (req, res, next) => {
+        const user = req.session?.user;
+        if (!user) return res.status(401).json({ error: 'Authentication required' });
+        if (!roles.includes(user.role)) return res.status(403).json({ error: 'Insufficient permissions' });
+        next();
+      },
       XMLParser,
       publicScriptUrl,
       createRouter: () => router,
@@ -456,4 +483,4 @@ class PluginManager {
   }
 }
 
-module.exports = { PluginManager, parseGithubRepo, LAUNCHER_PLUGIN_API_VERSION, validateManifest, applyPluginConfigUpdate, configFieldScope };
+module.exports = { PluginManager, parseGithubRepo, LAUNCHER_PLUGIN_API_VERSION, validateManifest, applyPluginConfigUpdate, configFieldScope, redactPluginConfigForRole };

@@ -6,13 +6,16 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel superseded runs for the same branch/PR so pushes in quick succession
+# do not queue redundant builds.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   validate:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node-version: ['22']
+    timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -20,11 +23,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '22'
           cache: npm
 
       - name: Install dependencies from lockfile
-        run: npm ci
+        run: npm ci --prefer-offline --no-audit --no-fund
 
       - name: Release file hygiene check
         run: npm run release:check
@@ -40,6 +43,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -56,13 +60,15 @@ jobs:
 
       - name: Container startup smoke test
         env:
+          APP_IMAGE: home-lab-launcher:ci
           SESSION_SECRET: ci-session-secret-for-container-smoke-test-only
           HOST_PORT: '18080'
           HOST_BIND_IP: 127.0.0.1
           APP_BASE_URL: http://127.0.0.1:18080
           PUBLIC_READ_ENABLED: 'false'
         run: |
-          docker compose up -d --build
+          # Reuse the image built above instead of rebuilding through Compose.
+          docker compose up -d --no-build
           for i in {1..60}; do
             if curl -fsS http://127.0.0.1:18080/api/healthz; then
               exit 0
@@ -75,6 +81,7 @@ jobs:
       - name: Stop containers
         if: always()
         env:
+          APP_IMAGE: home-lab-launcher:ci
           SESSION_SECRET: ci-session-secret-for-compose-cleanup-only
           HOST_PORT: '18080'
           HOST_BIND_IP: 127.0.0.1

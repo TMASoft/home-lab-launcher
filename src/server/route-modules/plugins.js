@@ -1,5 +1,5 @@
 const express = require('express');
-const { applyPluginConfigUpdate } = require('../plugins');
+const { applyPluginConfigUpdate, redactPluginConfigForRole } = require('../plugins');
 
 function registerPluginRoutes(router, deps) {
   const { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload } = deps;
@@ -11,8 +11,13 @@ function registerPluginRoutes(router, deps) {
 
   router.get('/plugins', requireAuth, async (req, res) => {
     let updates = [];
-    if (req.session.user?.role === 'admin' && req.query.updates === '1') updates = await pluginManager.checkUpdates();
-    const plugins = pluginManager.list().map((plugin) => ({ ...plugin, update: updates.find((item) => item.id === plugin.id) || null }));
+    const role = req.session.user?.role;
+    if (role === 'admin' && req.query.updates === '1') updates = await pluginManager.checkUpdates();
+    const plugins = pluginManager.list().map((plugin) => ({
+      ...plugin,
+      config: redactPluginConfigForRole(plugin.manifest, plugin.config, role),
+      update: updates.find((item) => item.id === plugin.id) || null
+    }));
     res.json({ plugins });
   });
 

@@ -6,6 +6,31 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.6.0] - 2026-07-02
+
+### Security
+
+- Plugin configuration returned by `GET /api/plugins` is now redacted by role: admin-scoped fields (such as connected-service API tokens) and fields without a declared config scope are only visible to Admins; Editors and Basic Users only see fields their role could write. Previously any authenticated user could read the full plugin config, including secrets.
+- Login no longer reveals whether a username exists through response timing: a constant-cost dummy hash comparison runs when the username is unknown.
+- Added a per-IP login failure cap (20 failures per 15 minutes across all usernames) alongside the existing per-user throttle, so a single IP can no longer spray passwords across many usernames.
+- Password hashing and verification in request handlers now run asynchronously, so login attempts no longer block the event loop (a denial-of-service vector under concurrent logins).
+- TOTP codes can no longer be replayed: the launcher records the last accepted code counter per user and rejects reuse within the validity window (login, enable, and disable flows).
+- Uploaded SVG service icons are now served with a `Content-Security-Policy: sandbox` header and `Cross-Origin-Resource-Policy: same-origin`, neutralizing stored-XSS via crafted SVG files opened directly.
+- API responses are sent with `Cache-Control: no-store` (content-hashed icon and asset files keep long-lived immutable caching).
+- The plugin loader validates `backend`/`frontend` manifest paths against directory traversal before requiring or mounting them.
+
+### Added
+
+- Scheduled config backups: when the Admin → Backups "Scheduled backup location" is set, the launcher now writes a daily JSON config backup there and keeps the most recent 14 files. This setting previously existed but was documentation-only.
+- Automatic maintenance jobs: expired sessions are pruned hourly and audit logs are pruned daily according to the configured retention, both visible under scheduled jobs in `/api/admin/health`.
+- New plugin backend context helpers (non-breaking, API v1): `guardedFetch` (SSRF-guarded, size-limited fetch), `canRead(req)` (session-or-public-read gate), and `requireRole(...roles)` middleware. Documented in `docs/plugins.md`.
+
+### Changed
+
+- Admin → Backups now warns that config backups include plugin configuration values, which may contain API tokens.
+- Installer scripts and README examples now default to the `v0.6.0` image tag (previously stale at `v0.3.7`).
+- CI: pushes to the same branch cancel superseded runs, jobs have explicit timeouts, npm installs skip audit/fund checks, and the container smoke test reuses the already-built image instead of rebuilding it.
+
 ## [0.5.2] - 2026-06-22
 
 ### Changed

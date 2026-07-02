@@ -4,7 +4,7 @@ set -eu
 INSTALLER_OS="Linux"
 DOCKER_INSTALL_URL="https://docs.docker.com/engine/install/"
 DEFAULT_INSTALL_DIR="$HOME/home-lab-launcher"
-DEFAULT_IMAGE_TAG="v0.3.7"
+DEFAULT_IMAGE_TAG="v0.6.0"
 IMAGE_REPOSITORY="ghcr.io/TMASoft/home-lab-launcher"
 
 TTY_PATH="/dev/tty"

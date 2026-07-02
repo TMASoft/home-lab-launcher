@@ -10,10 +10,10 @@ function registerUserRoutes(router, deps) {
     res.json({ users });
   });
 
-  router.post('/users', requireRole('admin'), express.json(), (req, res) => {
+  router.post('/users', requireRole('admin'), express.json(), async (req, res) => {
     try {
       const { username, password, role } = userPayload(req.body || {}, {}, { requirePassword: true });
-      const hash = bcrypt.hashSync(password, 12);
+      const hash = await bcrypt.hash(password, 12);
       const info = db.prepare('INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)').run(username, hash, role);
       logEvent(db, req, 'user.created', { id: info.lastInsertRowid, username, role });
       res.status(201).json({ user: { id: info.lastInsertRowid, username, role } });
@@ -22,7 +22,7 @@ function registerUserRoutes(router, deps) {
     }
   });
 
-  router.patch('/users/:id', requireRole('admin'), express.json(), (req, res) => {
+  router.patch('/users/:id', requireRole('admin'), express.json(), async (req, res) => {
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     try {
@@ -32,12 +32,12 @@ function registerUserRoutes(router, deps) {
         return res.status(400).json({ error: 'At least one admin account is required' });
       }
       if (password) {
-        db.prepare('UPDATE users SET username = ?, role = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(username, role, bcrypt.hashSync(password, 12), req.params.id);
+        db.prepare('UPDATE users SET username = ?, role = ?, password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(username, role, await bcrypt.hash(password, 12), req.params.id);
       } else {
         db.prepare('UPDATE users SET username = ?, role = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(username, role, req.params.id);
       }
       if (resetTotp) {
-        db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0 WHERE id = ?').run(req.params.id);
+        db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last_counter = NULL WHERE id = ?').run(req.params.id);
         logEvent(db, req, 'user.totp_reset', { id: Number(req.params.id), username });
       }
       const targetIsCurrentUser = Number(req.params.id) === Number(req.session.user.id);

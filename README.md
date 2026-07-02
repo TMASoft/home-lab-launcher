@@ -97,8 +97,8 @@ Admin usernames must be at least 3 characters and passwords must be at least 10 
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.5.2 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.5.2 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.6.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.6.0 docker compose up -d --no-build
 docker compose ps
 ```
 

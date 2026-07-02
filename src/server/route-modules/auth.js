@@ -4,33 +4,47 @@ const { getSetting } = require('../db');
 const { issueCsrfToken } = require('../security');
 const totp = require('../totp');
 
+// Compared against when a username does not exist so response timing does not
+// reveal which usernames are registered. Hash of a long random throwaway value.
+const DUMMY_PASSWORD_HASH = '$2a$12$abdPSDFEQ.WRYzarpYqmJu0afTCOpyv4fG9xbQI8nu4G02ROd13WW';
+
+function verifyTotpForUser(db, user, code) {
+  const result = totp.verifyTOTPWithCounter(user.totp_secret, code);
+  if (!result) return false;
+  if (user.totp_last_counter !== null && user.totp_last_counter !== undefined && result.counter <= user.totp_last_counter) return false;
+  db.prepare('UPDATE users SET totp_last_counter = ? WHERE id = ?').run(result.counter, user.id);
+  return true;
+}
+
 function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures, refreshSessionUser }) {
   router.get('/bootstrap-status', (req, res) => {
     const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
     res.json({ needsBootstrap: count === 0 });
   });
 
-  router.post('/bootstrap', express.json(), (req, res) => {
+  router.post('/bootstrap', express.json(), async (req, res) => {
     const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
     if (count !== 0) return res.apiError(409, 'Bootstrap already completed');
     const username = String(req.body.username || '').trim();
     const password = String(req.body.password || '');
     if (username.length < 3 || password.length < 10) return res.apiError(400, 'Username must be 3+ chars and password 10+ chars');
-    const hash = bcrypt.hashSync(password, 12);
+    const hash = await bcrypt.hash(password, 12);
 
     let totpSecret = null;
     let totpEnabled = 0;
+    let totpCounter = null;
 
     if (req.body.totpSecret && req.body.totpCode) {
-      const codeValid = totp.verifyTOTP(req.body.totpSecret, req.body.totpCode);
-      if (!codeValid) {
+      const codeResult = totp.verifyTOTPWithCounter(req.body.totpSecret, req.body.totpCode);
+      if (!codeResult) {
         return res.apiError(400, 'Invalid 2FA verification code');
       }
       totpSecret = req.body.totpSecret;
       totpEnabled = 1;
+      totpCounter = codeResult.counter;
     }
 
-    const info = db.prepare('INSERT INTO users (username, password_hash, role, totp_secret, totp_enabled) VALUES (?, ?, ?, ?, ?)').run(username, hash, 'admin', totpSecret, totpEnabled);
+    const info = db.prepare('INSERT INTO users (username, password_hash, role, totp_secret, totp_enabled, totp_last_counter) VALUES (?, ?, ?, ?, ?, ?)').run(username, hash, 'admin', totpSecret, totpEnabled, totpCounter);
     req.session.user = { id: info.lastInsertRowid, username, role: 'admin' };
     req.session.createdAt = new Date().toISOString();
     issueCsrfToken(req);
@@ -38,7 +52,7 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     res.json({ user: req.session.user });
   });
 
-  router.post('/auth/login', express.json(), (req, res) => {
+  router.post('/auth/login', express.json(), async (req, res) => {
     const username = String(req.body.username || '').trim();
     const password = String(req.body.password || '');
     const code = String(req.body.code || '').trim();
@@ -48,7 +62,8 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
       return res.apiError(429, 'Too many failed login attempts. Try again later.');
     }
     const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    const passwordMatches = await bcrypt.compare(password, user ? user.password_hash : DUMMY_PASSWORD_HASH);
+    if (!user || !passwordMatches) {
       recordLoginFailure(db, req, username);
       logEvent(db, req, 'auth.login_failed', { username }, 'warn');
       return res.apiError(401, 'Invalid username or password');
@@ -58,7 +73,7 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
       if (!code) {
         return res.json({ requiresTotp: true });
       }
-      if (!totp.verifyTOTP(user.totp_secret, code)) {
+      if (!verifyTotpForUser(db, user, code)) {
         recordLoginFailure(db, req, username);
         logEvent(db, req, 'auth.login_failed_2fa', { username }, 'warn');
         return res.apiError(401, 'Invalid 2FA code');
@@ -96,13 +111,13 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     res.json({ user });
   });
 
-  router.patch('/me/password', requireAuth, express.json(), (req, res) => {
+  router.patch('/me/password', requireAuth, express.json(), async (req, res) => {
     const currentPassword = String(req.body.currentPassword || '');
     const newPassword = String(req.body.newPassword || '');
     if (newPassword.length < 10) return res.apiError(400, 'New password must be at least 10 characters');
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
-    if (!user || !bcrypt.compareSync(currentPassword, user.password_hash)) return res.apiError(401, 'Current password is incorrect');
-    db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(bcrypt.hashSync(newPassword, 12), user.id);
+    if (!user || !(await bcrypt.compare(currentPassword, user.password_hash))) return res.apiError(401, 'Current password is incorrect');
+    db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(await bcrypt.hash(newPassword, 12), user.id);
     const revokedSessions = req.sessionStore.destroyForUser(user.id, { exceptSid: req.sessionID });
     logEvent(db, req, 'profile.password_changed', { revokedSessions });
     res.apiOk({ revokedSessions });
@@ -137,19 +152,20 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     const secret = String(req.body.secret || '').trim();
     const code = String(req.body.code || '').trim();
     if (!secret || !code) return res.apiError(400, 'Secret and verification code are required');
-    if (!totp.verifyTOTP(secret, code)) return res.apiError(400, 'Invalid verification code');
+    const codeResult = totp.verifyTOTPWithCounter(secret, code);
+    if (!codeResult) return res.apiError(400, 'Invalid verification code');
 
-    db.prepare('UPDATE users SET totp_secret = ?, totp_enabled = 1, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(secret, req.session.user.id);
+    db.prepare('UPDATE users SET totp_secret = ?, totp_enabled = 1, totp_last_counter = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(secret, codeResult.counter, req.session.user.id);
     logEvent(db, req, 'profile.totp_enabled');
     res.apiOk();
   });
 
-  router.post('/me/totp/disable', requireAuth, express.json(), (req, res) => {
+  router.post('/me/totp/disable', requireAuth, express.json(), async (req, res) => {
     const password = String(req.body.password || '');
     const code = String(req.body.code || '').trim();
 
     const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
-    if (!user || !bcrypt.compareSync(password, user.password_hash)) {
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
       return res.apiError(401, 'Current password is incorrect');
     }
 
@@ -157,12 +173,12 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
       if (!code) {
         return res.apiError(400, 'Verification code is required');
       }
-      if (!totp.verifyTOTP(user.totp_secret, code)) {
+      if (!verifyTotpForUser(db, user, code)) {
         return res.apiError(401, 'Invalid verification code');
       }
     }
 
-    db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.session.user.id);
+    db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last_counter = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.session.user.id);
     req.sessionStore.destroyForUser(req.session.user.id, { exceptSid: req.sessionID });
     logEvent(db, req, 'profile.totp_disabled');
     res.apiOk();

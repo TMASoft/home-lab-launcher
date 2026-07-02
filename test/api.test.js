@@ -489,7 +489,11 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
 
   const totp = require('../src/server/totp');
   const secretBuffer = totp.decodeBase32(setup.secret);
-  const correctCode = totp.generateHOTP(secretBuffer, Math.floor(Date.now() / 1000 / 30));
+  // Each verification below must use a strictly increasing counter because a
+  // consumed counter can no longer be reused (replay protection). The verify
+  // window is +/-1, so enable at counter-1, login at counter, disable at counter+1.
+  const baseCounter = Math.floor(Date.now() / 1000 / 30);
+  const correctCode = totp.generateHOTP(secretBuffer, baseCounter - 1);
 
   const enableRes = await admin.request('/api/me/totp/enable', { method: 'POST', body: { secret: setup.secret, code: totp.formatToken(correctCode) } });
   assert.equal(enableRes.ok, true);
@@ -508,9 +512,16 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
     /Invalid 2FA code/
   );
 
-  const correctCode2 = totp.generateHOTP(secretBuffer, Math.floor(Date.now() / 1000 / 30));
+  const correctCode2 = totp.generateHOTP(secretBuffer, baseCounter);
   const loginAttempt2 = await client2.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', code: totp.formatToken(correctCode2) } });
   assert.equal(loginAttempt2.user.role, 'admin');
+
+  // Replaying the code that was just consumed at login must be rejected.
+  const replayClient = new Client(server.baseUrl);
+  await assert.rejects(
+    () => replayClient.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', code: totp.formatToken(correctCode2) } }),
+    /Invalid 2FA code/
+  );
 
   const createdUser = await client2.request('/api/users', { method: 'POST', body: { username: 'editor-user', password: 'test-editor-password', role: 'editor' } });
   const userId = createdUser.user.id;
@@ -550,8 +561,8 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
     /Invalid verification code/
   );
 
-  // Disable succeeds with valid password and code
-  const correctCodeDisable = totp.generateHOTP(secretBuffer, Math.floor(Date.now() / 1000 / 30));
+  // Disable succeeds with valid password and a not-yet-consumed code
+  const correctCodeDisable = totp.generateHOTP(secretBuffer, baseCounter + 1);
   await client2.request('/api/me/totp/disable', {
     method: 'POST',
     body: {
@@ -819,4 +830,25 @@ test('admin TOTP reset revokes sessions and preset imports validate URLs', async
   csrfProbe.cookie = admin.cookie;
   csrfProbe.csrfToken = `${admin.csrfToken}x`;
   await assert.rejects(() => csrfProbe.request('/api/settings', { method: 'PATCH', body: { app_name: 'Bad CSRF' } }), /Invalid CSRF token/);
+});
+
+test('per-IP login throttle blocks username spraying across many usernames', async (t) => {
+  const server = startServer({ port: 19140 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const client = new Client(server.baseUrl);
+  for (let i = 0; i < 20; i += 1) {
+    await assert.rejects(
+      () => client.request('/api/auth/login', { method: 'POST', body: { username: `sprayed-user-${i}`, password: 'not-the-password' } }),
+      /Invalid username or password/
+    );
+  }
+
+  // The 21st attempt from the same IP is limited even for valid credentials
+  // and a username that has not itself hit the per-username limit.
+  await assert.rejects(
+    () => client.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } }),
+    /Too many failed login attempts/
+  );
 });

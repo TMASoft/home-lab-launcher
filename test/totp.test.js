@@ -60,3 +60,21 @@ test('TOTP helpers - verifyTOTP validates correct tokens and rejects invalid one
   assert.ok(!totp.verifyTOTP(secret, currentToken.slice(1)));
   assert.ok(!totp.verifyTOTP('INVALIDSECRET123', currentOtp));
 });
+
+test('TOTP helpers - verifyTOTPWithCounter returns the matched counter within the window', () => {
+  const totp = require('../src/server/totp');
+  const secret = totp.generateSecret();
+  const buffer = totp.decodeBase32(secret);
+  const counter = Math.floor(Date.now() / 1000 / 30);
+
+  const current = totp.verifyTOTPWithCounter(secret, totp.formatToken(totp.generateHOTP(buffer, counter)));
+  assert.ok(current);
+  assert.equal(current.counter, counter);
+
+  const previous = totp.verifyTOTPWithCounter(secret, totp.formatToken(totp.generateHOTP(buffer, counter - 1)));
+  assert.ok(previous);
+  assert.equal(previous.counter, counter - 1);
+
+  assert.equal(totp.verifyTOTPWithCounter(secret, '000000'), null);
+  assert.equal(totp.verifyTOTPWithCounter('', '123456'), null);
+});

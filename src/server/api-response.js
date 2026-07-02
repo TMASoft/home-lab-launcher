@@ -11,6 +11,9 @@ function created(res, payload = {}) {
 }
 
 function apiResponseMiddleware(req, res, next) {
+  // API responses may include session-scoped or secret data; individual routes
+  // that serve immutable content-hashed files override this with long-lived caching.
+  res.setHeader('Cache-Control', 'no-store');
   res.apiError = (status, message, extra) => error(res, status, message, extra);
   res.apiOk = (payload) => ok(res, payload);
   res.apiCreated = (payload) => created(res, payload);

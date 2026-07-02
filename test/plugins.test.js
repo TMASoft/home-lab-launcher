@@ -50,3 +50,28 @@ test('discoverGithubVersions falls back to explicit tree branch for subdirectory
   assert.equal(versions[0].version, 'main');
   assert.equal(versions[0].type, 'branch');
 });
+
+test('redactPluginConfigForRole hides admin-scoped and undeclared fields from non-admin roles', () => {
+  const { redactPluginConfigForRole } = require('../src/server/plugins');
+  const manifest = {
+    configSchema: {
+      apiToken: { type: 'string', scope: 'admin' },
+      url: { type: 'string', scope: 'admin' },
+      sectionTitle: { type: 'string', scope: 'editor' },
+      showCategories: { type: 'boolean', scope: 'user' }
+    }
+  };
+  const config = {
+    apiToken: 'super-secret-token',
+    url: 'http://miniflux.internal:8080',
+    sectionTitle: 'My Feeds',
+    showCategories: true,
+    legacyUndeclaredField: 'admin-only-by-default'
+  };
+
+  assert.deepEqual(redactPluginConfigForRole(manifest, config, 'admin'), config);
+  assert.deepEqual(redactPluginConfigForRole(manifest, config, 'editor'), { sectionTitle: 'My Feeds', showCategories: true });
+  assert.deepEqual(redactPluginConfigForRole(manifest, config, 'user'), { showCategories: true });
+  assert.deepEqual(redactPluginConfigForRole({}, config, 'user'), {});
+  assert.deepEqual(redactPluginConfigForRole(manifest, null, 'admin'), {});
+});

@@ -157,6 +157,9 @@ The `context` object currently includes:
 | `launcherApiVersion` | Current launcher plugin API version. |
 | `db` | Shared `better-sqlite3` database connection. |
 | `fetch` | Runtime `fetch` function. Plugins are trusted server-side code; this raw fetch is not restricted by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`. |
+| `guardedFetch(url, options, guard)` | SSRF-guarded fetch with response-size limits, redirect pinning, and timeouts. Prefer this over `fetch` for URLs that come from config or users. Pass `{ actorRole }` in `guard` to apply the launcher's private-network policy (defaults to `admin`). |
+| `canRead(req)` | Returns `true` when the request has a session user or anonymous public read is enabled. Use this to gate plugin GET routes the same way core routes are gated. |
+| `requireRole(...roles)` | Express middleware factory: responds 401 without a session, 403 when the session role is not listed. |
 | `XMLParser` | `fast-xml-parser` XML parser constructor. |
 | `publicScriptUrl` | URL for the plugin frontend script, if present. |
 | `createRouter()` | Returns an Express router. |
