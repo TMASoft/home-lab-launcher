@@ -40,6 +40,53 @@ const DEFAULT_APPEARANCE = {
   }
 };
 
+/* Built-in theme presets, merged once into the stored preset list at startup
+   (see seed()). After that they are ordinary stored presets: admins can apply,
+   duplicate, export, or delete them, and deletions stay deleted. */
+const BUILTIN_THEME_PRESETS = [
+  {
+    id: 'daybreak',
+    name: 'Daybreak',
+    description: 'The default look — bright cool paper with cobalt accents.',
+    appearance: { theme: { mode: 'light' } },
+    createdAt: '2026-07-04T00:00:00.000Z'
+  },
+  {
+    id: 'daybreak-night',
+    name: 'Daybreak Night',
+    description: 'The dark counterpart — deep blue-slate surfaces, same cobalt.',
+    appearance: { theme: { mode: 'dark' } },
+    createdAt: '2026-07-04T00:00:00.000Z'
+  },
+  {
+    id: 'vaporwave',
+    name: 'Vaporwave',
+    description: 'Dusk violet surfaces with neon pink. Same components, different sunset.',
+    appearance: {
+      theme: {
+        mode: 'dark',
+        colors: {
+          background: '#17102e',
+          surface: '#201741',
+          surface2: '#2a1f55',
+          surface3: '#352969',
+          text: '#f2ecff',
+          mutedText: '#b3a6d9',
+          quietText: '#9a8fc2',
+          border: '#352a63',
+          borderStrong: '#4d3f86',
+          primary: '#ff71ce',
+          primaryInk: '#33081f',
+          success: '#5fe3a1',
+          warning: '#ffd86b',
+          danger: '#ff7b9c'
+        }
+      }
+    },
+    createdAt: '2026-07-04T00:00:00.000Z'
+  }
+];
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -329,6 +376,16 @@ function seed(db) {
     });
   }
   if (getSetting(db, 'theme_presets', undefined) === undefined) setSetting(db, 'theme_presets', []);
+  if (getSetting(db, 'builtin_theme_presets_seeded', undefined) === undefined) {
+    const stored = getSetting(db, 'theme_presets', []);
+    const existing = Array.isArray(stored) ? stored : [];
+    const existingIds = new Set(existing.map((preset) => preset && preset.id));
+    setSetting(db, 'theme_presets', [
+      ...BUILTIN_THEME_PRESETS.filter((preset) => !existingIds.has(preset.id)),
+      ...existing
+    ]);
+    setSetting(db, 'builtin_theme_presets_seeded', 1);
+  }
 
   seedPresets(db);
 
@@ -370,4 +427,4 @@ function seedPresets(db) {
   tx();
 }
 
-module.exports = { openDb, getSetting, setSetting, DEFAULT_APPEARANCE };
+module.exports = { openDb, getSetting, setSetting, DEFAULT_APPEARANCE, BUILTIN_THEME_PRESETS };

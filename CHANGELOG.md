@@ -6,6 +6,12 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.8.1] - 2026-07-04
+
+### Fixed
+
+- The built-in theme presets (Daybreak, Daybreak Night, Vaporwave) shipped in 0.8.0 never actually appeared: startup seeding always wrote an empty `theme_presets` list, so the built-in fallback was unreachable on every install. They are now merged into the stored preset list once at startup (marker-gated), on both fresh installs and upgrades. Existing installs keep their active theme untouched — the built-ins simply appear as options under Admin → Appearance → Theme presets — and custom presets, ordering, and deletions of built-ins are preserved across restarts.
+
 ## [0.8.0] - 2026-07-04
 
 ### Changed
