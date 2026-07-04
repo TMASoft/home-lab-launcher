@@ -1,6 +1,7 @@
 const express = require('express');
 const path = require('path');
 const { getSetting, setSetting } = require('../db');
+const { generateApiToken, hashApiToken, tokenPrefix, apiTokenPayload } = require('../api-tokens');
 
 function registerAdminRoutes(router, deps) {
   const { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, DEFAULT_APPEARANCE, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler } = deps;
@@ -63,6 +64,39 @@ function registerAdminRoutes(router, deps) {
     } catch (error) {
       res.status(400).json({ error: error.message });
     }
+  });
+
+  router.get('/admin/api-tokens', requireRole('admin'), (req, res) => {
+    const tokens = db.prepare('SELECT * FROM api_tokens ORDER BY created_at DESC, id DESC').all().map(apiTokenPayload);
+    res.json({ tokens });
+  });
+
+  router.post('/admin/api-tokens', requireRole('admin'), express.json(), (req, res) => {
+    const name = String(req.body.name || '').trim().slice(0, 80);
+    if (!name) return res.apiError(400, 'Token name is required');
+    const role = String(req.body.role || 'user');
+    if (!['admin', 'editor', 'user'].includes(role)) return res.apiError(400, 'Role must be admin, editor, or user');
+    let expiresAt = null;
+    if (req.body.expiresDays !== undefined && req.body.expiresDays !== null && req.body.expiresDays !== '') {
+      const days = Number(req.body.expiresDays);
+      if (!Number.isFinite(days) || days < 1 || days > 3650) return res.apiError(400, 'expiresDays must be between 1 and 3650');
+      expiresAt = new Date(Date.now() + Math.floor(days) * 24 * 60 * 60 * 1000).toISOString();
+    }
+    const token = generateApiToken();
+    const info = db.prepare('INSERT INTO api_tokens (name, token_prefix, token_hash, role, created_by, expires_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .run(name, tokenPrefix(token), hashApiToken(token), role, req.session.user.id, expiresAt);
+    const row = db.prepare('SELECT * FROM api_tokens WHERE id = ?').get(info.lastInsertRowid);
+    logEvent(db, req, 'api_token.created', { id: row.id, name, role, expiresAt });
+    // The plaintext token is returned exactly once and never stored.
+    res.status(201).json({ token, apiToken: apiTokenPayload(row) });
+  });
+
+  router.delete('/admin/api-tokens/:id', requireRole('admin'), (req, res) => {
+    const row = db.prepare('SELECT * FROM api_tokens WHERE id = ?').get(req.params.id);
+    if (!row) return res.apiError(404, 'API token not found');
+    db.prepare('DELETE FROM api_tokens WHERE id = ?').run(row.id);
+    logEvent(db, req, 'api_token.revoked', { id: row.id, name: row.name });
+    res.apiOk();
   });
 
   router.get('/admin/theme-presets', requireRole('admin'), (req, res) => {

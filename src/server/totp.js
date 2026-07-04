@@ -74,11 +74,35 @@ function generateSecret() {
   return secret;
 }
 
+// Excludes ambiguous characters (i, l, o, 0, 1) so codes survive being read
+// aloud or copied from paper.
+const RECOVERY_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
+
+function normalizeRecoveryCode(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function generateRecoveryCodes(count = 10) {
+  const codes = [];
+  for (let i = 0; i < count; i++) {
+    let raw = '';
+    while (raw.length < 10) {
+      const byte = crypto.randomBytes(1)[0];
+      // 248 = 8 * 31; rejecting higher bytes keeps the modulo unbiased
+      if (byte < 248) raw += RECOVERY_ALPHABET[byte % RECOVERY_ALPHABET.length];
+    }
+    codes.push(`${raw.slice(0, 5)}-${raw.slice(5)}`);
+  }
+  return codes;
+}
+
 module.exports = {
   decodeBase32,
   formatToken,
   generateHOTP,
   verifyTOTP,
   verifyTOTPWithCounter,
-  generateSecret
+  generateSecret,
+  generateRecoveryCodes,
+  normalizeRecoveryCode
 };

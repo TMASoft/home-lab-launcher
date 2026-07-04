@@ -230,6 +230,8 @@ function settingsPayload(input = {}) {
   if (Object.prototype.hasOwnProperty.call(input, 'app_base_url')) out.app_base_url = input.app_base_url ? httpUrl(input.app_base_url, 'APP_BASE_URL') : '';
   if (Object.prototype.hasOwnProperty.call(input, 'public_read_enabled')) out.public_read_enabled = bool(input.public_read_enabled, false);
   if (Object.prototype.hasOwnProperty.call(input, 'scheduled_backup_location')) out.scheduled_backup_location = cleanText(input.scheduled_backup_location, '', 300);
+  if (Object.prototype.hasOwnProperty.call(input, 'health_webhook_url')) out.health_webhook_url = input.health_webhook_url ? httpUrl(input.health_webhook_url, 'Health webhook URL') : '';
+  if (Object.prototype.hasOwnProperty.call(input, 'health_history_retention_days')) out.health_history_retention_days = intInRange(input.health_history_retention_days, { min: 1, max: 90, fallback: 7 });
   return out;
 }
 

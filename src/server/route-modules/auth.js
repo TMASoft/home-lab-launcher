@@ -16,6 +16,36 @@ function verifyTotpForUser(db, user, code) {
   return true;
 }
 
+const RECOVERY_CODE_COUNT = 10;
+
+async function replaceRecoveryCodes(db, userId) {
+  const codes = totp.generateRecoveryCodes(RECOVERY_CODE_COUNT);
+  const hashes = await Promise.all(codes.map((code) => bcrypt.hash(totp.normalizeRecoveryCode(code), 10)));
+  const insert = db.prepare('INSERT INTO totp_recovery_codes (user_id, code_hash) VALUES (?, ?)');
+  db.transaction(() => {
+    db.prepare('DELETE FROM totp_recovery_codes WHERE user_id = ?').run(userId);
+    for (const hash of hashes) insert.run(userId, hash);
+  })();
+  return codes;
+}
+
+async function consumeRecoveryCode(db, userId, input) {
+  const normalized = totp.normalizeRecoveryCode(input);
+  if (!normalized) return false;
+  const rows = db.prepare('SELECT id, code_hash FROM totp_recovery_codes WHERE user_id = ? AND used_at IS NULL').all(userId);
+  for (const row of rows) {
+    if (await bcrypt.compare(normalized, row.code_hash)) {
+      db.prepare('UPDATE totp_recovery_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(row.id);
+      return true;
+    }
+  }
+  return false;
+}
+
+function countUnusedRecoveryCodes(db, userId) {
+  return db.prepare('SELECT COUNT(*) AS count FROM totp_recovery_codes WHERE user_id = ? AND used_at IS NULL').get(userId).count;
+}
+
 function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures, refreshSessionUser }) {
   router.get('/bootstrap-status', (req, res) => {
     const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
@@ -45,11 +75,12 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     }
 
     const info = db.prepare('INSERT INTO users (username, password_hash, role, totp_secret, totp_enabled, totp_last_counter) VALUES (?, ?, ?, ?, ?, ?)').run(username, hash, 'admin', totpSecret, totpEnabled, totpCounter);
+    const recoveryCodes = totpEnabled ? await replaceRecoveryCodes(db, info.lastInsertRowid) : undefined;
     req.session.user = { id: info.lastInsertRowid, username, role: 'admin' };
     req.session.createdAt = new Date().toISOString();
     issueCsrfToken(req);
     logEvent(db, req, 'bootstrap.admin_created', { username, totpEnabled: Boolean(totpEnabled) });
-    res.json({ user: req.session.user });
+    res.json({ user: req.session.user, recoveryCodes });
   });
 
   router.post('/auth/login', express.json(), async (req, res) => {
@@ -69,11 +100,18 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
       return res.apiError(401, 'Invalid username or password');
     }
 
+    let usedRecoveryCode = false;
     if (user.totp_enabled === 1) {
-      if (!code) {
+      const recoveryCode = String(req.body.recoveryCode || '').trim();
+      if (!code && !recoveryCode) {
         return res.json({ requiresTotp: true });
       }
-      if (!verifyTotpForUser(db, user, code)) {
+      let verified = code ? verifyTotpForUser(db, user, code) : false;
+      if (!verified && recoveryCode) {
+        verified = await consumeRecoveryCode(db, user.id, recoveryCode);
+        usedRecoveryCode = verified;
+      }
+      if (!verified) {
         recordLoginFailure(db, req, username);
         logEvent(db, req, 'auth.login_failed_2fa', { username }, 'warn');
         return res.apiError(401, 'Invalid 2FA code');
@@ -89,6 +127,9 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
       req.session.userAgent = req.get('user-agent') || '';
       issueCsrfToken(req);
       logEvent(db, req, 'auth.login');
+      if (usedRecoveryCode) {
+        logEvent(db, req, 'auth.login_recovery_code', { remaining: countUnusedRecoveryCodes(db, user.id) }, 'warn');
+      }
       res.json({ user: req.session.user, csrfToken: req.session.csrfToken });
     });
   });
@@ -108,6 +149,7 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
 
   router.get('/me', requireAuth, (req, res) => {
     const user = db.prepare('SELECT id, username, role, totp_enabled AS totpEnabled, created_at AS createdAt, updated_at AS updatedAt FROM users WHERE id = ?').get(req.session.user.id);
+    if (user && user.totpEnabled) user.recoveryCodesRemaining = countUnusedRecoveryCodes(db, user.id);
     res.json({ user });
   });
 
@@ -148,7 +190,7 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     res.json({ secret });
   });
 
-  router.post('/me/totp/enable', requireAuth, express.json(), (req, res) => {
+  router.post('/me/totp/enable', requireAuth, express.json(), async (req, res) => {
     const secret = String(req.body.secret || '').trim();
     const code = String(req.body.code || '').trim();
     if (!secret || !code) return res.apiError(400, 'Secret and verification code are required');
@@ -156,8 +198,26 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     if (!codeResult) return res.apiError(400, 'Invalid verification code');
 
     db.prepare('UPDATE users SET totp_secret = ?, totp_enabled = 1, totp_last_counter = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(secret, codeResult.counter, req.session.user.id);
+    const recoveryCodes = await replaceRecoveryCodes(db, req.session.user.id);
     logEvent(db, req, 'profile.totp_enabled');
-    res.apiOk();
+    res.apiOk({ recoveryCodes });
+  });
+
+  router.post('/me/totp/recovery-codes', requireAuth, express.json(), async (req, res) => {
+    const password = String(req.body.password || '');
+    const code = String(req.body.code || '').trim();
+
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.session.user.id);
+    if (!user || !(await bcrypt.compare(password, user.password_hash))) {
+      return res.apiError(401, 'Current password is incorrect');
+    }
+    if (user.totp_enabled !== 1) return res.apiError(400, 'Two-factor authentication is not enabled');
+    if (!code) return res.apiError(400, 'Verification code is required');
+    if (!verifyTotpForUser(db, user, code)) return res.apiError(401, 'Invalid verification code');
+
+    const recoveryCodes = await replaceRecoveryCodes(db, user.id);
+    logEvent(db, req, 'profile.totp_recovery_codes_regenerated');
+    res.apiOk({ recoveryCodes });
   });
 
   router.post('/me/totp/disable', requireAuth, express.json(), async (req, res) => {
@@ -179,6 +239,7 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
     }
 
     db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last_counter = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(req.session.user.id);
+    db.prepare('DELETE FROM totp_recovery_codes WHERE user_id = ?').run(req.session.user.id);
     req.sessionStore.destroyForUser(req.session.user.id, { exceptSid: req.sessionID });
     logEvent(db, req, 'profile.totp_disabled');
     res.apiOk();

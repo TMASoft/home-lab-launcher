@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Home Lab Launcher API",
-    "version": "0.5.2",
-    "description": "Pre-1.0 JSON API for the bundled frontend, trusted plugins, and private-deployment automation. Mutating API routes require the session CSRF token in the X-CSRF-Token header, except /api/bootstrap and /api/auth/login."
+    "version": "0.7.0",
+    "description": "Pre-1.0 JSON API for the bundled frontend, trusted plugins, and private-deployment automation. Mutating API routes require the session CSRF token in the X-CSRF-Token header, except /api/bootstrap and /api/auth/login. Automation may instead authenticate with an Admin-issued API token via Authorization: Bearer; token requests skip CSRF, act with the token's role, and are rejected on session/profile endpoints (/api/auth/*, /api/me*, /api/bootstrap*)."
   },
   "servers": [
     {
@@ -24,7 +24,8 @@
     { "name": "Assets" }
   ],
   "security": [
-    { "sessionCookie": [] }
+    { "sessionCookie": [] },
+    { "bearerToken": [] }
   ],
   "paths": {
     "/healthz": {
@@ -58,7 +59,7 @@
         "description": "Available only while no users exist. CSRF is not required for this bootstrap route.",
         "security": [],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BootstrapRequest" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/UserEnvelope" }, "400": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "description": "Created admin", "content": { "application/json": { "schema": { "type": "object", "required": ["user"], "properties": { "user": { "$ref": "#/components/schemas/User" }, "recoveryCodes": { "type": "array", "items": { "type": "string" }, "description": "Shown-once TOTP recovery codes when 2FA was enabled at bootstrap." } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "409": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/auth/login": {
@@ -139,7 +140,17 @@
         "summary": "Enable TOTP 2FA for current user",
         "security": [{ "sessionCookie": [], "csrfToken": [] }],
         "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TotpEnableRequest" } } } },
-        "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+        "responses": { "200": { "$ref": "#/components/responses/RecoveryCodesOk" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
+      }
+    },
+    "/me/totp/recovery-codes": {
+      "post": {
+        "tags": ["Profile"],
+        "summary": "Regenerate TOTP recovery codes",
+        "description": "Replaces all remaining recovery codes with a fresh shown-once set of ten single-use codes. Requires the current password and a valid TOTP code.",
+        "security": [{ "sessionCookie": [], "csrfToken": [] }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["password", "code"], "properties": { "password": { "type": "string" }, "code": { "type": "string" } } } } } },
+        "responses": { "200": { "$ref": "#/components/responses/RecoveryCodesOk" }, "400": { "$ref": "#/components/responses/Error" }, "401": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
       }
     },
     "/me/totp/disable": {
@@ -324,6 +335,13 @@
         "responses": { "200": { "$ref": "#/components/responses/Ok" }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } }
       }
     },
+    "/admin/api-tokens": {
+      "get": { "tags": ["Admin"], "summary": "List API tokens", "description": "Metadata only; the token secret is never returned after creation.", "responses": { "200": { "description": "API tokens", "content": { "application/json": { "schema": { "type": "object", "required": ["tokens"], "properties": { "tokens": { "type": "array", "items": { "$ref": "#/components/schemas/ApiToken" } } } } } } }, "403": { "$ref": "#/components/responses/Error" } } },
+      "post": { "tags": ["Admin"], "summary": "Create an API token", "description": "The plaintext token is returned exactly once and stored only as a SHA-256 hash.", "security": [{ "sessionCookie": [], "csrfToken": [] }], "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiTokenCreateRequest" } } } }, "responses": { "201": { "description": "Created token", "content": { "application/json": { "schema": { "type": "object", "required": ["token", "apiToken"], "properties": { "token": { "type": "string", "description": "Shown-once plaintext bearer token (hll_ prefix)." }, "apiToken": { "$ref": "#/components/schemas/ApiToken" } } } } } }, "400": { "$ref": "#/components/responses/Error" }, "403": { "$ref": "#/components/responses/Error" } } }
+    },
+    "/admin/api-tokens/{id}": {
+      "delete": { "tags": ["Admin"], "summary": "Revoke an API token", "security": [{ "sessionCookie": [], "csrfToken": [] }], "parameters": [{ "$ref": "#/components/parameters/Id" }], "responses": { "200": { "$ref": "#/components/responses/Ok" }, "403": { "$ref": "#/components/responses/Error" }, "404": { "$ref": "#/components/responses/Error" } } }
+    },
     "/admin/overview": { "get": { "tags": ["Admin"], "summary": "Read admin overview", "responses": { "200": { "description": "Admin overview", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AdminOverview" } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
     "/admin/health": { "get": { "tags": ["Admin"], "summary": "Read management-plane health", "responses": { "200": { "description": "Admin health", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/GenericObject" } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
     "/admin/config": { "get": { "tags": ["Admin"], "summary": "Read effective non-secret config", "responses": { "200": { "description": "Effective config", "content": { "application/json": { "schema": { "type": "object", "properties": { "config": { "$ref": "#/components/schemas/GenericObject" } } } } } }, "403": { "$ref": "#/components/responses/Error" } } } },
@@ -416,7 +434,8 @@
   "components": {
     "securitySchemes": {
       "sessionCookie": { "type": "apiKey", "in": "cookie", "name": "hll.sid" },
-      "csrfToken": { "type": "apiKey", "in": "header", "name": "X-CSRF-Token" }
+      "csrfToken": { "type": "apiKey", "in": "header", "name": "X-CSRF-Token" },
+      "bearerToken": { "type": "http", "scheme": "bearer", "description": "Admin-issued API token (hll_ prefix). Skips CSRF; not accepted on session/profile endpoints." }
     },
     "parameters": {
       "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "string" } },
@@ -432,7 +451,8 @@
       "Login": { "description": "Login response", "content": { "application/json": { "schema": { "oneOf": [{ "type": "object", "required": ["user", "csrfToken"], "properties": { "user": { "$ref": "#/components/schemas/User" }, "csrfToken": { "type": "string" } } }, { "type": "object", "required": ["requiresTotp"], "properties": { "requiresTotp": { "type": "boolean", "const": true } } }] } } } },
       "UserEnvelope": { "description": "User envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["user"], "properties": { "user": { "$ref": "#/components/schemas/User" } } } } } },
       "Service": { "description": "Service envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["service"], "properties": { "service": { "$ref": "#/components/schemas/Service" } } } } } },
-      "Services": { "description": "Services envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["services"], "properties": { "services": { "type": "array", "items": { "$ref": "#/components/schemas/Service" } } } } } } }
+      "Services": { "description": "Services envelope", "content": { "application/json": { "schema": { "type": "object", "required": ["services"], "properties": { "services": { "type": "array", "items": { "$ref": "#/components/schemas/Service" } } } } } } },
+      "RecoveryCodesOk": { "description": "Success with shown-once recovery codes", "content": { "application/json": { "schema": { "allOf": [{ "$ref": "#/components/schemas/Ok" }, { "type": "object", "required": ["recoveryCodes"], "properties": { "recoveryCodes": { "type": "array", "items": { "type": "string" }, "description": "Ten single-use codes, shown exactly once." } } }] } } } }
     },
     "schemas": {
       "Ok": { "type": "object", "required": ["ok"], "properties": { "ok": { "type": "boolean" } }, "additionalProperties": true },
@@ -440,9 +460,9 @@
       "Error": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } }, "additionalProperties": true },
       "GenericObject": { "type": "object", "additionalProperties": true },
       "Role": { "type": "string", "enum": ["admin", "editor", "user"] },
-      "User": { "type": "object", "properties": { "id": { "type": "integer" }, "username": { "type": "string" }, "role": { "$ref": "#/components/schemas/Role" }, "totpEnabled": { "type": ["boolean", "integer"] }, "createdAt": { "type": "string" }, "updatedAt": { "type": "string" } }, "additionalProperties": true },
+      "User": { "type": "object", "properties": { "id": { "type": "integer" }, "username": { "type": "string" }, "role": { "$ref": "#/components/schemas/Role" }, "totpEnabled": { "type": ["boolean", "integer"] }, "recoveryCodesRemaining": { "type": "integer", "description": "Unused TOTP recovery codes. Present on /api/me when 2FA is enabled." }, "createdAt": { "type": "string" }, "updatedAt": { "type": "string" } }, "additionalProperties": true },
       "BootstrapRequest": { "type": "object", "required": ["username", "password"], "properties": { "username": { "type": "string", "minLength": 3 }, "password": { "type": "string", "minLength": 10 }, "totpSecret": { "type": "string" }, "totpCode": { "type": "string" } } },
-      "LoginRequest": { "type": "object", "required": ["username", "password"], "properties": { "username": { "type": "string" }, "password": { "type": "string" }, "code": { "type": "string" } } },
+      "LoginRequest": { "type": "object", "required": ["username", "password"], "properties": { "username": { "type": "string" }, "password": { "type": "string" }, "code": { "type": "string", "description": "Six-digit TOTP code." }, "recoveryCode": { "type": "string", "description": "Single-use recovery code accepted in place of a TOTP code; case and separators are ignored." } } },
       "SessionState": { "type": "object", "required": ["user", "publicReadEnabled", "csrfToken"], "properties": { "user": { "oneOf": [{ "$ref": "#/components/schemas/User" }, { "type": "null" }] }, "publicReadEnabled": { "type": "boolean" }, "csrfToken": { "type": ["string", "null"] } } },
       "PasswordChangeRequest": { "type": "object", "required": ["currentPassword", "newPassword"], "properties": { "currentPassword": { "type": "string" }, "newPassword": { "type": "string", "minLength": 10 } } },
       "TotpEnableRequest": { "type": "object", "required": ["secret", "code"], "properties": { "secret": { "type": "string" }, "code": { "type": "string" } } },
@@ -450,8 +470,8 @@
       "UserSession": { "type": "object", "properties": { "sid": { "type": "string" }, "userAgent": { "type": "string" }, "ip": { "type": "string" }, "createdAt": { "type": ["string", "null"] }, "expiresAt": { "type": "string" }, "current": { "type": "boolean" } }, "additionalProperties": true },
       "Appearance": { "type": "object", "properties": { "version": { "type": "integer" }, "brand": { "$ref": "#/components/schemas/GenericObject" }, "hero": { "$ref": "#/components/schemas/GenericObject" }, "theme": { "$ref": "#/components/schemas/GenericObject" } }, "additionalProperties": true },
       "PublicSettings": { "type": "object", "properties": { "appName": { "type": "string" }, "version": { "type": "string" }, "repositoryUrl": { "type": "string" }, "appBaseUrl": { "type": "string" }, "publicReadEnabled": { "type": "boolean" }, "appearance": { "$ref": "#/components/schemas/Appearance" } }, "additionalProperties": true },
-      "SettingsUpdateRequest": { "type": "object", "properties": { "app_name": { "type": "string" }, "app_base_url": { "type": "string" }, "public_read_enabled": { "type": "boolean" }, "scheduled_backup_location": { "type": "string" } }, "additionalProperties": false },
-      "ServiceHealth": { "type": "object", "properties": { "serviceId": { "type": "string" }, "status": { "type": "string", "enum": ["up", "down", "unknown"] }, "statusCode": { "type": ["integer", "null"] }, "responseMs": { "type": ["integer", "null"] }, "checkedAt": { "type": ["string", "null"] }, "nextCheckAt": { "type": ["string", "null"] }, "error": { "type": ["string", "null"] } }, "additionalProperties": true },
+      "SettingsUpdateRequest": { "type": "object", "properties": { "app_name": { "type": "string" }, "app_base_url": { "type": "string" }, "public_read_enabled": { "type": "boolean" }, "scheduled_backup_location": { "type": "string" }, "health_webhook_url": { "type": "string", "format": "uri", "description": "Webhook receiving a JSON POST on service up/down transitions. Empty string disables." }, "health_history_retention_days": { "type": "integer", "minimum": 1, "maximum": 90, "default": 7 } }, "additionalProperties": false },
+      "ServiceHealth": { "type": "object", "properties": { "serviceId": { "type": "string" }, "status": { "type": "string", "enum": ["up", "down", "unknown"] }, "statusCode": { "type": ["integer", "null"] }, "responseMs": { "type": ["integer", "null"] }, "checkedAt": { "type": ["string", "null"] }, "nextCheckAt": { "type": ["string", "null"] }, "error": { "type": ["string", "null"] }, "uptime24h": { "type": ["number", "null"], "description": "Percentage of samples with status=up over the last 24 hours; null without history." } }, "additionalProperties": true },
       "Service": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "icon": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "category": { "type": "string" }, "accent": { "type": "string" }, "description": { "type": "string" }, "tags": { "type": "array", "items": { "type": "string" } }, "sortOrder": { "type": "integer" }, "featured": { "type": "boolean" }, "enabled": { "type": "boolean" }, "healthCheckEnabled": { "type": "boolean" }, "healthCheckUrl": { "type": "string" }, "healthCheckIntervalMinutes": { "type": "integer" }, "health": { "oneOf": [{ "$ref": "#/components/schemas/ServiceHealth" }, { "type": "null" }] } }, "additionalProperties": true },
       "ServiceWriteRequest": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "url": { "type": "string", "format": "uri" }, "icon": { "type": "string" }, "iconImageData": { "type": "string", "description": "Data URL for uploaded icon image." }, "category": { "type": "string" }, "accent": { "type": "string" }, "description": { "type": "string" }, "tags": { "oneOf": [{ "type": "array", "items": { "type": "string" } }, { "type": "string" }] }, "sortOrder": { "type": "integer" }, "featured": { "type": "boolean" }, "enabled": { "type": "boolean" }, "healthCheckEnabled": { "type": "boolean" }, "healthCheckUrl": { "type": "string", "format": "uri" }, "healthCheckIntervalMinutes": { "type": "integer", "minimum": 1, "maximum": 1440 } }, "additionalProperties": true },
       "ServiceBulkRequest": { "type": "object", "required": ["ids", "action"], "properties": { "ids": { "type": "array", "items": { "type": "string" } }, "action": { "type": "string", "enum": ["enable", "disable", "feature", "unfeature", "delete"] } } },
@@ -473,7 +493,9 @@
       "PresetImportRequest": { "type": "object", "required": ["presetId"], "properties": { "presetId": { "type": "string" }, "customUrl": { "type": "string", "format": "uri", "description": "Optional service URL override. Required when the selected preset has no website fallback." } } },
       "Plugin": { "type": "object", "properties": { "id": { "type": "string" }, "name": { "type": "string" }, "sourceUrl": { "type": "string" }, "sourceType": { "type": "string" }, "version": { "type": "string" }, "enabled": { "type": "boolean" }, "manifest": { "$ref": "#/components/schemas/GenericObject" }, "config": { "$ref": "#/components/schemas/GenericObject" }, "installedHash": { "type": "string" }, "lifecycle": { "type": "string" }, "lastError": { "type": ["string", "null"] } }, "additionalProperties": true },
       "PluginInstallRequest": { "type": "object", "required": ["repoUrl", "version", "trustConfirmed"], "properties": { "repoUrl": { "type": "string" }, "version": { "type": "string" }, "expectedSha256": { "type": "string" }, "trustConfirmed": { "type": "boolean", "const": true } }, "additionalProperties": false },
-      "PluginLocalInstallRequest": { "type": "object", "required": ["path", "trustConfirmed"], "properties": { "path": { "type": "string" }, "trustConfirmed": { "type": "boolean", "const": true } }, "additionalProperties": false }
+      "PluginLocalInstallRequest": { "type": "object", "required": ["path", "trustConfirmed"], "properties": { "path": { "type": "string" }, "trustConfirmed": { "type": "boolean", "const": true } }, "additionalProperties": false },
+      "ApiToken": { "type": "object", "properties": { "id": { "type": "integer" }, "name": { "type": "string" }, "tokenPrefix": { "type": "string", "description": "Display prefix of the token for identification; the full secret is never stored." }, "role": { "$ref": "#/components/schemas/Role" }, "createdBy": { "type": ["integer", "null"] }, "expiresAt": { "type": ["string", "null"] }, "lastUsedAt": { "type": ["string", "null"] }, "createdAt": { "type": "string" } }, "additionalProperties": true },
+      "ApiTokenCreateRequest": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string", "maxLength": 80 }, "role": { "$ref": "#/components/schemas/Role" }, "expiresDays": { "type": "integer", "minimum": 1, "maximum": 3650, "description": "Optional expiry in days from creation." } }, "additionalProperties": false }
     }
   }
 }

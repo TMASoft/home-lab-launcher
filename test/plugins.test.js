@@ -75,3 +75,39 @@ test('redactPluginConfigForRole hides admin-scoped and undeclared fields from no
   assert.deepEqual(redactPluginConfigForRole({}, config, 'user'), {});
   assert.deepEqual(redactPluginConfigForRole(manifest, null, 'admin'), {});
 });
+
+test('cleanupSupersededInstalls removes unreferenced install dirs and orphaned tarballs', () => {
+  const { openDb } = require('../src/server/db');
+  const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hll-plugin-cleanup-'));
+  try {
+    const db = openDb(dataDir);
+    const pluginDir = path.join(dataDir, 'plugins');
+    const manager = new PluginManager({ app: { use() {} }, db, pluginDir });
+
+    const activeDir = path.join(pluginDir, 'owner-repo-v2.0.0');
+    const staleDir = path.join(pluginDir, 'owner-repo-v1.0.0');
+    const nestedActiveExtract = path.join(pluginDir, 'owner-monorepo-v1.0.0');
+    fs.mkdirSync(activeDir, { recursive: true });
+    fs.mkdirSync(staleDir, { recursive: true });
+    fs.mkdirSync(path.join(nestedActiveExtract, 'subdir'), { recursive: true });
+    fs.writeFileSync(path.join(pluginDir, 'owner-repo-v2.0.0.tgz'), 'leftover');
+
+    const insert = db.prepare(`
+      INSERT INTO plugins (id, name, source_url, source_type, version, install_path, enabled, manifest_json, config_json, installed_hash, lifecycle, last_error)
+      VALUES (?, ?, 'https://github.com/o/r', 'github', ?, ?, 1, '{}', '{}', 'hash', 'enabled', NULL)
+    `);
+    insert.run('active-plugin', 'Active', 'v2.0.0', activeDir);
+    // install_path pointing at a subdirectory keeps the whole extract alive
+    insert.run('nested-plugin', 'Nested', 'v1.0.0', path.join(nestedActiveExtract, 'subdir'));
+
+    const removed = manager.cleanupSupersededInstalls().sort();
+    assert.deepEqual(removed, ['owner-repo-v1.0.0', 'owner-repo-v2.0.0.tgz']);
+    assert.ok(fs.existsSync(activeDir));
+    assert.ok(fs.existsSync(path.join(nestedActiveExtract, 'subdir')));
+    assert.ok(!fs.existsSync(staleDir));
+    assert.ok(!fs.existsSync(path.join(pluginDir, 'owner-repo-v2.0.0.tgz')));
+    db.close();
+  } finally {
+    fs.rmSync(dataDir, { recursive: true, force: true });
+  }
+});

@@ -45,8 +45,10 @@ function startServer({ port = 19080, env: envOverrides = {} } = {}) {
     throw new Error(`Server did not become ready: ${output}`);
   }
   async function stop() {
-    if (child.exitCode === null) child.kill('SIGTERM');
-    await new Promise((resolve) => child.once('exit', resolve));
+    if (child.exitCode === null) {
+      child.kill('SIGTERM');
+      await new Promise((resolve) => child.once('exit', resolve));
+    }
     fs.rmSync(dataDir, { recursive: true, force: true });
   }
   return { child, baseUrl, dataDir, ready, stop, output: () => output };

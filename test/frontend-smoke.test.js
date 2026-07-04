@@ -22,6 +22,10 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
   for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'test-service-url', 'data-toggle-metadata', 'showServiceHostnames()', 'showServiceTags()', '/api/admin/presets/import', 'svc-preset-id']) {
     assert.ok(js.includes(token), `missing ${token}`);
   }
+  // v0.7.0 additions: recovery codes, API tokens, health webhook settings, uptime badges
+  for (const token of ['showRecoveryCodesModal(', 'recoveryCodesRemaining', '/api/me/totp/recovery-codes', 'login-use-recovery', 'recoveryCode', 'apiTokensCardHtml()', '/api/admin/api-tokens', 'data-api-token-revoke', 'admin-health-webhook', 'health_webhook_url', 'health_history_retention_days', 'serviceUptimeHtml(', 'uptime24h']) {
+    assert.ok(js.includes(token), `missing v0.7.0 token ${token}`);
+  }
   const accessibilityTokens = [
     'lastFocusedBeforeModal',
     'firstFocusableIn(',

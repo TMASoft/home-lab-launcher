@@ -124,7 +124,7 @@ test('core API supports auth, services, settings, logs, and plugin health', asyn
   });
   assert.equal(
     sanitizedAppearanceObj.appearance.hero.subheading,
-    '<p>Hello <strong>World</strong>! alert(1) <a>XSS</a> <a href="https://example.com">Safe Link</a></p>'
+    '<p>Hello <strong>World</strong>!  <a>XSS</a> <a href="https://example.com">Safe Link</a></p>'
   );
 
 
@@ -497,6 +497,8 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
 
   const enableRes = await admin.request('/api/me/totp/enable', { method: 'POST', body: { secret: setup.secret, code: totp.formatToken(correctCode) } });
   assert.equal(enableRes.ok, true);
+  assert.equal(enableRes.recoveryCodes.length, 10);
+  assert.ok(enableRes.recoveryCodes.every((code) => /^[a-z2-9]{5}-[a-z2-9]{5}$/.test(code)));
 
   const me = await admin.request('/api/me');
   assert.equal(me.user.totpEnabled, 1);
@@ -578,6 +580,300 @@ test('optional 2FA/TOTP flow (setup, enable, enforce, reset, disable)', async (t
   assert.ok(logs.logs.some((entry) => entry.action === 'profile.totp_disabled'));
 });
 
+test('TOTP recovery codes (login, single-use, regenerate, cleared on disable)', async (t) => {
+  const server = startServer({ port: 19141 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const totp = require('../src/server/totp');
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  const setup = await admin.request('/api/me/totp/setup', { method: 'POST' });
+  const secretBuffer = totp.decodeBase32(setup.secret);
+  const baseCounter = Math.floor(Date.now() / 1000 / 30);
+  const enableRes = await admin.request('/api/me/totp/enable', { method: 'POST', body: { secret: setup.secret, code: totp.formatToken(totp.generateHOTP(secretBuffer, baseCounter - 1)) } });
+  const recoveryCodes = enableRes.recoveryCodes;
+  assert.equal(recoveryCodes.length, 10);
+
+  const meEnabled = await admin.request('/api/me');
+  assert.equal(meEnabled.user.recoveryCodesRemaining, 10);
+
+  // A recovery code logs in instead of a TOTP code; normalization tolerates
+  // case and separator differences.
+  const recoveryClient = new Client(server.baseUrl);
+  const scrambled = recoveryCodes[0].toUpperCase().replace('-', ' ');
+  const recoveryLogin = await recoveryClient.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', recoveryCode: scrambled } });
+  assert.equal(recoveryLogin.user.role, 'admin');
+
+  const meAfterUse = await recoveryClient.request('/api/me');
+  assert.equal(meAfterUse.user.recoveryCodesRemaining, 9);
+
+  // Single-use: the same code is rejected on a second attempt.
+  await assert.rejects(
+    () => new Client(server.baseUrl).request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', recoveryCode: recoveryCodes[0] } }),
+    /Invalid 2FA code/
+  );
+  await assert.rejects(
+    () => new Client(server.baseUrl).request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', recoveryCode: 'nope2-nope3' } }),
+    /Invalid 2FA code/
+  );
+
+  // Regenerate requires the current password and a valid TOTP code.
+  await assert.rejects(
+    () => recoveryClient.request('/api/me/totp/recovery-codes', { method: 'POST', body: { password: 'wrong-password', code: '000000' } }),
+    /Current password is incorrect/
+  );
+  await assert.rejects(
+    () => recoveryClient.request('/api/me/totp/recovery-codes', { method: 'POST', body: { password: 'test-admin-password-please-change', code: '000000' } }),
+    /Invalid verification code/
+  );
+  const regen = await recoveryClient.request('/api/me/totp/recovery-codes', { method: 'POST', body: { password: 'test-admin-password-please-change', code: totp.formatToken(totp.generateHOTP(secretBuffer, baseCounter)) } });
+  assert.equal(regen.recoveryCodes.length, 10);
+  assert.ok(!regen.recoveryCodes.includes(recoveryCodes[1]));
+
+  // Old unused codes are invalidated by regeneration.
+  await assert.rejects(
+    () => new Client(server.baseUrl).request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change', recoveryCode: recoveryCodes[1] } }),
+    /Invalid 2FA code/
+  );
+  const meAfterRegen = await recoveryClient.request('/api/me');
+  assert.equal(meAfterRegen.user.recoveryCodesRemaining, 10);
+
+  const logs = await recoveryClient.request('/api/admin/logs?limit=50');
+  assert.ok(logs.logs.some((entry) => entry.action === 'auth.login_recovery_code'));
+  assert.ok(logs.logs.some((entry) => entry.action === 'profile.totp_recovery_codes_regenerated'));
+
+  // Disabling TOTP clears the stored codes.
+  await recoveryClient.request('/api/me/totp/disable', { method: 'POST', body: { password: 'test-admin-password-please-change', code: totp.formatToken(totp.generateHOTP(secretBuffer, baseCounter + 1)) } });
+  const meDisabled = await recoveryClient.request('/api/me');
+  assert.equal(meDisabled.user.totpEnabled, 0);
+  assert.equal(meDisabled.user.recoveryCodesRemaining, undefined);
+  const plainLogin = await new Client(server.baseUrl).request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  assert.equal(plainLogin.user.role, 'admin');
+});
+
+test('session lifetime honors SESSION_MAX_AGE_DAYS and rolls on activity', async (t) => {
+  const server = startServer({ port: 19142, env: { SESSION_MAX_AGE_DAYS: '1' } });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const login = await fetch(`${server.baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'test-admin-password-please-change' })
+  });
+  assert.equal(login.status, 200);
+  const cookieLifetimeDays = (setCookie) => {
+    const expires = /Expires=([^;]+)/i.exec(String(setCookie || ''));
+    assert.ok(expires, `Set-Cookie missing Expires: ${setCookie}`);
+    return (new Date(expires[1]).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+  };
+  const loginCookie = login.headers.get('set-cookie');
+  const loginDays = cookieLifetimeDays(loginCookie);
+  assert.ok(loginDays > 0.9 && loginDays < 1.1, `expected ~1 day, got ${loginDays}`);
+
+  // rolling: true means every authenticated response refreshes the cookie.
+  const me = await fetch(`${server.baseUrl}/api/me`, { headers: { Cookie: loginCookie.split(';')[0] } });
+  assert.equal(me.status, 200);
+  const rolledDays = cookieLifetimeDays(me.headers.get('set-cookie'));
+  assert.ok(rolledDays > 0.9 && rolledDays < 1.1, `expected ~1 day, got ${rolledDays}`);
+
+  // Out-of-range values clamp to the 1-90 day bounds.
+  const clamped = startServer({ port: 19143, env: { SESSION_MAX_AGE_DAYS: '500' } });
+  await clamped.ready();
+  t.after(() => clamped.stop());
+  const clampedLogin = await fetch(`${clamped.baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin', password: 'test-admin-password-please-change' })
+  });
+  const clampedDays = cookieLifetimeDays(clampedLogin.headers.get('set-cookie'));
+  assert.ok(clampedDays > 89 && clampedDays < 91, `expected ~90 days, got ${clampedDays}`);
+});
+
+test('API tokens authenticate automation requests with role scoping', async (t) => {
+  const server = startServer({ port: 19144 });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  const created = await admin.request('/api/admin/api-tokens', { method: 'POST', body: { name: 'ci-bot', role: 'editor', expiresDays: 30 } });
+  assert.match(created.token, /^hll_[A-Za-z0-9_-]{43}$/);
+  assert.equal(created.apiToken.role, 'editor');
+  assert.ok(created.apiToken.expiresAt);
+  assert.ok(created.token.startsWith(created.apiToken.tokenPrefix));
+
+  await assert.rejects(
+    () => admin.request('/api/admin/api-tokens', { method: 'POST', body: { name: '', role: 'editor' } }),
+    /Token name is required/
+  );
+  await assert.rejects(
+    () => admin.request('/api/admin/api-tokens', { method: 'POST', body: { name: 'bad', role: 'superuser' } }),
+    /Role must be/
+  );
+
+  const bearer = (token) => ({ Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' });
+
+  // An editor token can create services — no cookies, no CSRF token.
+  const createService = await fetch(`${server.baseUrl}/api/services`, {
+    method: 'POST',
+    headers: bearer(created.token),
+    body: JSON.stringify({ name: 'Token Service', url: 'https://token.example.com' })
+  });
+  assert.equal(createService.status, 201);
+
+  // ...but cannot reach admin-only endpoints.
+  const adminAsEditor = await fetch(`${server.baseUrl}/api/admin/overview`, { headers: bearer(created.token) });
+  assert.equal(adminAsEditor.status, 403);
+
+  // Session/profile endpoints reject token auth entirely.
+  const meWithToken = await fetch(`${server.baseUrl}/api/me`, { headers: bearer(created.token) });
+  assert.equal(meWithToken.status, 403);
+
+  // A user-role token is read-only where editors can write.
+  const userToken = await admin.request('/api/admin/api-tokens', { method: 'POST', body: { name: 'read-bot', role: 'user' } });
+  const writeAsUser = await fetch(`${server.baseUrl}/api/services`, {
+    method: 'POST',
+    headers: bearer(userToken.token),
+    body: JSON.stringify({ name: 'Nope', url: 'https://nope.example.com' })
+  });
+  assert.equal(writeAsUser.status, 403);
+  const readAsUser = await fetch(`${server.baseUrl}/api/services`, { headers: bearer(userToken.token) });
+  assert.equal(readAsUser.status, 200);
+
+  // Garbage tokens fail closed.
+  const invalid = await fetch(`${server.baseUrl}/api/services`, { headers: { Authorization: 'Bearer hll_not-a-real-token-aaaaaaaaaaaaaaaaaaaaaaaaa' } });
+  assert.equal(invalid.status, 401);
+
+  // Listing shows metadata and last-used tracking, never the secret.
+  const list = await admin.request('/api/admin/api-tokens');
+  assert.equal(list.tokens.length, 2);
+  const listedEditorToken = list.tokens.find((item) => item.name === 'ci-bot');
+  assert.ok(listedEditorToken.lastUsedAt);
+  assert.ok(!JSON.stringify(list).includes(created.token));
+
+  // Revocation takes effect immediately.
+  await admin.request(`/api/admin/api-tokens/${listedEditorToken.id}`, { method: 'DELETE' });
+  const revoked = await fetch(`${server.baseUrl}/api/services`, { headers: bearer(created.token) });
+  assert.equal(revoked.status, 401);
+
+  const logs = await admin.request('/api/admin/logs?limit=50');
+  assert.ok(logs.logs.some((entry) => entry.action === 'api_token.created'));
+  assert.ok(logs.logs.some((entry) => entry.action === 'api_token.revoked'));
+  // Actions performed with a token are attributed to it in the audit log.
+  assert.ok(logs.logs.some((entry) => entry.action === 'service.created' && entry.actorUsername === 'token:ci-bot'));
+});
+
+test('plugin GET routes honor the public-read gate unless the manifest opts out', async (t) => {
+  const server = startServer({ port: 19148, env: { PUBLIC_READ_ENABLED: 'false' } });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const fsx = require('node:fs');
+  const pathx = require('node:path');
+  const writePlugin = (dirName, manifest) => {
+    const dir = pathx.join(server.dataDir, dirName);
+    fsx.mkdirSync(dir, { recursive: true });
+    fsx.writeFileSync(pathx.join(dir, 'plugin.json'), JSON.stringify(manifest));
+    fsx.writeFileSync(pathx.join(dir, 'index.js'), `
+      module.exports = {
+        register(context) {
+          const router = context.createRouter();
+          router.get('/ping', (req, res) => res.json({ pong: true }));
+          context.mountRouter(router);
+        }
+      };
+    `);
+    return dir;
+  };
+
+  const gatedDir = writePlugin('gated-plugin', { id: 'gated-plugin', name: 'Gated', version: 'local', launcherApiVersion: 1, backend: 'index.js' });
+  const openDir = writePlugin('open-plugin', { id: 'open-plugin', name: 'Open', version: 'local', launcherApiVersion: 1, backend: 'index.js', publicAccess: true });
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  await admin.request('/api/plugins/install-local', { method: 'POST', body: { path: gatedDir, trustConfirmed: true } });
+  await admin.request('/api/plugins/install-local', { method: 'POST', body: { path: openDir, trustConfirmed: true } });
+
+  // Public read is off: anonymous GETs to a normal plugin are rejected by the
+  // launcher before the plugin sees them.
+  const anonGated = await fetch(`${server.baseUrl}/api/plugins/gated-plugin/ping`);
+  assert.equal(anonGated.status, 401);
+
+  // Authenticated users pass.
+  const authGated = await admin.request('/api/plugins/gated-plugin/ping');
+  assert.equal(authGated.pong, true);
+
+  // publicAccess: true opts the plugin out of the gate.
+  const anonOpen = await fetch(`${server.baseUrl}/api/plugins/open-plugin/ping`);
+  assert.equal(anonOpen.status, 200);
+
+  // With public read enabled, anonymous GETs pass the gate again.
+  await admin.request('/api/settings', { method: 'PATCH', body: { public_read_enabled: true } });
+  const anonGatedOpen = await fetch(`${server.baseUrl}/api/plugins/gated-plugin/ping`);
+  assert.equal(anonGatedOpen.status, 200);
+});
+
+test('forward-auth maps trusted proxy headers to local users', async (t) => {
+  const server = startServer({
+    port: 19145,
+    env: {
+      TRUST_PROXY: 'loopback',
+      AUTH_PROXY_ENABLED: 'true',
+      AUTH_PROXY_USERNAME_HEADER: 'remote-user',
+      AUTH_PROXY_AUTO_CREATE: 'true',
+      AUTH_PROXY_DEFAULT_ROLE: 'user'
+    }
+  });
+  await server.ready();
+  t.after(() => server.stop());
+
+  // Existing local user authenticates via the header.
+  const asAdmin = await fetch(`${server.baseUrl}/api/auth/session`, { headers: { 'Remote-User': 'admin' } });
+  const adminSession = await asAdmin.json();
+  assert.equal(adminSession.user?.username, 'admin');
+  assert.equal(adminSession.user?.role, 'admin');
+  assert.ok(adminSession.csrfToken);
+
+  // Unknown usernames are auto-created with the configured default role.
+  const asNew = await fetch(`${server.baseUrl}/api/auth/session`, { headers: { 'Remote-User': 'proxy-person' } });
+  const newSession = await asNew.json();
+  assert.equal(newSession.user?.username, 'proxy-person');
+  assert.equal(newSession.user?.role, 'user');
+
+  // No header, no session.
+  const anon = await fetch(`${server.baseUrl}/api/auth/session`);
+  assert.equal((await anon.json()).user, null);
+
+  // Forward-auth never applies to API-token requests: the token identity wins.
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+  const tokenRes = await admin.request('/api/admin/api-tokens', { method: 'POST', body: { name: 'proxy-check', role: 'user' } });
+  const withBoth = await fetch(`${server.baseUrl}/api/services`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${tokenRes.token}`, 'Remote-User': 'admin', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Nope', url: 'https://nope.example.com' })
+  });
+  assert.equal(withBoth.status, 403);
+
+  const logs = await admin.request('/api/admin/logs?limit=50');
+  assert.ok(logs.logs.some((entry) => entry.action === 'auth_proxy.user_created'));
+  assert.ok(logs.logs.some((entry) => entry.action === 'auth_proxy.login'));
+});
+
+test('forward-auth fails closed when TRUST_PROXY is missing or role invalid', async (t) => {
+  const noTrust = startServer({ port: 19146, env: { AUTH_PROXY_ENABLED: 'true' } });
+  t.after(() => noTrust.stop());
+  await assert.rejects(() => noTrust.ready(), /AUTH_PROXY_ENABLED requires TRUST_PROXY/);
+
+  const badRole = startServer({ port: 19147, env: { TRUST_PROXY: 'loopback', AUTH_PROXY_ENABLED: 'true', AUTH_PROXY_DEFAULT_ROLE: 'root' } });
+  t.after(() => badRole.stop());
+  await assert.rejects(() => badRole.ready(), /AUTH_PROXY_DEFAULT_ROLE/);
+});
+
 test('service creation falls back gracefully and logs warning on broken icon URL', async (t) => {
   const server = startServer({ port: 19106 });
   await server.ready();
@@ -644,6 +940,88 @@ test('manual health checks persist down status for unresolved hosts', async (t) 
   assert.equal(failureLog.details.id, 'bad-health-service');
   assert.equal(failureLog.details.source, 'manual');
   assert.match(failureLog.details.error, /could not be resolved/i);
+});
+
+test('health history records samples, computes uptime, and fires transition webhooks', async (t) => {
+  let serviceStatusCode = 200;
+  const mockService = http.createServer((req, res) => {
+    res.writeHead(serviceStatusCode);
+    res.end();
+  });
+  await new Promise((resolve) => mockService.listen(0, '127.0.0.1', resolve));
+  t.after(() => mockService.close());
+  const serviceUrl = `http://127.0.0.1:${mockService.address().port}/`;
+
+  const webhookPosts = [];
+  const webhookServer = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', () => {
+      webhookPosts.push(JSON.parse(body));
+      res.writeHead(200);
+      res.end();
+    });
+  });
+  await new Promise((resolve) => webhookServer.listen(0, '127.0.0.1', resolve));
+  t.after(() => webhookServer.close());
+
+  const server = startServer({ port: 19149, env: { SERVER_FETCH_PRIVATE_NETWORK_ACCESS: 'all' } });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const admin = new Client(server.baseUrl);
+  await admin.request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
+
+  await assert.rejects(
+    () => admin.request('/api/settings', { method: 'PATCH', body: { health_webhook_url: 'ftp://nope' } }),
+    /Health webhook URL/
+  );
+  await admin.request('/api/settings', { method: 'PATCH', body: { health_webhook_url: `http://127.0.0.1:${webhookServer.address().port}/notify`, health_history_retention_days: 14 } });
+
+  await admin.request('/api/services', {
+    method: 'POST',
+    body: { id: 'history-service', name: 'History Service', url: serviceUrl, icon: '🔗', healthCheckEnabled: true }
+  });
+
+  // First sample: up. No webhook — there is no previous status to transition from.
+  const first = await admin.request('/api/services/history-service/check', { method: 'POST', body: {} });
+  assert.equal(first.health.status, 'up');
+  assert.equal(webhookPosts.length, 0);
+
+  // up → down fires a webhook.
+  serviceStatusCode = 500;
+  const second = await admin.request('/api/services/history-service/check', { method: 'POST', body: {} });
+  assert.equal(second.health.status, 'down');
+  assert.equal(webhookPosts.length, 1);
+  assert.equal(webhookPosts[0].status, 'down');
+  assert.equal(webhookPosts[0].previousStatus, 'up');
+  assert.equal(webhookPosts[0].priority, 5);
+  assert.match(webhookPosts[0].title, /down/i);
+  assert.equal(webhookPosts[0].service.id, 'history-service');
+
+  // down → down does not re-fire.
+  await admin.request('/api/services/history-service/check', { method: 'POST', body: {} });
+  assert.equal(webhookPosts.length, 1);
+
+  // down → up fires a recovery webhook.
+  serviceStatusCode = 200;
+  const fourth = await admin.request('/api/services/history-service/check', { method: 'POST', body: {} });
+  assert.equal(fourth.health.status, 'up');
+  assert.equal(webhookPosts.length, 2);
+  assert.equal(webhookPosts[1].status, 'up');
+  assert.equal(webhookPosts[1].previousStatus, 'down');
+  assert.match(webhookPosts[1].title, /recovered/i);
+
+  // 24h uptime reflects the recorded samples: 2 up out of 4.
+  const services = await admin.request('/api/services');
+  const service = services.services.find((item) => item.id === 'history-service');
+  assert.equal(service.health.uptime24h, 50);
+
+  const logs = await admin.request('/api/admin/logs?limit=50');
+  assert.ok(logs.logs.some((entry) => entry.action === 'service.health_webhook_sent'));
+
+  const config = await admin.request('/api/admin/config');
+  assert.equal(config.config.healthHistoryRetentionDays, 14);
 });
 
 test('service creation stores remote SVG icons locally', async (t) => {

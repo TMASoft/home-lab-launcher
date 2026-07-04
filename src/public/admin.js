@@ -80,6 +80,7 @@ function adminSettingsHtml() {
   return `<div class="admin-stack">
     <div class="settings-card"><h3>General</h3><div class="form-grid"><div class="row"><div class="field"><label>Application name</label><input id="admin-app-name" value="${escapeHtml(s.appName || '')}"></div><div class="field"><label>Base URL</label><input id="admin-base-url" value="${escapeHtml(s.appBaseUrl || '')}" placeholder="http://server-ip:8080 or https://portal.example.com"><small>Used for secure cookies, proxy checks, and beta readiness warnings.</small></div></div></div></div>
     <div class="settings-card"><h3>Access</h3><label class="check-line"><input id="admin-public-read" type="checkbox" ${s.publicReadEnabled ? 'checked' : ''}> Allow anonymous read-only access</label><p>Review this before exposing the launcher outside your LAN.</p><button class="primary" id="admin-save-settings" type="button">Save settings</button></div>
+    <div class="settings-card"><h3>Health notifications</h3><p>POST a JSON notification when a monitored service goes down or recovers. The payload includes <code>title</code>, <code>message</code>, and <code>priority</code> (ntfy/Gotify) plus <code>content</code> (Discord), so most webhook receivers work directly.</p><div class="form-grid"><div class="row"><div class="field"><label>Webhook URL</label><input id="admin-health-webhook" value="${escapeHtml(state.admin.config?.healthWebhookUrl || '')}" placeholder="https://ntfy.sh/my-topic or a Discord webhook URL"><small>Leave empty to disable notifications.</small></div><div class="field"><label>Health history retention (days)</label><input id="admin-health-retention" type="number" min="1" max="90" value="${escapeHtml(state.admin.config?.healthHistoryRetentionDays ?? 7)}"><small>Health samples power the 24h uptime column and are pruned after this many days (1–90).</small></div></div><button class="primary" id="admin-save-health-settings" type="button">Save health settings</button></div></div>
     <div class="settings-card"><h3>Service preset catalog</h3><p>The preset catalog provides quick access to pre-configured service definitions when adding new services. Native presets are bundled with Home Lab Launcher. Heimdall presets are synced from the <a href="https://github.com/linuxserver/Heimdall-Apps" target="_blank" rel="noopener noreferrer">linuxserver/Heimdall-Apps</a> repository.</p><div class="stats-row">${statCard('Native presets', pc.counts?.local ?? '—')}${statCard('Heimdall presets', pc.counts?.heimdall ?? '—')}${statCard('Total presets', pc.counts?.total ?? '—')}</div><label class="check-line"><input id="admin-remote-presets" type="checkbox" ${pc.enableRemotePresets !== false ? 'checked' : ''}> Enable remote Heimdall presets</label><small>When disabled, only bundled native presets are available and the catalog will not sync from GitHub.</small><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="catalog-update" type="button" ${updateBtnDisabled}>${updateBtnText}</button><span id="catalog-update-status" class="test-result">${syncStatusHtml}</span></div><button class="primary" id="save-preset-settings" type="button" style="margin-top: 10px;">Save preset settings</button></div>
   </div>`;
 }
@@ -152,7 +153,14 @@ function adminServicesHtml() {
     <div class="service-admin-list" id="service-admin-list">${serviceAdminRows(state.services)}</div></div>`;
 }
 function serviceAdminRows(services) {
-  return services.map((svc) => `<article class="service-admin-row" tabindex="0" draggable="true" data-service-row="${escapeHtml(svc.id)}" data-service-search="${escapeHtml([svc.name, svc.url, svc.category, svc.description, ...(svc.tags || [])].join(' ').toLowerCase())}"><span class="drag-handle" title="Drag to reorder" aria-hidden="true">☰</span><input type="checkbox" aria-label="Select ${escapeHtml(svc.name)}" data-service-select="${escapeHtml(svc.id)}">${iconHtml(svc.icon, svc.name)}<div><strong>${escapeHtml(svc.name)}</strong><small>${escapeHtml(svc.category)} · ${svc.enabled ? 'enabled' : 'disabled'} · ${svc.featured ? 'featured' : 'not featured'}</small><small>${escapeHtml(svc.url)}</small></div><div class="service-row-actions"><button class="ghost" data-service-move="up" data-service-target="${escapeHtml(svc.id)}" type="button" aria-label="Move ${escapeHtml(svc.name)} up">↑</button><button class="ghost" data-service-move="down" data-service-target="${escapeHtml(svc.id)}" type="button" aria-label="Move ${escapeHtml(svc.name)} down">↓</button><button class="ghost" data-admin-edit-service="${escapeHtml(svc.id)}" type="button">Edit</button><button class="ghost" data-admin-duplicate-service="${escapeHtml(svc.id)}" type="button">Duplicate</button></div></article>`).join('');
+  return services.map((svc) => `<article class="service-admin-row" tabindex="0" draggable="true" data-service-row="${escapeHtml(svc.id)}" data-service-search="${escapeHtml([svc.name, svc.url, svc.category, svc.description, ...(svc.tags || [])].join(' ').toLowerCase())}"><span class="drag-handle" title="Drag to reorder" aria-hidden="true">☰</span><input type="checkbox" aria-label="Select ${escapeHtml(svc.name)}" data-service-select="${escapeHtml(svc.id)}">${iconHtml(svc.icon, svc.name)}<div><strong>${escapeHtml(svc.name)}</strong><small>${escapeHtml(svc.category)} · ${svc.enabled ? 'enabled' : 'disabled'} · ${svc.featured ? 'featured' : 'not featured'}${serviceUptimeHtml(svc)}</small><small>${escapeHtml(svc.url)}</small></div><div class="service-row-actions"><button class="ghost" data-service-move="up" data-service-target="${escapeHtml(svc.id)}" type="button" aria-label="Move ${escapeHtml(svc.name)} up">↑</button><button class="ghost" data-service-move="down" data-service-target="${escapeHtml(svc.id)}" type="button" aria-label="Move ${escapeHtml(svc.name)} down">↓</button><button class="ghost" data-admin-edit-service="${escapeHtml(svc.id)}" type="button">Edit</button><button class="ghost" data-admin-duplicate-service="${escapeHtml(svc.id)}" type="button">Duplicate</button></div></article>`).join('');
+}
+
+function serviceUptimeHtml(svc) {
+  const uptime = svc.health?.uptime24h;
+  if (uptime === null || uptime === undefined) return '';
+  const cls = uptime >= 99 ? 'success' : uptime >= 90 ? 'warning' : 'danger';
+  return ` · <span class="uptime-badge ${cls}" title="Uptime over the last 24 hours">${escapeHtml(uptime)}% 24h</span>`;
 }
 
 function adminSecurityHtml() {
@@ -161,7 +169,20 @@ function adminSecurityHtml() {
   const warnings = (h.warnings || []).map((w) => `<li><strong>${escapeHtml(w.level)}</strong> — ${escapeHtml(w.message)}</li>`).join('') || '<li>No security/config warnings detected.</li>';
   return `<div class="admin-stack"><div class="settings-card"><h3>Security posture</h3><ul class="warning-list">${warnings}</ul><div class="stats-row">${statCard('Active sessions', h.sessions?.active ?? '—')}${statCard('CSRF', state.csrfToken ? 'enabled' : 'missing')}${statCard('Headers', 'enabled')}${statCard('Cookie secure', c.security?.cookieSecure ? 'yes' : 'no')}</div><p>Security headers, CSRF checks, login throttling, and audit logging are enabled in this build.</p></div>
     <div class="settings-card"><h3>Effective configuration</h3><p><strong>Base URL valid:</strong> ${c.urls?.appBaseUrlValid ? 'yes' : 'no'} · <strong>Protocol:</strong> ${escapeHtml(c.urls?.appBaseUrlProtocol || 'unset')} · <strong>Behind proxy:</strong> ${c.urls?.behindProxy ? 'yes' : 'no'}</p><p><strong>Request:</strong> ${escapeHtml(c.urls?.requestProtocol || '')}://${escapeHtml(c.urls?.requestHost || '')} · <strong>Forwarded proto:</strong> ${escapeHtml(c.urls?.forwardedProto || 'none')}</p><p><strong>Log retention:</strong> ${escapeHtml(c.security?.logRetentionDays || 90)} days · <strong>Scheduled backup location:</strong> ${escapeHtml(c.scheduledBackupLocation || 'not configured')}</p></div>
+    ${apiTokensCardHtml()}
     <div class="settings-card"><h3>Plugin and job health</h3><div class="stats-row">${statCard('Plugin failures', h.plugins?.failures?.length ?? 0)}${statCard('Plugin jobs', h.scheduledJobs?.plugins?.length ?? 0)}</div><div class="log-list">${(h.scheduledJobs?.plugins || []).map((j) => `<article class="log-item"><strong>${escapeHtml(j.name)}</strong><span>${escapeHtml(j.pluginId)} · every ${Math.round(j.intervalMs / 1000)}s · ${escapeHtml(j.lastStatus)}</span>${j.lastError ? `<code>${escapeHtml(j.lastError)}</code>` : ''}</article>`).join('') || '<p>No scheduled plugin jobs registered.</p>'}</div></div></div>`;
+}
+
+function apiTokensCardHtml() {
+  const tokens = state.admin.apiTokens || [];
+  const rows = tokens.map((t) => {
+    const expires = t.expiresAt ? new Date(t.expiresAt).toLocaleDateString() : 'never';
+    const lastUsed = t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleString() : 'never';
+    return `<tr><td><strong>${escapeHtml(t.name)}</strong><br><code>${escapeHtml(t.tokenPrefix)}…</code></td><td>${escapeHtml(roleLabel(t.role))}</td><td>${escapeHtml(expires)}</td><td>${escapeHtml(lastUsed)}</td><td><button class="ghost danger" data-api-token-revoke="${t.id}" data-api-token-name="${escapeHtml(t.name)}" type="button">Revoke</button></td></tr>`;
+  }).join('');
+  return `<div class="settings-card"><h3>API tokens</h3><p>Bearer tokens for automation (<code>Authorization: Bearer hll_…</code>). Tokens act with the selected role, cannot use session/profile endpoints, and are shown exactly once at creation.</p>
+    <div class="table-wrap"><table><thead><tr><th>Token</th><th>Role</th><th>Expires</th><th>Last used</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="5">No API tokens issued.</td></tr>'}</tbody></table></div>
+    <h3>Create token</h3><div class="row"><input id="api-token-name" placeholder="name, e.g. ci-deploy" maxlength="80"><select id="api-token-role"><option value="user">Basic User (read)</option><option value="editor">Editor</option><option value="admin">Admin</option></select><input id="api-token-expires" type="number" min="1" max="3650" placeholder="expiry days (optional)"><button class="primary" id="api-token-create" type="button">Create token</button></div></div>`;
 }
 
 function adminBackupsHtml() {
@@ -211,6 +232,7 @@ function bindAdminTabHandlers() {
   if (state.adminTab === 'appearance') bindAppearanceHandlers(content);
   if (state.adminTab === 'services') bindServiceToolHandlers();
   if (state.adminTab === 'users') bindUserHandlers(content);
+  if (state.adminTab === 'security') bindSecurityHandlers(content);
   if (state.adminTab === 'backups') bindBackupHandlers();
   if (state.adminTab === 'plugins') bindPluginHandlers(content);
   if (state.adminTab === 'logs') bindLogHandlers();
@@ -296,6 +318,31 @@ function filterServiceAdminRows() {
   document.querySelectorAll('[data-service-row]').forEach((row) => { row.hidden = q && !row.dataset.serviceSearch.includes(q); });
 }
 
+function bindSecurityHandlers(content) {
+  $('api-token-create')?.addEventListener('click', async () => {
+    const name = formValue('api-token-name');
+    if (!name) return toast('Enter a token name');
+    const body = { name, role: $('api-token-role').value };
+    const days = formValue('api-token-expires');
+    if (days) body.expiresDays = Number(days);
+    const result = await api('/api/admin/api-tokens', { method: 'POST', body: JSON.stringify(body) });
+    await loadAdminData();
+    openModal(`<h2>API token created</h2><p>Copy this token now — it is shown exactly once and cannot be retrieved later.</p><p><code class="token-reveal" id="new-api-token">${escapeHtml(result.token)}</code></p><div class="inline-controls"><button class="primary" id="copy-api-token" type="button">Copy to clipboard</button></div>`);
+    $('copy-api-token')?.addEventListener('click', async () => {
+      await navigator.clipboard.writeText(result.token);
+      toast('Token copied to clipboard');
+    });
+  });
+  content?.addEventListener('click', async (event) => {
+    const revoke = event.target.closest('[data-api-token-revoke]');
+    if (!revoke) return;
+    if (!confirm(`Revoke API token "${revoke.dataset.apiTokenName}"? Automation using it stops working immediately.`)) return;
+    await api(`/api/admin/api-tokens/${revoke.dataset.apiTokenRevoke}`, { method: 'DELETE' });
+    await loadAdminData();
+    toast('API token revoked');
+  });
+}
+
 function bindBackupHandlers() {
   $('download-backup')?.addEventListener('click', async () => {
     const data = await api('/api/admin/backup');
@@ -352,6 +399,11 @@ function bindSettingsHandlers() {
     await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ app_name: formValue('admin-app-name'), app_base_url: formValue('admin-base-url'), public_read_enabled: $('admin-public-read').checked }) });
     await Promise.all([loadSettings(), loadAdminData()]);
     render(); toast('Settings saved');
+  });
+  $('admin-save-health-settings')?.addEventListener('click', async () => {
+    await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ health_webhook_url: formValue('admin-health-webhook'), health_history_retention_days: Number($('admin-health-retention').value || 7) }) });
+    await loadAdminData();
+    toast('Health settings saved');
   });
   $('save-preset-settings')?.addEventListener('click', async () => {
     await api('/api/admin/presets/settings', { method: 'PUT', body: JSON.stringify({ enableRemotePresets: $('admin-remote-presets').checked }) });

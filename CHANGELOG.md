@@ -6,6 +6,31 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.7.0] - 2026-07-04
+
+### Security
+
+- The regex-based hero-subheading HTML sanitizer was replaced with the maintained `sanitize-html` package. The allowlist is unchanged (`strong`/`em`/`b`/`i`/`code`/`br`/`p`/`ul`/`ol`/`li`/`a` with http(s) `href` only); script/style element *content* is now discarded instead of surviving as text.
+- Sessions now roll on activity and honor a configurable lifetime: `SESSION_MAX_AGE_DAYS` (default 14, clamped 1–90) applies to both the cookie and the server-side session row.
+- Plugin `GET`/`HEAD` API routes under `/api/plugins/:id/*` are now gated by the launcher's public-read setting before the plugin sees the request. Plugins serving intentionally public data can opt out with `"publicAccess": true` in their manifest.
+
+### Added
+
+- **TOTP recovery codes** (migration 7): enabling 2FA (including at bootstrap) generates ten single-use, bcrypt-hashed recovery codes shown exactly once, with copy/download in the UI. A recovery code signs in via the new "Use a recovery code instead" login option; each use is audit-logged with the remaining count. The profile shows how many codes remain and can regenerate a fresh set (`POST /api/me/totp/recovery-codes`, current password + TOTP code required). Codes are deleted on 2FA disable and admin 2FA reset.
+- **API tokens for automation** (migration 8): Admins can issue role-scoped bearer tokens (`Authorization: Bearer hll_…`) with optional expiry from Admin → Security. Tokens are stored as SHA-256 hashes with a display prefix, track last use, revoke instantly, skip CSRF (no cookies involved), are rejected on session/profile endpoints, and appear in the audit log as `token:<name>`. The secret is shown exactly once at creation.
+- **Forward-auth via trusted reverse-proxy header** (Authelia/authentik pattern): opt in with `AUTH_PROXY_ENABLED=true` plus `AUTH_PROXY_USERNAME_HEADER` (default `remote-user`), `AUTH_PROXY_AUTO_CREATE`, and `AUTH_PROXY_DEFAULT_ROLE`. Requires `TRUST_PROXY`; the server refuses to start when misconfigured. Never applies to API-token requests.
+- **Health-check history and 24h uptime** (migration 9): every health sample is recorded to `service_health_history`, pruned on a configurable retention (`health_history_retention_days`, default 7, max 90). Service payloads now include `health.uptime24h`, shown as a colorized badge in the admin services list.
+- **Webhook notifications on health transitions**: configure `health_webhook_url` in Admin → Settings to receive a JSON POST when a monitored service goes down or recovers (up→down / down→up only). The payload carries `title`/`message`/`priority` (ntfy/Gotify) and `content` (Discord) plus structured fields, is sent through the SSRF-guarded fetcher, and is audit-logged.
+
+### Changed
+
+- **Dashboard UI refresh** (styles only; no markup or theming-contract changes). The dark control-plane look and single accent color are kept but sharpened: introduced spacing and shadow scales for consistent rhythm; the hero headline scales up with tighter tracking and balanced wrapping. Service cards drop the gradient fill for a flat surface with a subtle shadow, gain a lift-on-hover and a `:focus-within` ring, and keep their row actions quiet until hover/focus. Status badges (online/down/pending/disabled) now use soft tinted fills plus a status dot so state never depends on color alone. Machine data (hosts, version pill, favorite hostnames) is set in a monospace stack. Launchpad controls became category chips plus a segmented Cards/Compact/List switch and a magnifier-icon search field. A light-theme accent-on-white contrast issue was fixed via a dedicated `--primary-text` token, and a favorites-tile bug where a long hostname pushed the service name under the reorder buttons was corrected. All 14 admin-overridable theme tokens are unchanged, so customization still cascades.
+- Plugin installs and updates now clean up superseded install directories and leftover download archives in the plugin directory after success; rolled-back updates keep their previous directory.
+- The SQLite session store implements `touch()`, so rolling sessions extend the stored expiry instead of only the cookie.
+- `/api/admin/config` now reports `healthWebhookUrl` and `healthHistoryRetentionDays`; `/api/me` reports `recoveryCodesRemaining` when 2FA is enabled.
+- Installer scripts and README examples now default to the `v0.7.0` image tag.
+- `docs/openapi.json` documents the bearer-token security scheme and all new endpoints, and its `info.version` (previously stale at 0.5.2) now tracks the release.
+
 ## [0.6.0] - 2026-07-02
 
 ### Security

@@ -71,7 +71,8 @@ function registerPluginRoutes(router, deps) {
       await pluginManager.reload();
       const failed = pluginManager.health().failures.find((item) => item.pluginId === plugin.id);
       if (failed) return res.status(400).json({ error: `Plugin installed but failed to load: ${failed.message}`, plugin });
-      logEvent(db, req, 'plugin.installed', plugin);
+      const cleaned = pluginManager.cleanupSupersededInstalls();
+      logEvent(db, req, 'plugin.installed', { ...plugin, cleaned });
       res.status(201).json({ plugin });
     } catch (error) {
       res.status(400).json({ error: error.message });
@@ -109,7 +110,8 @@ function registerPluginRoutes(router, deps) {
         logEvent(db, req, 'plugin.update_rolled_back', { id: req.params.id, attemptedVersion: (req.body || {}).version, error: failed.message }, 'error');
         return res.status(400).json({ error: `Update failed and was rolled back: ${failed.message}` });
       }
-      logEvent(db, req, 'plugin.updated', { id: req.params.id, from: previous.version, to: plugin.version });
+      const cleaned = pluginManager.cleanupSupersededInstalls();
+      logEvent(db, req, 'plugin.updated', { id: req.params.id, from: previous.version, to: plugin.version, cleaned });
       res.json({ plugin, rolledBack: false });
     } catch (error) {
       db.prepare(`UPDATE plugins SET name=?, source_url=?, source_type=?, version=?, install_path=?, enabled=?, manifest_json=?, config_json=?, installed_hash=?, lifecycle=?, last_error=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`).run(previous.name, previous.source_url, previous.source_type, previous.version, previous.install_path, previous.enabled, previous.manifest_json, previous.config_json, previous.installed_hash, 'enabled', null, previous.id);

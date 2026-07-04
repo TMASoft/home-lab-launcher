@@ -344,7 +344,21 @@ class PluginManager {
       publicScriptUrl,
       createRouter: () => router,
       json: express.json,
-      mountRouter: (r = router) => this.mount(pluginId, `/api/plugins/${pluginId}`, r),
+      mountRouter: (r = router) => {
+        // Launcher-enforced read gate: plugin GET/HEAD routes honor the same
+        // public-read setting as core routes unless the manifest explicitly
+        // opts out with "publicAccess": true. Mutating methods stay with the
+        // plugin's own role checks (plus launcher CSRF).
+        const gated = express.Router();
+        gated.use((req, res, next) => {
+          if (manifest.publicAccess === true) return next();
+          if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+          if (context.canRead(req)) return next();
+          return res.status(401).json({ error: 'Authentication required' });
+        });
+        gated.use(r);
+        this.mount(pluginId, `/api/plugins/${pluginId}`, gated);
+      },
       registerDashboardSection: (section) => {
         const current = this.sectionsByPlugin.get(pluginId) || [];
         current.push({ pluginId, ...section, script: section.script || publicScriptUrl });
@@ -415,6 +429,37 @@ class PluginManager {
       }
     }
     return updates;
+  }
+
+  // Removes install directories no longer referenced by any plugin row, plus
+  // leftover .tgz downloads. Callers invoke this only after a successful
+  // install/update — a rolled-back update still needs its previous directory.
+  cleanupSupersededInstalls() {
+    const removed = [];
+    try {
+      const active = this.db.prepare('SELECT install_path FROM plugins').all().map((row) => path.resolve(row.install_path));
+      for (const entry of fs.readdirSync(this.pluginDir, { withFileTypes: true })) {
+        const full = path.resolve(this.pluginDir, entry.name);
+        if (entry.isFile()) {
+          if (entry.name.endsWith('.tgz')) {
+            fs.rmSync(full, { force: true });
+            removed.push(entry.name);
+          }
+          continue;
+        }
+        if (!entry.isDirectory()) continue;
+        // install_path may be a subdirectory of the extracted tree when the
+        // plugin lives in a repo subfolder, so match on ancestry.
+        const inUse = active.some((installPath) => installPath === full || installPath.startsWith(full + path.sep));
+        if (!inUse) {
+          fs.rmSync(full, { recursive: true, force: true });
+          removed.push(entry.name);
+        }
+      }
+    } catch (error) {
+      console.error('Plugin install cleanup failed:', error);
+    }
+    return removed;
   }
 
   async installFromGithub(repoUrl, version, { expectedSha256 = '' } = {}) {

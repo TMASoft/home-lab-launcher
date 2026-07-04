@@ -31,6 +31,7 @@ Current behavior:
 - GitHub plugin archives are extracted with path, entry-count, expanded-size, and symlink/hardlink safety checks.
 - The Admin console reports lifecycle state: installed, enabled, disabled, failed, and update available.
 - Updates are manual, show release notes when GitHub provides them, preserve existing plugin config, and roll back automatically if the updated plugin fails to load.
+- After a successful install or update, superseded install directories and leftover download archives in the plugin directory are removed automatically (a rolled-back update keeps its previous directory).
 - Local filesystem installs are supported for development when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`.
 - Plugins are enabled/disabled/reloaded from the Admin console.
 - Plugins are not sandboxed.
@@ -81,6 +82,13 @@ Every plugin must include `plugin.json` at the root of the install target. For r
 | `frontend` | Optional | Browser script loaded when the plugin exposes dashboard sections. |
 | `permissions` | Optional | Human-readable declared capabilities. |
 | `configSchema` | Optional | Configuration fields rendered in the Admin console. Supported types: `string`, `number`, `boolean`, and `enum`. Each field may declare `scope`: `admin` (default), `editor`, or `user`. |
+| `publicAccess` | Optional | Set to `true` to opt the plugin's API routes out of the launcher-enforced public-read gate (see below). Default `false`. |
+
+### Public-read gate on plugin routes
+
+The launcher wraps every router mounted with `mountRouter` in a read gate: `GET` and `HEAD` requests to `/api/plugins/:pluginId/*` require launcher read access — a signed-in user, or anonymous access when public read is enabled — exactly like core routes. Ungated requests are rejected with `401` before the plugin sees them.
+
+A plugin that intentionally serves public data (for example, a status endpoint consumed by external dashboards) can set `"publicAccess": true` in its manifest to opt out. Mutating methods (`POST`/`PUT`/`PATCH`/`DELETE`) are not affected by the gate; they remain the plugin's responsibility via `context.requireRole(...)`, and launcher CSRF protection still applies.
 
 ## Configuration scopes
 

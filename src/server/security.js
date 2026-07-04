@@ -32,6 +32,9 @@ function csrfProtection(req, res, next) {
   if (!req.path.startsWith('/api/')) return next();
   if (!MUTATING_METHODS.has(req.method)) return next();
   if (CSRF_EXEMPT_PATHS.has(req.path)) return next();
+  // Bearer-token requests carry no ambient cookie credentials, so CSRF does
+  // not apply; req.apiToken is only set after the token validated.
+  if (req.apiToken) return next();
   const expected = req.session?.csrfToken;
   const actual = req.get('x-csrf-token');
   const expectedBuffer = Buffer.from(String(expected || ''), 'utf8');

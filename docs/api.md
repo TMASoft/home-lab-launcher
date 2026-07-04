@@ -10,6 +10,7 @@ The machine-readable API contract lives in [`docs/openapi.json`](openapi.json) a
 - Successful responses use a resource envelope such as `{ "service": ... }`, `{ "services": [...] }`, or endpoint-specific status fields.
 - Errors use `{ "error": "message" }` with an appropriate HTTP status.
 - Mutating routes require the session CSRF token in `X-CSRF-Token` after login. `/api/auth/login` returns the token.
+- Automation can authenticate with an Admin-issued API token in `Authorization: Bearer hll_…` instead of a session. Token requests skip CSRF (no cookies are involved), act with the token's role, and are rejected on session/profile endpoints (`/api/auth/*`, `/api/me*`, `/api/bootstrap*`).
 - The OpenAPI spec models the session cookie as `hll.sid` and mutating authenticated routes with `X-CSRF-Token` security.
 - Authenticated and read-gated requests revalidate the session user against the database before trusting cached session identity. Deleted users are rejected, role changes take effect immediately, and account security changes revoke affected sessions.
 - Role names are `admin`, `editor`, and `user`. Anonymous access to read routes depends on `PUBLIC_READ_ENABLED` / Admin settings.
@@ -22,15 +23,16 @@ The machine-readable API contract lives in [`docs/openapi.json`](openapi.json) a
 | `GET` | `/api/healthz` | Public | Minimal health check with `{ ok, version, uptimeSeconds }`. |
 | `GET` | `/api/openapi.json` | Public | Machine-readable OpenAPI 3.1 API contract. |
 | `GET` | `/api/bootstrap-status` | Public | Reports whether first-admin setup is still required. |
-| `POST` | `/api/bootstrap` | Public until bootstrapped | Creates the first Admin account when no users exist; optional `totpSecret` + six-digit `totpCode` enables 2FA immediately. |
-| `POST` | `/api/auth/login` | Public | Starts a session and returns `{ user, csrfToken }`, or `{ requiresTotp: true }` when a valid password needs a TOTP code. |
+| `POST` | `/api/bootstrap` | Public until bootstrapped | Creates the first Admin account when no users exist; optional `totpSecret` + six-digit `totpCode` enables 2FA immediately and returns shown-once `recoveryCodes`. |
+| `POST` | `/api/auth/login` | Public | Starts a session and returns `{ user, csrfToken }`, or `{ requiresTotp: true }` when a valid password needs a TOTP code. Accepts `{ code }` (TOTP) or `{ recoveryCode }` (single-use backup code). |
 | `POST` | `/api/auth/logout` | Session | Ends the current session. |
 | `GET` | `/api/auth/session` | Public | Returns current session user, if any. |
-| `GET` | `/api/me` | Session | Returns the current user. |
+| `GET` | `/api/me` | Session | Returns the current user, including `recoveryCodesRemaining` when 2FA is enabled. |
 | `PATCH` | `/api/me/password` | Session | Changes the current user's password and revokes other active sessions. |
 | `POST` | `/api/me/totp/setup` | Session | Generates a new Base32 TOTP secret for the current user's authenticator app. |
-| `POST` | `/api/me/totp/enable` | Session | Verifies a six-digit TOTP code and enables 2FA for the current user. |
-| `POST` | `/api/me/totp/disable` | Session | Disables 2FA for the current user. Requires `{ password }` and, when 2FA is enabled, `{ code }`; other sessions are revoked after disable. |
+| `POST` | `/api/me/totp/enable` | Session | Verifies a six-digit TOTP code, enables 2FA, and returns ten shown-once single-use `recoveryCodes`. |
+| `POST` | `/api/me/totp/recovery-codes` | Session | Replaces all recovery codes with a fresh shown-once set. Requires `{ password, code }` (current TOTP code). |
+| `POST` | `/api/me/totp/disable` | Session | Disables 2FA for the current user and deletes recovery codes. Requires `{ password }` and, when 2FA is enabled, `{ code }`; other sessions are revoked after disable. |
 | `GET` | `/api/me/sessions` | Session | Lists active sessions for the current user. |
 | `DELETE` | `/api/me/sessions/:sid` | Session | Revokes one active session. |
 | `DELETE` | `/api/me/sessions` | Session | Revokes other sessions for the current user. |
@@ -40,7 +42,7 @@ The machine-readable API contract lives in [`docs/openapi.json`](openapi.json) a
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
 | `GET` | `/api/settings/public` | Public | Public runtime settings, appearance, and anonymous-read status. |
-| `GET` | `/api/services` | Public if enabled, otherwise session | Lists enabled/visible services with health metadata. |
+| `GET` | `/api/services` | Public if enabled, otherwise session | Lists enabled/visible services with health metadata, including `health.uptime24h` (percentage over the last 24h of samples, `null` without history). |
 | `GET` | `/api/service-health` | Public if enabled, otherwise session | Lists service health rows. |
 | `GET` | `/api/service-icons/:filename` | Public/Session | Serves stored service icons. Requires launcher read access when public read is disabled. |
 | `GET` | `/api/app-assets/:filename` | Public | Serves stored branding assets. Treat branding assets as public. |
@@ -80,7 +82,10 @@ Admin-only routes.
 
 | Method | Path | Purpose |
 | --- | --- | --- |
-| `PATCH` | `/api/settings` | Update app settings such as app name, base URL, public read, and backup note. |
+| `PATCH` | `/api/settings` | Update app settings such as app name, base URL, public read, backup note, `health_webhook_url`, and `health_history_retention_days`. |
+| `GET` | `/api/admin/api-tokens` | List issued API tokens (metadata only — never the secret). |
+| `POST` | `/api/admin/api-tokens` | Create an API token with `{ name, role, expiresDays? }`. The plaintext `token` is returned exactly once. |
+| `DELETE` | `/api/admin/api-tokens/:id` | Revoke an API token immediately. |
 | `GET` | `/api/admin/overview` | Counts, runtime summary, warnings, notices, and readiness information. |
 | `GET` | `/api/admin/health` | Runtime, config, plugin, and scheduled-job health. |
 | `GET` | `/api/admin/config` | Effective non-secret configuration diagnostics. |
@@ -165,6 +170,8 @@ Trusted plugins run server-side and may extend the API through the plugin contex
 
 Plugin authors should keep route responses consistent with the core convention: resource envelopes for success and `{ "error": "message" }` for failures. Document every plugin-provided route in the plugin README because plugin routes are not enumerated by the core API reference.
 
+`GET`/`HEAD` requests to plugin routes under `/api/plugins/:id/*` are gated by the launcher's public-read setting unless the plugin manifest sets `"publicAccess": true` — see [plugins.md](plugins.md#public-read-gate-on-plugin-routes).
+
 ## Operator examples
 
 Login and capture the CSRF token and session cookie:
@@ -209,4 +216,13 @@ Revoke other sessions for the current user:
 curl -sS -X DELETE http://localhost:8080/api/me/sessions \
   -H 'Cookie: hll.sid=SESSION_COOKIE_VALUE' \
   -H 'X-CSRF-Token: CSRF_TOKEN_VALUE'
+```
+
+Automate with an API token (no cookies or CSRF token needed):
+
+```bash
+curl -sS -X POST http://localhost:8080/api/services \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer hll_YOUR_TOKEN_VALUE' \
+  -d '{"name":"Grafana","url":"https://grafana.example.test","category":"monitoring"}'
 ```

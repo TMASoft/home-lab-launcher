@@ -38,6 +38,7 @@ function registerUserRoutes(router, deps) {
       }
       if (resetTotp) {
         db.prepare('UPDATE users SET totp_secret = NULL, totp_enabled = 0, totp_last_counter = NULL WHERE id = ?').run(req.params.id);
+        db.prepare('DELETE FROM totp_recovery_codes WHERE user_id = ?').run(req.params.id);
         logEvent(db, req, 'user.totp_reset', { id: Number(req.params.id), username });
       }
       const targetIsCurrentUser = Number(req.params.id) === Number(req.session.user.id);

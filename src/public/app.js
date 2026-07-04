@@ -66,7 +66,7 @@ async function loadPluginSections() {
 }
 async function loadAdminData() {
   if (!isAdmin()) return;
-  const [overview, health, config, notices, users, plugins, logs, appearance, presetCatalog] = await Promise.all([
+  const [overview, health, config, notices, users, plugins, logs, appearance, presetCatalog, apiTokens] = await Promise.all([
     api('/api/admin/overview'),
     api('/api/admin/health'),
     api('/api/admin/config'),
@@ -75,8 +75,10 @@ async function loadAdminData() {
     api('/api/plugins'),
     api('/api/admin/logs?limit=100'),
     api('/api/admin/appearance'),
-    api('/api/admin/presets/settings').catch(() => ({}))
+    api('/api/admin/presets/settings').catch(() => ({})),
+    api('/api/admin/api-tokens').catch(() => ({ tokens: [] }))
   ]);
+  state.admin.apiTokens = apiTokens.tokens || [];
   state.admin.overview = overview;
   state.admin.health = health;
   state.admin.config = config.config;
@@ -727,19 +729,35 @@ function showServiceModal(s) {
 
 
 function showLoginModal() {
-  openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label>2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"></div><div id="login-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);
+  openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label id="login-code-label">2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"><small><button class="link-button" id="login-use-recovery" type="button">Use a recovery code instead</button></small></div><div id="login-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);
   let requiresTotp = false;
+  let useRecoveryCode = false;
+  $('login-use-recovery').onclick = () => {
+    useRecoveryCode = !useRecoveryCode;
+    $('login-code-label').textContent = useRecoveryCode ? 'Recovery code' : '2FA Code';
+    const input = $('login-code');
+    input.placeholder = useRecoveryCode ? 'xxxxx-xxxxx' : '123456';
+    input.removeAttribute('pattern');
+    if (!useRecoveryCode) input.setAttribute('pattern', '[0-9]{6}');
+    input.inputMode = useRecoveryCode ? 'text' : 'numeric';
+    input.value = '';
+    $('login-use-recovery').textContent = useRecoveryCode ? 'Use an authenticator code instead' : 'Use a recovery code instead';
+    input.focus();
+  };
   $('login-submit').onclick = async () => {
     const username = formValue('login-username');
     const password = formValue('login-password');
-    const code = requiresTotp ? formValue('login-code') : '';
+    const codeValue = requiresTotp ? formValue('login-code') : '';
     const errorEl = $('login-form-error');
     if (errorEl) {
       errorEl.textContent = '';
       errorEl.style.display = 'none';
     }
     try {
-      const res = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password, code }) });
+      const payload = { username, password };
+      if (useRecoveryCode) payload.recoveryCode = codeValue;
+      else payload.code = codeValue;
+      const res = await api('/api/auth/login', { method: 'POST', body: JSON.stringify(payload) });
       if (res.requiresTotp) {
         requiresTotp = true;
         $('login-user-field').hidden = true;
@@ -803,8 +821,12 @@ function showBootstrapModal() {
       payload.totpCode = totpCode;
     }
     try {
-      await api('/api/bootstrap', { method: 'POST', body: JSON.stringify(payload) });
-      location.reload();
+      const result = await api('/api/bootstrap', { method: 'POST', body: JSON.stringify(payload) });
+      if (result.recoveryCodes?.length) {
+        showRecoveryCodesModal(result.recoveryCodes, { onClose: () => location.reload() });
+      } else {
+        location.reload();
+      }
     } catch (error) {
       if (errorEl) {
         errorEl.textContent = error.message;
@@ -815,12 +837,49 @@ function showBootstrapModal() {
     }
   };
 }
+function showRecoveryCodesModal(codes, { onClose } = {}) {
+  openModal(`<h2>Recovery codes</h2><p>Store these single-use backup codes somewhere safe (password manager or printout). Each code signs you in once in place of a 2FA code if you lose your authenticator.</p><p><strong>They are shown only this once and cannot be retrieved later.</strong></p><div class="recovery-codes">${codes.map((code) => `<code>${escapeHtml(code)}</code>`).join('')}</div><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="copy-recovery-codes" type="button">Copy all</button><button class="ghost" id="download-recovery-codes" type="button">Download .txt</button><button class="primary" id="recovery-codes-done" type="button">I saved them</button></div>`);
+  $('copy-recovery-codes').onclick = async () => {
+    await navigator.clipboard.writeText(codes.join('\n'));
+    toast('Recovery codes copied');
+  };
+  $('download-recovery-codes').onclick = () => {
+    const blob = new Blob([`Home Lab Launcher recovery codes (${new Date().toISOString().slice(0, 10)})\n\n${codes.join('\n')}\n`], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'home-lab-launcher-recovery-codes.txt';
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+  $('recovery-codes-done').onclick = async () => {
+    closeModal();
+    if (onClose) await onClose();
+  };
+}
+
 async function showProfileModal() {
   const [me, sessions] = await Promise.all([api('/api/me'), api('/api/me/sessions')]);
   const totpSection = me.user.totpEnabled ? `
     <div class="settings-card">
       <p><strong>Status:</strong> Enabled</p>
-      <button class="ghost danger" id="profile-disable-2fa" type="button">Disable 2FA</button>
+      <p><strong>Recovery codes:</strong> ${Number(me.user.recoveryCodesRemaining || 0)} unused${Number(me.user.recoveryCodesRemaining || 0) <= 2 ? ' — consider regenerating' : ''}</p>
+      <div class="inline-controls">
+        <button class="ghost" id="profile-regenerate-codes" type="button">Regenerate recovery codes</button>
+        <button class="ghost danger" id="profile-disable-2fa" type="button">Disable 2FA</button>
+      </div>
+      <div id="profile-2fa-regenerate-area" hidden style="margin-top: 15px;">
+        <p>Regenerating replaces all remaining codes with 10 new single-use codes.</p>
+        <div class="field">
+          <label>Confirm current password</label>
+          <input id="profile-2fa-regenerate-password" type="password">
+        </div>
+        <div class="field" style="margin-top: 10px;">
+          <label>Enter the 6-digit verification code</label>
+          <input id="profile-2fa-regenerate-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric">
+        </div>
+        <button class="primary" style="margin-top: 10px;" id="profile-confirm-regenerate-codes" type="button">Regenerate codes</button>
+      </div>
       <div id="profile-2fa-disable-area" hidden style="margin-top: 15px;">
         <div class="field">
           <label>Confirm current password</label>
@@ -879,6 +938,25 @@ async function showProfileModal() {
     }
   };
   if (me.user.totpEnabled) {
+    $('profile-regenerate-codes').onclick = () => {
+      $('profile-2fa-regenerate-area').hidden = false;
+      $('profile-regenerate-codes').hidden = true;
+    };
+    $('profile-confirm-regenerate-codes').onclick = async () => {
+      const password = formValue('profile-2fa-regenerate-password');
+      const code = formValue('profile-2fa-regenerate-code');
+      if (!password || !code) {
+        showError('Password and verification code are required');
+        return;
+      }
+      showError('');
+      try {
+        const result = await api('/api/me/totp/recovery-codes', { method: 'POST', body: JSON.stringify({ password, code }) });
+        showRecoveryCodesModal(result.recoveryCodes, { onClose: showProfileModal });
+      } catch (error) {
+        showError(error.message);
+      }
+    };
     $('profile-disable-2fa').onclick = () => {
       $('profile-2fa-disable-area').hidden = false;
       $('profile-disable-2fa').hidden = true;
@@ -922,9 +1000,10 @@ async function showProfileModal() {
       }
       showError('');
       try {
-        await api('/api/me/totp/enable', { method: 'POST', body: JSON.stringify({ secret: activeSecret, code }) });
+        const result = await api('/api/me/totp/enable', { method: 'POST', body: JSON.stringify({ secret: activeSecret, code }) });
         toast('2FA enabled successfully');
-        await showProfileModal();
+        if (result.recoveryCodes?.length) showRecoveryCodesModal(result.recoveryCodes, { onClose: showProfileModal });
+        else await showProfileModal();
       } catch (error) {
         showError(error.message);
       }

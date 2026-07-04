@@ -97,8 +97,8 @@ Admin usernames must be at least 3 characters and passwords must be at least 10 
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.6.0 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.6.0 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.7.0 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.7.0 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -157,6 +157,8 @@ On mobile screens, launchpad filters and view controls stack into touch-friendly
 Service hostnames in the launchpad are shown only to Admins. The metadata toggle hides both hostnames and tags for Admins, while non-admin viewers can use the same toggle to hide or show tags only.
 
 Editors and Admins can enable HTTP health checks per service, optionally override the health-check URL, set the check interval, and trigger manual checks. Cards show the latest status, last-check timing, response time, and error details where available. These checks are server-side fetches; see the SSRF notes below before granting Editor access in shared or internet-exposed deployments.
+
+Every health sample is recorded to a history table (retention configurable in Admin → Settings, 1–90 days, default 7) and powers a 24-hour uptime percentage shown in the admin services list and returned in service payloads. Optionally configure a webhook URL in Admin → Settings → Health notifications to receive a JSON POST whenever a monitored service transitions up→down or down→up; the payload includes `title`, `message`, and `priority` (ntfy/Gotify) plus `content` (Discord), so most receivers work without an adapter.
 
 ## Service icons
 
@@ -247,6 +249,10 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 
 Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
 
+Enabling 2FA generates ten single-use recovery codes, shown exactly once (copy or download them). Each code signs you in once in place of a TOTP code via "Use a recovery code instead" on the login form. The profile shows how many codes remain and can regenerate a fresh set (current password + TOTP code required); disabling 2FA or an admin 2FA reset deletes them.
+
+Admins can also issue **API tokens** (Admin → Security) for automation: bearer tokens scoped to a role (`Authorization: Bearer hll_…`), with optional expiry, last-used tracking, and immediate revocation. The token value is shown exactly once at creation. Token requests skip CSRF (they carry no cookies) and cannot use session/profile endpoints; actions are audit-logged as `token:<name>`.
+
 On mobile screens, the Admin section tabs are displayed as a horizontally scrollable tab bar so every Admin area remains reachable without compressing labels or forcing the whole page wider than the viewport.
 
 ## Configuration
@@ -263,6 +269,11 @@ Most runtime settings are environment variables on first boot, then editable in 
 | `APP_NAME` | Initial displayed application name | `Home Lab Launcher` |
 | `APP_BASE_URL` | External URL users open in a browser; set this to the reverse-proxy HTTPS URL when proxied | `http://localhost:8080` |
 | `SESSION_SECRET` | Required session signing secret; generate a long random value before deployment | Change this |
+| `SESSION_MAX_AGE_DAYS` | Session lifetime in days (clamped 1–90). Sessions roll: activity refreshes both the cookie and the server-side expiry | `14` |
+| `AUTH_PROXY_ENABLED` | Opt-in forward-auth: trust a reverse-proxy username header (Authelia/authentik pattern). Requires `TRUST_PROXY`; the server refuses to start if misconfigured | `false` |
+| `AUTH_PROXY_USERNAME_HEADER` | Header carrying the authenticated username. The reverse proxy **must** strip this header from client requests | `remote-user` |
+| `AUTH_PROXY_AUTO_CREATE` | Auto-create unknown proxy-authenticated usernames as local users with a random placeholder password | `false` |
+| `AUTH_PROXY_DEFAULT_ROLE` | Role for auto-created forward-auth users: `admin`, `editor`, or `user` | `user` |
 | `DATA_DIR` | SQLite/session/plugin data directory | `/app/data` in Docker |
 | `PLUGIN_DIR` | Installed plugin directory | `/app/data/plugins` |
 | `NODE_EXTRA_CA_CERTS` | Optional path inside the container/native runtime to an internal CA bundle that Node.js should trust for outbound HTTPS requests, including trusted plugins | empty |
@@ -304,7 +315,7 @@ Plugins are trusted Admin-installed code. The Admin console shows lifecycle stat
 - static frontend assets, and
 - dashboard sections.
 
-The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install and may paste an expected SHA-256 checksum from a trusted release note; when provided, the downloaded archive must match before extraction. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. Plugin config fields are scoped by the manifest: Admins can edit all fields, Editors can edit only `scope: "editor"` or `scope: "user"` fields, and Admin-only values are preserved when Editors save config. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
+The plugin manager supports GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install and may paste an expected SHA-256 checksum from a trusted release note; when provided, the downloaded archive must match before extraction. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. After a successful install or update, superseded install directories and leftover download archives in the plugin directory are cleaned up automatically. Plugin `GET`/`HEAD` API routes honor the launcher's public-read setting by default; a plugin manifest can opt out with `"publicAccess": true` (see docs/plugins.md). Plugin config fields are scoped by the manifest: Admins can edit all fields, Editors can edit only `scope: "editor"` or `scope: "user"` fields, and Admin-only values are preserved when Editors save config. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
 
 See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
 
@@ -366,6 +377,10 @@ The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the i
 - Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
 - Security headers are set by the application; still use HTTPS for real deployments.
 - Keep `TRUST_PROXY=false` for direct exposure. Set `TRUST_PROXY=loopback` or `TRUST_PROXY=1` only when a trusted reverse proxy supplies forwarded headers.
+- Sessions roll on activity and expire after `SESSION_MAX_AGE_DAYS` (default 14, clamped 1–90) of inactivity, on both the cookie and the server side.
+- TOTP recovery codes are stored bcrypt-hashed and are single-use; each use is audit-logged with the remaining count. Regeneration requires the current password plus a TOTP code.
+- API tokens are stored as SHA-256 hashes with only a display prefix retained. Treat issued tokens like passwords; revoke unused ones. Tokens cannot access session/profile endpoints and never mix with forward-auth.
+- Forward-auth (`AUTH_PROXY_*`) trusts a proxy-supplied username header, so enable it only when the reverse proxy strips that header from client requests and `TRUST_PROXY` is configured; the server refuses to start otherwise. Prefer auto-create off unless your proxy is the sole entry point.
 - Users can revoke other active sessions from their profile.
 - Admins can export logs, set retention, prune old audit events, and review management-plane notices.
 - Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement and supports optional SHA-256 checksum verification for GitHub archives.

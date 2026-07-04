@@ -61,8 +61,21 @@ test('openDb upgrades a pre-migration schema and records versions', () => {
     assert.ok(presetCacheColumns.includes('name'));
     assert.ok(presetCacheColumns.includes('icon_url'));
     assert.ok(presetCacheColumns.includes('source'));
-    assert.equal(upgraded.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN (1, 2, 3, 4, 5, 6)").get().count, 6);
-    assert.equal(upgraded.pragma('user_version', { simple: true }), 6);
+    const recoveryColumns = upgraded.prepare('PRAGMA table_info(totp_recovery_codes)').all().map((row) => row.name);
+    assert.ok(recoveryColumns.includes('user_id'));
+    assert.ok(recoveryColumns.includes('code_hash'));
+    assert.ok(recoveryColumns.includes('used_at'));
+    const apiTokenColumns = upgraded.prepare('PRAGMA table_info(api_tokens)').all().map((row) => row.name);
+    assert.ok(apiTokenColumns.includes('token_hash'));
+    assert.ok(apiTokenColumns.includes('role'));
+    assert.ok(apiTokenColumns.includes('expires_at'));
+    assert.ok(apiTokenColumns.includes('last_used_at'));
+    const healthHistoryColumns = upgraded.prepare('PRAGMA table_info(service_health_history)').all().map((row) => row.name);
+    assert.ok(healthHistoryColumns.includes('service_id'));
+    assert.ok(healthHistoryColumns.includes('status'));
+    assert.ok(healthHistoryColumns.includes('checked_at'));
+    assert.equal(upgraded.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9)").get().count, 9);
+    assert.equal(upgraded.pragma('user_version', { simple: true }), 9);
     upgraded.close();
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });

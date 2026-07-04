@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const express = require('express');
+const sanitizeHtmlLib = require('sanitize-html');
 const packageJson = require('../../package.json');
 const openapiJson = require('../../docs/openapi.json');
 const { getSetting, setSetting, DEFAULT_APPEARANCE } = require('./db');
@@ -38,7 +39,8 @@ function serviceFromRow(row) {
       responseMs: row.health_response_ms,
       checkedAt: row.health_checked_at,
       nextCheckAt: row.health_next_check_at,
-      error: row.health_error
+      error: row.health_error,
+      uptime24h: row.health_uptime_24h ?? null
     } : null
   };
 }
@@ -116,36 +118,11 @@ function cleanAssetUrl(value) {
 
 function sanitizeHtml(html) {
   if (typeof html !== 'string') return '';
-  const allowedTags = new Set(['strong', 'em', 'b', 'i', 'code', 'br', 'p', 'ul', 'ol', 'li', 'a']);
-  const tagRe = /<\/?([a-zA-Z1-6]+)([^>]*)>/g;
-  return html.replace(tagRe, (match, tagName, attrs) => {
-    const lowerTag = tagName.toLowerCase();
-    if (!allowedTags.has(lowerTag)) {
-      return '';
-    }
-    const isClosing = match.startsWith('</');
-    if (isClosing) {
-      return `</${lowerTag}>`;
-    }
-    if (lowerTag === 'a') {
-      const hrefMatch = attrs.match(/href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i);
-      const hrefValue = hrefMatch ? (hrefMatch[1] || hrefMatch[2] || hrefMatch[3]) : '';
-      let isSafe = false;
-      try {
-        const url = new URL(hrefValue);
-        isSafe = ['http:', 'https:'].includes(url.protocol);
-      } catch {
-        if (/^https?:\/\//i.test(hrefValue)) {
-          isSafe = true;
-        }
-      }
-      if (isSafe) {
-        const cleanHref = hrefValue.replace(/"/g, '&quot;');
-        return `<a href="${cleanHref}">`;
-      }
-      return '<a>';
-    }
-    return `<${lowerTag}>`;
+  return sanitizeHtmlLib(html, {
+    allowedTags: ['strong', 'em', 'b', 'i', 'code', 'br', 'p', 'ul', 'ol', 'li', 'a'],
+    allowedAttributes: { a: ['href'] },
+    allowedSchemes: ['http', 'https'],
+    allowProtocolRelative: false
   });
 }
 
@@ -432,9 +409,16 @@ function configWarnings(db, { dataDir, pluginDir }) {
 function serviceSelectSql(orderBy = 'ORDER BY s.sort_order ASC, s.name ASC') {
   return `
     SELECT s.*, h.status AS health_status, h.status_code AS health_status_code, h.response_ms AS health_response_ms,
-      h.checked_at AS health_checked_at, h.next_check_at AS health_next_check_at, h.error AS health_error
+      h.checked_at AS health_checked_at, h.next_check_at AS health_next_check_at, h.error AS health_error,
+      u.uptime_24h AS health_uptime_24h
     FROM services s
     LEFT JOIN service_health h ON h.service_id = s.id
+    LEFT JOIN (
+      SELECT service_id, ROUND(100.0 * SUM(CASE WHEN status = 'up' THEN 1 ELSE 0 END) / COUNT(*), 1) AS uptime_24h
+      FROM service_health_history
+      WHERE checked_at >= datetime('now', '-1 day')
+      GROUP BY service_id
+    ) u ON u.service_id = s.id
     ${orderBy}
   `;
 }
@@ -474,12 +458,66 @@ async function checkServiceHealth(db, service) {
         : err.message;
   }
   const responseMs = Date.now() - started;
+  const previousStatus = db.prepare('SELECT status FROM service_health WHERE service_id = ?').get(service.id)?.status || null;
   db.prepare(`
     INSERT INTO service_health (service_id, status, status_code, response_ms, checked_at, next_check_at, error)
     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, ?, ?)
     ON CONFLICT(service_id) DO UPDATE SET status=excluded.status, status_code=excluded.status_code, response_ms=excluded.response_ms, checked_at=CURRENT_TIMESTAMP, next_check_at=excluded.next_check_at, error=excluded.error
   `).run(service.id, status, statusCode, responseMs, nextCheckAt, error);
-  return db.prepare('SELECT status, status_code AS statusCode, response_ms AS responseMs, checked_at AS checkedAt, next_check_at AS nextCheckAt, error FROM service_health WHERE service_id = ?').get(service.id);
+  db.prepare('INSERT INTO service_health_history (service_id, status, status_code, response_ms, error) VALUES (?, ?, ?, ?, ?)')
+    .run(service.id, status, statusCode, responseMs, error);
+  const health = db.prepare('SELECT status, status_code AS statusCode, response_ms AS responseMs, checked_at AS checkedAt, next_check_at AS nextCheckAt, error FROM service_health WHERE service_id = ?').get(service.id);
+  const wentDown = status === 'down' && previousStatus !== null && previousStatus !== 'down';
+  const recovered = status === 'up' && previousStatus === 'down';
+  if (wentDown || recovered) {
+    await sendHealthWebhook(db, service, previousStatus, health).catch(() => {});
+  }
+  return health;
+}
+
+// Generic JSON POST on up/down transitions. The payload carries title/message/
+// priority (ntfy, Gotify) and content (Discord) alongside the structured
+// service fields, so most webhook receivers work without adapters.
+async function sendHealthWebhook(db, service, previousStatus, health) {
+  const url = String(getSetting(db, 'health_webhook_url', '') || '').trim();
+  if (!url) return;
+  const recovered = health.status === 'up';
+  const title = recovered ? `Service recovered: ${service.name}` : `Service down: ${service.name}`;
+  const detail = health.error || (health.statusCode ? `HTTP ${health.statusCode}` : 'no response');
+  const message = recovered
+    ? `${service.name} is back up (${detail}, ${health.responseMs} ms).`
+    : `${service.name} is down (${detail}).`;
+  const payload = {
+    title,
+    message,
+    content: `**${title}** — ${message}`,
+    priority: recovered ? 3 : 5,
+    service: { id: service.id, name: service.name, url: service.healthCheckUrl || service.url },
+    status: health.status,
+    previousStatus,
+    statusCode: health.statusCode,
+    responseMs: health.responseMs,
+    error: health.error || null,
+    checkedAt: health.checkedAt
+  };
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+    let response;
+    try {
+      response = await guardedFetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      }, { actorRole: 'admin', label: 'Health webhook URL' });
+    } finally {
+      clearTimeout(timeout);
+    }
+    logEvent(db, {}, 'service.health_webhook_sent', { id: service.id, name: service.name, status: health.status, previousStatus, webhookStatus: response.status }, response.ok ? 'info' : 'warn');
+  } catch (error) {
+    logEvent(db, {}, 'service.health_webhook_failed', { id: service.id, name: service.name, status: health.status, previousStatus, error: error.message }, 'warn');
+  }
 }
 
 function logServiceHealthFailure(db, req, service, health, source) {
@@ -524,6 +562,12 @@ function pruneExpiredSessions(db) {
   return db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(Date.now()).changes;
 }
 
+function pruneHealthHistoryByRetention(db) {
+  const days = Math.min(90, Math.max(1, Number(getSetting(db, 'health_history_retention_days', 7))));
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  return db.prepare('DELETE FROM service_health_history WHERE checked_at < ?').run(cutoff).changes;
+}
+
 function pruneAppLogsByRetention(db) {
   const days = Math.min(3650, Math.max(1, Number(getSetting(db, 'log_retention_days', 90))));
   const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
@@ -550,6 +594,10 @@ function startMaintenanceScheduler(db, scheduler) {
     const deleted = pruneAppLogsByRetention(db);
     if (deleted > 0) logEvent(db, {}, 'logs.pruned', { deleted, source: 'scheduled' });
   }, { intervalMs: 24 * 60 * 60 * 1000, initialDelayMs: 5 * 60 * 1000 });
+  scheduler.addInterval('health-history-prune', () => {
+    const deleted = pruneHealthHistoryByRetention(db);
+    if (deleted > 0) logEvent(db, {}, 'health_history.pruned', { deleted, source: 'scheduled' });
+  }, { intervalMs: 6 * 60 * 60 * 1000, initialDelayMs: 5 * 60 * 1000 });
   scheduler.addInterval('scheduled-config-backup', () => {
     try {
       const result = runScheduledConfigBackup(db);
@@ -703,7 +751,9 @@ function effectiveConfig(db, req, { dataDir, pluginDir }) {
       publicReadEnabled: settings.publicReadEnabled,
       logRetentionDays: getSetting(db, 'log_retention_days', 90)
     },
-    scheduledBackupLocation: getSetting(db, 'scheduled_backup_location', '')
+    scheduledBackupLocation: getSetting(db, 'scheduled_backup_location', ''),
+    healthWebhookUrl: getSetting(db, 'health_webhook_url', ''),
+    healthHistoryRetentionDays: getSetting(db, 'health_history_retention_days', 7)
   };
 }
 
@@ -731,6 +781,7 @@ function uniqueServiceId(db, base) {
 }
 
 function revalidateSessionUser(req, db) {
+  if (req.apiToken) return req.session.user;
   if (!req.session?.user) return null;
   if (!db) return req.session.user;
   const user = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(req.session.user.id);
@@ -833,6 +884,14 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
     res.json(openapiJson);
   });
 
+  // Session lifecycle and profile endpoints are meaningless for bearer-token
+  // callers (no session, no per-user profile) and several dereference the
+  // numeric session user id, so they reject token auth outright.
+  router.use(['/auth', '/me', '/bootstrap', '/bootstrap-status'], (req, res, next) => {
+    if (req.apiToken) return res.apiError(403, 'API tokens cannot be used on session endpoints');
+    next();
+  });
+
   registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited, recordLoginFailure, clearLoginFailures, refreshSessionUser });
 
   router.get('/settings/public', (req, res) => {
@@ -855,4 +914,4 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   return { requireAuth, requireRole };
 }
 
-module.exports = { registerCoreRoutes, requireRole, requireAuth };
+module.exports = { registerCoreRoutes, requireRole, requireAuth, logEvent };

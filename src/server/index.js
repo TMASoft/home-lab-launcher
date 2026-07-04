@@ -5,9 +5,11 @@ const express = require('express');
 const session = require('express-session');
 const { BetterSqliteSessionStore } = require('./session-store');
 const { openDb, getSetting } = require('./db');
-const { registerCoreRoutes } = require('./routes');
+const { registerCoreRoutes, logEvent } = require('./routes');
+const { parseAuthProxyConfig, validateAuthProxyConfig, authProxyMiddleware } = require('./auth-proxy');
 const { PluginManager } = require('./plugins');
 const { securityHeaders, csrfProtection } = require('./security');
+const { apiTokenAuth } = require('./api-tokens');
 const { parsePrivateNetworkAccess } = require('./server-fetch');
 const { Scheduler } = require('./scheduler');
 
@@ -75,22 +77,48 @@ function parseTrustProxy(value) {
   return raw;
 }
 
+function parseSessionMaxAgeDays(value) {
+  const days = Number(String(value ?? '').trim() || 14);
+  if (!Number.isFinite(days)) return 14;
+  return Math.min(90, Math.max(1, Math.floor(days)));
+}
+
+const sessionMaxAgeDays = parseSessionMaxAgeDays(process.env.SESSION_MAX_AGE_DAYS);
 const trustProxy = parseTrustProxy(process.env.TRUST_PROXY);
 app.set('trust proxy', trustProxy);
+
+const authProxyConfig = parseAuthProxyConfig();
+const authProxyErrors = validateAuthProxyConfig(authProxyConfig, { trustProxy });
+if (authProxyErrors.length > 0) {
+  for (const error of authProxyErrors) console.error(`[startup] ${error}`);
+  process.exit(1);
+}
 app.use(securityHeaders);
-app.use(session({
+app.use(apiTokenAuth(db));
+const sessionMiddleware = session({
   store: new BetterSqliteSessionStore(db),
   secret: process.env.SESSION_SECRET || 'dev-only-change-this-session-secret',
   name: 'hll.sid',
   resave: false,
   saveUninitialized: false,
+  rolling: true,
   cookie: {
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.APP_BASE_URL?.startsWith('https://') || false,
-    maxAge: 1000 * 60 * 60 * 24 * 14
+    maxAge: 1000 * 60 * 60 * 24 * sessionMaxAgeDays
   }
-}));
+});
+app.use((req, res, next) => {
+  if (req.apiToken) {
+    // Token-authenticated requests get an ephemeral, never-persisted session
+    // object so downstream code can read req.session.user uniformly.
+    req.session = { user: { ...req.apiToken.user } };
+    return next();
+  }
+  return sessionMiddleware(req, res, next);
+});
+app.use(authProxyMiddleware(db, authProxyConfig, { logEvent }));
 app.use(csrfProtection);
 
 const pluginManager = new PluginManager({ app, db, pluginDir });
@@ -115,6 +143,7 @@ function startupWarnings() {
   if (nodeEnv === 'production' && appBaseUrl && appBaseUrl.startsWith('http://')) warnings.push('Production is configured over plain HTTP. Use HTTPS behind a reverse proxy when possible.');
   if (appBaseUrl && appBaseUrl.startsWith('https://') && !trustProxy) warnings.push('APP_BASE_URL uses HTTPS but TRUST_PROXY is disabled; enable TRUST_PROXY=loopback or TRUST_PROXY=1 when TLS terminates at a reverse proxy.');
   if (publicReadEnabled) warnings.push('Anonymous read-only public access is enabled.');
+  if (authProxyConfig.enabled) warnings.push(`Forward-auth is enabled via the "${authProxyConfig.usernameHeader}" header; ensure the reverse proxy strips that header from client requests.`);
   if (nodeEnv !== 'production' || process.env.ENABLE_LOCAL_PLUGIN_INSTALL === 'true') warnings.push('Local plugin install is enabled; plugins are trusted Admin-installed server-side code.');
   if (nodeEnv === 'production' && parsePrivateNetworkAccess().roles.has('editor')) warnings.push('Editors can trigger server-side fetches to private-network URLs; set SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin or disabled for stricter shared deployments.');
   return warnings;

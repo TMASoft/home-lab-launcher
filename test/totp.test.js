@@ -78,3 +78,20 @@ test('TOTP helpers - verifyTOTPWithCounter returns the matched counter within th
   assert.equal(totp.verifyTOTPWithCounter(secret, '000000'), null);
   assert.equal(totp.verifyTOTPWithCounter('', '123456'), null);
 });
+
+test('TOTP helpers - generateRecoveryCodes produces unique well-formed codes', () => {
+  const codes = totp.generateRecoveryCodes();
+  assert.equal(codes.length, 10);
+  assert.equal(new Set(codes).size, 10);
+  for (const code of codes) {
+    assert.match(code, /^[a-hj-km-np-z2-9]{5}-[a-hj-km-np-z2-9]{5}$/);
+  }
+  assert.equal(totp.generateRecoveryCodes(4).length, 4);
+});
+
+test('TOTP helpers - normalizeRecoveryCode strips separators and lowercases', () => {
+  assert.equal(totp.normalizeRecoveryCode('AB2DE-FG3JK'), 'ab2defg3jk');
+  assert.equal(totp.normalizeRecoveryCode('  ab2de fg3jk  '), 'ab2defg3jk');
+  assert.equal(totp.normalizeRecoveryCode(null), '');
+  assert.equal(totp.normalizeRecoveryCode(12345), '12345');
+});

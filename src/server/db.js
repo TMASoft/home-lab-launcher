@@ -196,6 +196,62 @@ const MIGRATIONS = [
     up(db) {
       addColumnIfMissing(db, 'users', 'totp_last_counter', 'INTEGER');
     }
+  },
+  {
+    id: 7,
+    name: 'totp-recovery-codes',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS totp_recovery_codes (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          user_id INTEGER NOT NULL,
+          code_hash TEXT NOT NULL,
+          used_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_totp_recovery_codes_user ON totp_recovery_codes(user_id);
+      `);
+    }
+  },
+  {
+    id: 8,
+    name: 'api-tokens',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS api_tokens (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT NOT NULL,
+          token_prefix TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          role TEXT NOT NULL CHECK(role IN ('admin', 'editor', 'user')),
+          created_by INTEGER,
+          expires_at TEXT,
+          last_used_at TEXT,
+          created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE SET NULL
+        );
+      `);
+    }
+  },
+  {
+    id: 9,
+    name: 'service-health-history',
+    up(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS service_health_history (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          service_id TEXT NOT NULL,
+          status TEXT NOT NULL,
+          status_code INTEGER,
+          response_ms INTEGER,
+          error TEXT,
+          checked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (service_id) REFERENCES services(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_service_health_history_service_time ON service_health_history(service_id, checked_at);
+      `);
+    }
   }
 ];
 

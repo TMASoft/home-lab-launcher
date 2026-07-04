@@ -42,6 +42,16 @@ class BetterSqliteSessionStore extends session.Store {
     }
   }
 
+  touch(sid, sess, cb = () => {}) {
+    try {
+      const maxAge = sess.cookie?.maxAge || 1000 * 60 * 60 * 24;
+      this.db.prepare('UPDATE sessions SET expires_at = ? WHERE sid = ?').run(Date.now() + maxAge, sid);
+      cb(null);
+    } catch (error) {
+      cb(error);
+    }
+  }
+
   destroy(sid, cb = () => {}) {
     try {
       this.db.prepare('DELETE FROM sessions WHERE sid = ?').run(sid);
