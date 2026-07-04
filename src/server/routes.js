@@ -181,8 +181,55 @@ function getAppearance(db) {
   }
 }
 
+/* Built-in presets seed the theme list until an admin saves their own set.
+   They ride the normal preset pipeline (sanitizeAppearance), so they behave
+   exactly like imported themes — apply, duplicate, export, delete. */
+const BUILTIN_THEME_PRESETS = [
+  {
+    id: 'daybreak',
+    name: 'Daybreak',
+    description: 'The default look — bright cool paper with cobalt accents.',
+    appearance: { theme: { mode: 'light' } },
+    createdAt: '2026-07-04T00:00:00.000Z'
+  },
+  {
+    id: 'daybreak-night',
+    name: 'Daybreak Night',
+    description: 'The dark counterpart — deep blue-slate surfaces, same cobalt.',
+    appearance: { theme: { mode: 'dark' } },
+    createdAt: '2026-07-04T00:00:00.000Z'
+  },
+  {
+    id: 'vaporwave',
+    name: 'Vaporwave',
+    description: 'Dusk violet surfaces with neon pink. Same components, different sunset.',
+    appearance: {
+      theme: {
+        mode: 'dark',
+        colors: {
+          background: '#17102e',
+          surface: '#201741',
+          surface2: '#2a1f55',
+          surface3: '#352969',
+          text: '#f2ecff',
+          mutedText: '#b3a6d9',
+          quietText: '#9a8fc2',
+          border: '#352a63',
+          borderStrong: '#4d3f86',
+          primary: '#ff71ce',
+          primaryInk: '#33081f',
+          success: '#5fe3a1',
+          warning: '#ffd86b',
+          danger: '#ff7b9c'
+        }
+      }
+    },
+    createdAt: '2026-07-04T00:00:00.000Z'
+  }
+];
+
 function getThemePresets(db) {
-  const stored = getSetting(db, 'theme_presets', []);
+  const stored = getSetting(db, 'theme_presets', BUILTIN_THEME_PRESETS);
   const presets = Array.isArray(stored) ? stored : [];
   return presets.map((preset) => {
     try {

@@ -5,10 +5,10 @@ const bcrypt = require('bcryptjs');
 const LOCAL_PRESETS = require('./presets.json');
 
 const DEFAULT_SERVICES = [
-  { id: 'ha', name: 'Home Assistant', icon: '🏠', url: 'https://ha.example.local:8123', category: 'core', accent: '#4de7ff', description: 'Primary home automation dashboard.', tags: ['automation', 'home', 'core'], sort_order: 10, featured: 1, enabled: 1 },
-  { id: 'kuma', name: 'Uptime Kuma', icon: '📈', url: 'https://kuma.example.local', category: 'core', accent: '#79f2c0', description: 'Status dashboard and service availability history.', tags: ['status', 'monitoring'], sort_order: 20, featured: 1, enabled: 1 },
-  { id: 'router', name: 'Router', icon: '📶', url: 'http://192.168.1.1', category: 'core', accent: '#6da8ff', description: 'Network gateway management.', tags: ['network', 'gateway'], sort_order: 30, featured: 0, enabled: 1 },
-  { id: 'media', name: 'Media Server', icon: '🎬', url: 'http://media.local', category: 'media', accent: '#b99cff', description: 'Streaming and media library.', tags: ['media', 'streaming'], sort_order: 40, featured: 1, enabled: 1 }
+  { id: 'ha', name: 'Home Assistant', icon: '🏠', url: 'https://ha.example.local:8123', category: 'core', accent: '#2f55e0', description: 'Primary home automation dashboard.', tags: ['automation', 'home', 'core'], sort_order: 10, featured: 1, enabled: 1 },
+  { id: 'kuma', name: 'Uptime Kuma', icon: '📈', url: 'https://kuma.example.local', category: 'core', accent: '#17834e', description: 'Status dashboard and service availability history.', tags: ['status', 'monitoring'], sort_order: 20, featured: 1, enabled: 1 },
+  { id: 'router', name: 'Router', icon: '📶', url: 'http://192.168.1.1', category: 'core', accent: '#0e7490', description: 'Network gateway management.', tags: ['network', 'gateway'], sort_order: 30, featured: 0, enabled: 1 },
+  { id: 'media', name: 'Media Server', icon: '🎬', url: 'http://media.local', category: 'media', accent: '#7c3aed', description: 'Streaming and media library.', tags: ['media', 'streaming'], sort_order: 40, featured: 1, enabled: 1 }
 ];
 
 const DEFAULT_APPEARANCE = {
@@ -31,7 +31,7 @@ const DEFAULT_APPEARANCE = {
     subheading: 'A role-aware launcher for the tools, dashboards, and dynamic sections that make up your home lab.'
   },
   theme: {
-    mode: 'dark',
+    mode: 'light',
     fontFamily: 'system',
     customFontFamily: '',
     density: 'comfortable',

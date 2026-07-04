@@ -139,7 +139,7 @@ function assetFieldHtml(id, label, value) {
   return `<div class="field"><label>${escapeHtml(label)}</label><div class="inline-controls"><input id="appearance-${id}-url" value="${escapeHtml(value || '')}" placeholder="/api/app-assets/..."><input id="appearance-${id}-file" type="file" accept="image/png,image/jpeg,image/gif,image/webp"><button class="ghost" data-upload-app-asset="${escapeHtml(id)}" type="button">Upload</button></div><small>PNG, JPG, GIF, and WebP only. SVG is intentionally not accepted in this release.</small></div>`;
 }
 function defaultColorFor(key) {
-  return { background: '#090c11', surface: '#0f141b', surface2: '#141a23', text: '#eef3f8', mutedText: '#a5afbb', border: '#273241', primary: '#8fd3ff', success: '#8ee6b0', warning: '#ffd27a', danger: '#ff8f9d' }[key] || '#8fd3ff';
+  return { background: '#f5f7fa', surface: '#ffffff', surface2: '#edf1f7', surface3: '#e2e8f2', text: '#182033', mutedText: '#55607a', quietText: '#757f94', border: '#e1e6ef', borderStrong: '#c6cedc', primary: '#2f55e0', primaryInk: '#ffffff', success: '#17834e', warning: '#96650a', danger: '#c23a32' }[key] || '#2f55e0';
 }
 
 function adminServicesHtml() {

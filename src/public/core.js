@@ -133,7 +133,7 @@ function applyAppearance(appearance = {}) {
   const heroCard = document.querySelector('.hero-card');
   if (heroCard) {
     if (isStoredAppAsset(brand.heroImageUrl)) {
-      heroCard.style.backgroundImage = `linear-gradient(90deg, var(--surface) 0%, rgba(15,20,27,.88) 58%, rgba(15,20,27,.48)), url("${brand.heroImageUrl}")`;
+      heroCard.style.backgroundImage = `linear-gradient(90deg, var(--surface) 0%, color-mix(in srgb, var(--surface) 88%, transparent) 58%, color-mix(in srgb, var(--surface) 48%, transparent)), url("${brand.heroImageUrl}")`;
       heroCard.style.backgroundSize = 'cover';
       heroCard.style.backgroundPosition = 'center';
     } else {
