@@ -6,6 +6,16 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## Unreleased
 
+## [0.8.0] - 2026-07-04
+
+### Changed
+
+- **Daybreak UI rebrand.** The default look is now "Daybreak": a bright cool-paper light theme (cobalt `#2f55e0` primary, pill-shaped buttons/chips/search under the soft radius preset, soft 22px card radii and layered shadows) with a matching "Daybreak Night" dark palette. Fresh installs default to light mode; existing installs keep whatever mode is stored. Component styling that was hardcoded to the old sky-blue/dark look (toast, user dropdown, focus rings, drag handles, badges, preset badges, error banners) now derives from the contract tokens via `color-mix`, so every component follows admin theme overrides. Light mode overrides the semantic colors (`success`/`warning`/`danger`) with darker tones for AA contrast on white. A new `--radius-btn` token rides the existing radius presets (soft = pills, rounded = 12px, square = 6px), the hero image overlay derives from `--surface` instead of a hardcoded dark gradient, and seeded services plus the service accent-color choices use the new palette. The theming contract is unchanged: all 14 admin-overridable tokens, the theme/density/radius/font body classes, and theme JSON import/export keep working.
+
+### Added
+
+- **Built-in theme presets.** Admin → Appearance → Theme presets now ships with three built-ins: Daybreak (default light), Daybreak Night (dark), and Vaporwave (dusk violet with neon pink). They ride the normal preset pipeline — apply, duplicate, export, delete — and seed the list only until an admin saves their own set; a stored preset list always wins.
+
 ## [0.7.0] - 2026-07-04
 
 ### Security
