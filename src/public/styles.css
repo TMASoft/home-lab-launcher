@@ -364,6 +364,7 @@ img, svg, video { max-width: 100%; }
   gap: var(--space-4);
   align-items: stretch;
 }
+.layout-item { min-width: 0; }
 .layout-item-wide { grid-row: span 2; }
 .layout-item-full { grid-column: 1 / -1; }
 .layout-toolbar {

@@ -60,3 +60,10 @@ test('frontend styles include reduced-motion and mobile layout safeguards', () =
     assert.ok(css.includes(token), `missing CSS quality token ${token}`);
   }
 });
+
+test('appearance color inputs use the active theme mode fallback palette', () => {
+  const js = fs.readFileSync(path.join(__dirname, '..', 'src/public/admin.js'), 'utf8');
+  assert.ok(js.includes('defaultColorFor(key, t.mode)'), 'appearance fields must use the active theme mode');
+  assert.ok(js.includes("dark: { background: '#0f1420'"), 'dark fallback palette must match Daybreak Night');
+  assert.ok(js.includes("light: { background: '#f5f7fa'"), 'light fallback palette must match Daybreak');
+});
