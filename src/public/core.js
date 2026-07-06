@@ -10,9 +10,10 @@ const state = {
   pluginSections: [],
   csrfToken: null,
   adminTab: 'overview',
+  commandPalette: { open: false, query: '', selected: 0 },
   layoutEditing: false,
   draggedLayoutId: '',
-  admin: { overview: null, health: null, config: null, notices: [], users: [], plugins: [], logs: [], appearance: null, presets: [] }
+  admin: { overview: null, health: null, config: null, notices: [], users: [], plugins: [], logs: [], appearance: null, presets: [], discoveryStatus: null, discovery: null, discoveryComposeYaml: '' }
 };
 
 const $ = (id) => document.getElementById(id);

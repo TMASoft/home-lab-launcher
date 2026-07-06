@@ -528,4 +528,4 @@ class PluginManager {
   }
 }
 
-module.exports = { PluginManager, parseGithubRepo, LAUNCHER_PLUGIN_API_VERSION, validateManifest, applyPluginConfigUpdate, configFieldScope, redactPluginConfigForRole };
+module.exports = { PluginManager, parseGithubRepo, LAUNCHER_PLUGIN_API_VERSION, validateManifest, applyPluginConfigUpdate, configFieldScope, redactPluginConfigForRole, compareVersions };

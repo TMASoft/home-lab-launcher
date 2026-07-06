@@ -220,8 +220,18 @@ function pluginInstallPayload(input = {}) {
     version: cleanText(input.version, '', 120),
     expectedSha256: sha256(input.expectedSha256),
     trustConfirmed: input.trustConfirmed === true,
-    path: cleanText(input.path, '', 500)
+    path: cleanText(input.path, '', 500),
+    catalogId: cleanText(input.catalogId, '', 120)
   };
+}
+
+function discoveryDockerEndpoint(value) {
+  const raw = cleanText(value, '', 300);
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return httpUrl(raw, 'Docker discovery endpoint');
+  const socketPath = raw.replace(/^unix:\/\//i, '');
+  if (!socketPath.startsWith('/')) throw new Error('Docker discovery endpoint must be an http(s) URL (socket proxy) or an absolute unix socket path');
+  return `unix://${socketPath}`;
 }
 
 function settingsPayload(input = {}) {
@@ -232,6 +242,7 @@ function settingsPayload(input = {}) {
   if (Object.prototype.hasOwnProperty.call(input, 'scheduled_backup_location')) out.scheduled_backup_location = cleanText(input.scheduled_backup_location, '', 300);
   if (Object.prototype.hasOwnProperty.call(input, 'health_webhook_url')) out.health_webhook_url = input.health_webhook_url ? httpUrl(input.health_webhook_url, 'Health webhook URL') : '';
   if (Object.prototype.hasOwnProperty.call(input, 'health_history_retention_days')) out.health_history_retention_days = intInRange(input.health_history_retention_days, { min: 1, max: 90, fallback: 7 });
+  if (Object.prototype.hasOwnProperty.call(input, 'discovery_docker_endpoint')) out.discovery_docker_endpoint = discoveryDockerEndpoint(input.discovery_docker_endpoint);
   return out;
 }
 

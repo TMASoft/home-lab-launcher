@@ -150,6 +150,7 @@ Plugin installation and lifecycle management is Admin-only unless noted. Plugin 
 | `POST` | `/api/plugins/reload` | Admin | Reload installed plugins. |
 | `GET` | `/api/plugin-sources/github/versions` | Admin | Discover GitHub releases/tags for a plugin repository. |
 | `GET` | `/api/plugin-sources/updates` | Admin | Check installed plugins for available updates. |
+| `GET` | `/api/plugin-catalog` | Admin | Browse the curated plugin catalog with compatibility and installed-state annotations (`?refresh=1` forces a remote fetch). |
 | `GET` | `/api/plugin-sources/local/status` | Admin | Report whether local plugin install mode is enabled. |
 | `POST` | `/api/plugins/install` | Admin | Install a trusted GitHub plugin version, optionally verifying SHA-256. |
 | `POST` | `/api/plugins/install-local` | Admin | Install a trusted local plugin path when local mode is enabled. |

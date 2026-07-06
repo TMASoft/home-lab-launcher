@@ -15,6 +15,7 @@ const { registerServiceRoutes } = require('./route-modules/services');
 const { registerUserRoutes } = require('./route-modules/users');
 const { registerPluginRoutes } = require('./route-modules/plugins');
 const { registerPresetRoutes } = require('./route-modules/presets');
+const { registerDiscoveryRoutes } = require('./route-modules/discovery');
 const { startPresetCatalogScheduler } = require('./preset-catalog');
 
 function serviceFromRow(row) {
@@ -909,6 +910,8 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   registerPluginRoutes(router, { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload });
 
   registerPresetRoutes(router, { db, dataDir, requireRole, logEvent, downloadServiceIcon, saveServiceIconBuffer, detectImageMime, IMAGE_MIME_EXTENSIONS, uniqueServiceId, slug, guardedFetch, scheduler, servicePayload });
+
+  registerDiscoveryRoutes(router, { db, dataDir, requireRole, logEvent, servicePayload, normalizeServiceIcon, uniqueServiceId, slug, serviceFromRow, serviceSelectSql });
 
   startPresetCatalogScheduler(db, scheduler);
 

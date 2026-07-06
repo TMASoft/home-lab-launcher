@@ -1,5 +1,6 @@
 const express = require('express');
 const { applyPluginConfigUpdate, redactPluginConfigForRole } = require('../plugins');
+const { getPluginCatalog, annotateCatalogEntries } = require('../plugin-catalog');
 
 function registerPluginRoutes(router, deps) {
   const { db, requireAuth, requireRole, canRead, logEvent, pluginManager, safeJsonParse, pluginInstallPayload } = deps;
@@ -54,6 +55,23 @@ function registerPluginRoutes(router, deps) {
     res.json({ updates: await pluginManager.checkUpdates() });
   });
 
+  router.get('/plugin-catalog', requireRole('admin'), async (req, res) => {
+    const refresh = req.query.refresh === '1';
+    const result = await getPluginCatalog(db, { refresh });
+    if (result.fetched) logEvent(db, req, 'plugin_catalog.fetched', { url: result.sourceUrl, entries: result.entries.length, warnings: result.warnings.length, refresh });
+    else if (result.error) logEvent(db, req, 'plugin_catalog.fetch_failed', { url: result.sourceUrl, error: result.error, stale: result.stale }, 'warn');
+    res.json({
+      catalog: {
+        sourceUrl: result.sourceUrl,
+        fetchedAt: result.fetchedAt,
+        stale: result.stale,
+        error: result.error,
+        warnings: result.warnings,
+        entries: annotateCatalogEntries(result.entries, pluginManager.list())
+      }
+    });
+  });
+
   router.get('/plugin-sources/local/status', requireRole('admin'), (req, res) => {
     res.json({
       enabled: process.env.NODE_ENV !== 'production' || process.env.ENABLE_LOCAL_PLUGIN_INSTALL === 'true',
@@ -72,7 +90,7 @@ function registerPluginRoutes(router, deps) {
       const failed = pluginManager.health().failures.find((item) => item.pluginId === plugin.id);
       if (failed) return res.status(400).json({ error: `Plugin installed but failed to load: ${failed.message}`, plugin });
       const cleaned = pluginManager.cleanupSupersededInstalls();
-      logEvent(db, req, 'plugin.installed', { ...plugin, cleaned });
+      logEvent(db, req, 'plugin.installed', { ...plugin, cleaned, ...(payload.catalogId ? { catalogId: payload.catalogId, installSource: 'catalog' } : {}) });
       res.status(201).json({ plugin });
     } catch (error) {
       res.status(400).json({ error: error.message });

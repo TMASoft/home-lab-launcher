@@ -4,7 +4,13 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
-## Unreleased
+## [0.9.1] - 2026-07-06
+
+### Added
+
+- Added a role-aware command palette opened from the header or `Ctrl+K`/`Cmd+K`, plus `/` to focus launchpad search. The palette indexes visible services, categories, plugin sections, admin tabs, profile actions, docs links, and safe management actions such as copy URL, toggle favorite, run health check, add/edit service, export backup, jump to logs, export logs, and open plugin settings/logs.
+- Added Admin-only service discovery (Admin → Discovery): scan running containers through an explicitly configured Docker endpoint (read-only socket proxy recommended; the socket is never mounted by default) or paste Compose YAML as untrusted input, then review candidates — with URL/id conflict detection, per-candidate editing, and create/update/skip choices — before anything is imported. Candidates are built from names, images, published ports, and an allowlist of labels (`home-lab-launcher.*`, `homepage.*`, Traefik `Host()` rules, Compose project/service); environment values, secrets sections, and secret-like label keys are never read, and credentials embedded in URLs are stripped. Imports run through standard service validation (max 50 per batch) and every scan and import is audit-logged. New `yaml` dependency for strict Compose parsing with alias-expansion and size limits.
+- Added a curated plugin catalog to Admin → Plugins. The catalog is static JSON fetched from the official `home-lab-launcher-plugins` repository (override with `PLUGIN_CATALOG_URL`), cached server-side for 15 minutes with a manual refresh button, and Admin-only. Entries show trust status (official/community), description, declared permissions, launcher API compatibility, repository/docs links, installed state, and an update hint, so admins can compare plugins before installing. Installing from the catalog reuses the existing pinned GitHub install path — live version discovery with release notes, explicit version pinning, the trust acknowledgement, and optional SHA-256 verification (prefilled when the catalog provides a hash for the selected version). Manual GitHub URL installs are unchanged. Catalog fetches, fetch failures, and catalog-originated installs are audit-logged, and a catalog outage never affects installed plugins — the last cached copy is served and marked stale.
 
 ## [0.8.1] - 2026-07-04
 

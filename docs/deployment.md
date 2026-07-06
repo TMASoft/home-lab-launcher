@@ -105,6 +105,41 @@ That volume contains:
 
 Back up this volume if the launcher is important to your environment. Do not delete the `launcher-data` volume unless you intentionally want to reset all data. See `docs/examples/backup-restore.md` for Docker volume backup and restore snippets.
 
+## Service discovery setup
+
+Admins can discover launchpad candidates from running containers (Admin → Discovery). Discovery is disabled until an endpoint is configured, and the launcher **never mounts or assumes the Docker socket by default**.
+
+### Recommended: read-only Docker socket proxy
+
+Point discovery at a socket proxy that only exposes the read-only container list, instead of giving the launcher the raw Docker socket (which is root-equivalent on the host):
+
+```yaml
+services:
+  docker-socket-proxy:
+    image: lscr.io/linuxserver/socket-proxy:latest
+    environment:
+      - CONTAINERS=1   # allow GET /containers/json
+      - POST=0         # deny all mutating calls
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    read_only: true
+    tmpfs:
+      - /run
+    restart: unless-stopped
+    # Keep the proxy on an internal network shared with home-lab-launcher;
+    # never publish its port to the host or LAN.
+```
+
+Then set the Docker endpoint in Admin → Discovery to `http://docker-socket-proxy:2375`. The endpoint is stored in the launcher database, not in YAML or environment files.
+
+### Alternative: direct unix socket
+
+Mounting `/var/run/docker.sock` (read-only) into the container and configuring `/var/run/docker.sock` as the endpoint also works, but grants the launcher process far more access than discovery needs. Prefer the socket proxy for anything beyond a single-admin test box.
+
+### What discovery reads
+
+A scan calls only `GET /containers/json` and reads container names, images, published ports, and an allowlist of labels (`home-lab-launcher.*`, `homepage.*`, Traefik router `Host()` rules, and Compose project/service labels). Environment values and secret-like label keys are never read, stored, or displayed. Scans change nothing; imports happen only after an admin reviews candidates and applies them, and both are written to the audit log. Add a `home-lab-launcher.ignore: "true"` label to any container or Compose service you never want suggested.
+
 ## Deployment patterns
 
 ### Direct HTTP on a private LAN

@@ -78,6 +78,7 @@ async function loadAdminData() {
     api('/api/admin/presets/settings').catch(() => ({})),
     api('/api/admin/api-tokens').catch(() => ({ tokens: [] }))
   ]);
+  state.admin.discoveryStatus = await api('/api/discovery/status').catch(() => null);
   state.admin.apiTokens = apiTokens.tokens || [];
   state.admin.overview = overview;
   state.admin.health = health;
@@ -188,6 +189,259 @@ function showAccessError(error) {
   $('service-grid').innerHTML = '';
   $('services-empty').hidden = false;
   $('services-empty').textContent = error.message === 'Authentication required' ? 'Login required to view this launcher.' : error.message;
+}
+
+function isTypingTarget(target) {
+  return target?.closest?.('input, textarea, select, [contenteditable="true"]');
+}
+
+function commandSearchText(command) {
+  return [command.title, command.subtitle, command.group, command.keywords].filter(Boolean).join(' ').toLowerCase();
+}
+
+function adminTabCommand(tab, title, keywords = '') {
+  return {
+    id: `admin:${tab}`,
+    title,
+    subtitle: 'Admin console',
+    group: 'Admin',
+    shortcut: 'Admin',
+    keywords,
+    run: () => openAdminTab(tab)
+  };
+}
+
+function serviceCommands(service) {
+  const favorite = state.favorites.includes(service.id);
+  const searchParts = [service.name, service.category, service.description, ...(service.tags || [])];
+  if (isAdmin()) searchParts.push(service.url, getHost(service.url));
+  const subtitle = isAdmin() ? `${service.category || 'general'} · ${getHost(service.url)}` : service.category || 'Service';
+  const commands = [
+    {
+      id: `service:${service.id}:open`,
+      title: `Open ${service.name}`,
+      subtitle,
+      group: 'Services',
+      shortcut: 'Enter',
+      keywords: searchParts.join(' '),
+      run: () => window.open(service.url, '_blank', 'noopener,noreferrer')
+    },
+    {
+      id: `service:${service.id}:copy`,
+      title: `Copy ${service.name} URL`,
+      subtitle: 'Copy service link to clipboard',
+      group: 'Services',
+      shortcut: 'Copy',
+      keywords: searchParts.join(' '),
+      run: async () => { await navigator.clipboard.writeText(service.url); toast('Copied URL'); }
+    },
+    {
+      id: `service:${service.id}:favorite`,
+      title: `${favorite ? 'Remove' : 'Add'} ${service.name} ${favorite ? 'from' : 'to'} favorites`,
+      subtitle: 'Personal launchpad preference',
+      group: 'Favorites',
+      shortcut: 'Star',
+      keywords: searchParts.join(' '),
+      run: async () => { state.favorites = favorite ? state.favorites.filter((id) => id !== service.id) : [service.id, ...state.favorites]; await saveFavorites(); renderServices(); toast(favorite ? 'Favorite removed' : 'Favorite added'); }
+    }
+  ];
+  if (canEditServices()) {
+    commands.push(
+      {
+        id: `service:${service.id}:check`,
+        title: `Run health check for ${service.name}`,
+        subtitle: 'Editor/Admin service action',
+        group: 'Management',
+        shortcut: 'Check',
+        keywords: searchParts.join(' '),
+        run: () => runServiceHealthCheck(service.id)
+      },
+      {
+        id: `service:${service.id}:edit`,
+        title: `Edit ${service.name}`,
+        subtitle: 'Open service editor',
+        group: 'Management',
+        shortcut: 'Edit',
+        keywords: searchParts.join(' '),
+        run: () => showServiceModal(state.services.find((s) => s.id === service.id))
+      }
+    );
+  }
+  return commands;
+}
+
+function buildCommandPaletteCommands() {
+  const commands = [
+    { id: 'nav:launchpad', title: 'Jump to launchpad', subtitle: 'Service grid and favorites', group: 'Navigation', shortcut: '#', keywords: 'services search categories tags', run: () => { location.hash = 'services'; $('services')?.scrollIntoView(); } },
+    { id: 'search:focus', title: 'Search services', subtitle: 'Focus launchpad search', group: 'Navigation', shortcut: '/', keywords: 'filter services categories tags', run: () => $('service-search')?.focus() }
+  ];
+  state.services.forEach((service) => commands.push(...serviceCommands(service)));
+  [...new Set(state.services.map((service) => service.category || 'general'))].sort().forEach((category) => {
+    commands.push({ id: `category:${category}`, title: `Show ${category} services`, subtitle: 'Filter launchpad category', group: 'Categories', shortcut: 'Filter', keywords: category, run: () => { state.selectedCategory = category; renderServices(); location.hash = 'services'; } });
+  });
+  (state.pluginSections || []).forEach((section) => {
+    const title = section.title || section.id || section.pluginId || 'Plugin section';
+    commands.push({ id: `plugin-section:${section.pluginId}:${section.id}`, title: `Open ${title}`, subtitle: 'Dashboard plugin section', group: 'Plugins', shortcut: 'Plugin', keywords: [section.pluginId, section.id, title].join(' '), run: () => document.querySelector(`[data-layout-id^="plugin:${CSS.escape(layoutSafeId(section.pluginId || 'plugin'))}:"]`)?.scrollIntoView({ block: 'start' }) });
+  });
+  if (state.user) {
+    commands.push(
+      { id: 'profile:open', title: 'Open profile and password', subtitle: 'Account settings', group: 'Profile', shortcut: 'Profile', keywords: 'password 2fa sessions logout', run: () => showProfileModal() },
+      { id: 'profile:layout', title: `${state.layoutEditing ? 'Stop' : 'Edit'} dashboard layout`, subtitle: 'Reorder dashboard sections', group: 'Profile', shortcut: 'Layout', keywords: 'customize rearrange sections', run: () => setLayoutEditing(!state.layoutEditing) }
+    );
+  }
+  if (canEditServices()) commands.push({ id: 'service:add', title: 'Add service', subtitle: 'Create a launchpad service', group: 'Management', shortcut: 'Add', keywords: 'new service preset', run: () => showServiceModal() });
+  if (isAdmin()) {
+    [
+      ['overview', 'Open Admin Overview', 'readiness runtime notices'],
+      ['settings', 'Open Admin Settings', 'base url public read health notifications presets'],
+      ['appearance', 'Open Appearance', 'theme branding hero presets'],
+      ['services', 'Open Admin Services', 'import export reorder bulk'],
+      ['discovery', 'Open Service Discovery', 'docker compose scan import candidates'],
+      ['users', 'Open Users', 'roles passwords 2fa'],
+      ['security', 'Open Security', 'api tokens config sessions'],
+      ['backups', 'Open Backups', 'download restore database'],
+      ['plugins', 'Open Plugins', 'install configure logs reload'],
+      ['logs', 'Open Audit Logs', 'audit export retention']
+    ].forEach(([tab, title, keywords]) => commands.push(adminTabCommand(tab, title, keywords)));
+    commands.push(
+      { id: 'backup:export', title: 'Export config backup', subtitle: 'Downloads portable backup JSON', group: 'Admin', shortcut: 'Backup', keywords: 'download backup config', run: exportConfigBackup },
+      { id: 'logs:open', title: 'Jump to audit logs', subtitle: 'Admin logs tab', group: 'Admin', shortcut: 'Logs', keywords: 'audit management events', run: () => openAdminTab('logs') },
+      { id: 'logs:export', title: 'Export audit logs', subtitle: 'Downloads audit log JSON', group: 'Admin', shortcut: 'Export', keywords: 'audit logs download', run: exportAuditLogs }
+    );
+    (state.admin.plugins || []).forEach((plugin) => {
+      commands.push(
+        { id: `plugin:${plugin.id}:settings`, title: `Open ${plugin.name} settings`, subtitle: 'Plugin configuration', group: 'Plugins', shortcut: 'Settings', keywords: [plugin.id, plugin.name, plugin.sourceUrl].join(' '), run: () => openPluginSettings(plugin.id) },
+        { id: `plugin:${plugin.id}:logs`, title: `Open ${plugin.name} logs`, subtitle: 'Plugin log entries', group: 'Plugins', shortcut: 'Logs', keywords: [plugin.id, plugin.name, 'logs'].join(' '), run: () => openPluginLogs(plugin.id) }
+      );
+    });
+  }
+  commands.push(
+    { id: 'docs:readme', title: 'Open README', subtitle: 'Project capabilities and usage', group: 'Docs', shortcut: 'Docs', keywords: 'documentation capabilities', run: () => window.open('https://github.com/TMASoft/home-lab-launcher#readme', '_blank', 'noopener,noreferrer') },
+    { id: 'docs:deployment', title: 'Open deployment docs', subtitle: 'Install and hardening guide', group: 'Docs', shortcut: 'Docs', keywords: 'docker nginx caddy install', run: () => window.open('https://github.com/TMASoft/home-lab-launcher/blob/main/docs/deployment.md', '_blank', 'noopener,noreferrer') },
+    { id: 'docs:plugins', title: 'Open plugin docs', subtitle: 'Plugin install and extension points', group: 'Docs', shortcut: 'Docs', keywords: 'plugins manifest trusted', run: () => window.open('https://github.com/TMASoft/home-lab-launcher/blob/main/docs/plugins.md', '_blank', 'noopener,noreferrer') }
+  );
+  return commands;
+}
+
+function filteredCommands() {
+  const q = state.commandPalette.query.trim().toLowerCase();
+  const commands = buildCommandPaletteCommands();
+  if (!q) return commands.slice(0, 80);
+  return commands.filter((command) => commandSearchText(command).includes(q)).slice(0, 80);
+}
+
+function renderCommandPaletteResults() {
+  const results = $('command-palette-results');
+  if (!results) return;
+  const commands = filteredCommands();
+  state.commandPalette.selected = Math.min(state.commandPalette.selected, Math.max(commands.length - 1, 0));
+  
+  if (!commands.length) {
+    results.innerHTML = '<div class="command-empty" role="status">No matching commands</div>';
+    $('command-palette-input')?.setAttribute('aria-activedescendant', '');
+    return;
+  }
+  
+  results.innerHTML = commands.map((command, index) => {
+    const activeClass = index === state.commandPalette.selected ? 'active' : '';
+    const ariaSelected = index === state.commandPalette.selected ? 'true' : 'false';
+    return `<button id="command-result-${index}" class="command-result ${activeClass}" type="button" role="option" tabindex="-1" aria-selected="${ariaSelected}" data-command-index="${index}"><span><strong>${escapeHtml(command.title)}</strong><small>${escapeHtml(command.subtitle || command.group || '')}</small></span><kbd>${escapeHtml(command.shortcut || command.group || '')}</kbd></button>`;
+  }).join('');
+
+  updateCommandPaletteHighlight();
+}
+
+function updateCommandPaletteHighlight() {
+  const results = $('command-palette-results');
+  if (!results) return;
+  const buttons = results.querySelectorAll('.command-result');
+  buttons.forEach((btn, index) => {
+    const active = index === state.commandPalette.selected;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  
+  const activeBtn = results.querySelector('.command-result.active');
+  if (activeBtn) {
+    activeBtn.scrollIntoView({ block: 'nearest' });
+    $('command-palette-input')?.setAttribute('aria-activedescendant', activeBtn.id);
+  } else {
+    $('command-palette-input')?.setAttribute('aria-activedescendant', '');
+  }
+}
+
+function openCommandPalette(initialQuery = '') {
+  state.commandPalette = {
+    open: true,
+    query: initialQuery,
+    selected: 0,
+    previousFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null
+  };
+  const palette = $('command-palette');
+  const input = $('command-palette-input');
+  palette.hidden = false;
+  input.value = initialQuery;
+  renderCommandPaletteResults();
+  requestAnimationFrame(() => input.focus({ preventScroll: true }));
+}
+
+function closeCommandPalette() {
+  state.commandPalette.open = false;
+  $('command-palette').hidden = true;
+  const prev = state.commandPalette.previousFocus;
+  if (prev && document.body.contains(prev)) {
+    prev.focus({ preventScroll: true });
+  } else {
+    $('command-palette-button')?.focus({ preventScroll: true });
+  }
+}
+
+async function runSelectedCommand(index = state.commandPalette.selected) {
+  const command = filteredCommands()[index];
+  if (!command) return;
+  closeCommandPalette();
+  try {
+    await command.run();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
+async function runServiceHealthCheck(serviceId) {
+  const result = await api(`/api/services/${serviceId}/check`, { method: 'POST' });
+  await loadServices();
+  renderServices();
+  const status = result.health?.status;
+  toast(status === 'up' ? 'Health check passed' : status === 'down' ? `Health check failed${result.health?.error ? `: ${result.health.error}` : ''}` : 'Health check complete');
+}
+
+async function openAdminTab(tab) {
+  if (!isAdmin()) return;
+  location.hash = 'admin-panel';
+  state.adminTab = tab;
+  if (!state.admin.overview) await loadAdminData();
+  renderAdminConsole();
+  $('admin-panel')?.scrollIntoView({ block: 'start' });
+}
+
+async function exportConfigBackup() {
+  const data = await api('/api/admin/backup');
+  downloadJson(`home-lab-launcher-backup-${new Date().toISOString().slice(0, 10)}.json`, data);
+}
+
+async function exportAuditLogs() {
+  const data = await api('/api/admin/logs/export');
+  downloadJson(`home-lab-launcher-logs-${new Date().toISOString().slice(0, 10)}.json`, data);
+}
+
+async function openPluginSettings(pluginId) {
+  await openAdminTab('plugins');
+  document.querySelector(`[data-plugin-row="${CSS.escape(pluginId)}"]`)?.scrollIntoView({ block: 'center' });
+}
+
+async function openPluginLogs(pluginId) {
+  const data = await api(`/api/plugins/${pluginId}/logs`);
+  openModal(`<h2>Plugin logs: ${escapeHtml(pluginId)}</h2><div class="log-list">${data.logs.map((l) => `<article class="log-item"><strong>${escapeHtml(l.action)}</strong><span>${escapeHtml(l.level)} · ${new Date(l.createdAt).toLocaleString()}</span><code>${escapeHtml(JSON.stringify(l.details || {}))}</code></article>`).join('') || '<p>No plugin logs yet.</p>'}</div>`);
 }
 
 function sortServices(services) {
@@ -476,13 +730,7 @@ $('service-grid').addEventListener('click', async (e) => {
   if (fav) { const id = fav.dataset.fav; state.favorites = state.favorites.includes(id) ? state.favorites.filter((x) => x !== id) : [id, ...state.favorites]; await saveFavorites(); renderServices(); }
   if (edit) showServiceModal(state.services.find((s) => s.id === edit.dataset.edit));
   if (check) {
-    const result = await api(`/api/services/${check.dataset.checkService}/check`, { method: 'POST' });
-    const service = state.services.find((s) => s.id === check.dataset.checkService);
-    if (service) service.health = result.health;
-    await loadServices();
-    renderServices();
-    const status = result.health?.status;
-    toast(status === 'up' ? 'Health check passed' : status === 'down' ? `Health check failed${result.health?.error ? `: ${result.health.error}` : ''}` : 'Health check complete');
+    await runServiceHealthCheck(check.dataset.checkService);
   }
   if (del) {
     const service = state.services.find((s) => s.id === del.dataset.delete);
@@ -560,6 +808,66 @@ async function persistServiceOrder() {
 $('services-empty').addEventListener('click', (event) => { if (event.target.closest('[data-empty-add-service]')) showServiceModal(); });
 $('add-service-button').addEventListener('click', () => showServiceModal());
 $('add-service-shortcut-button').addEventListener('click', () => showServiceModal());
+$('command-palette-button').addEventListener('click', () => openCommandPalette());
+$('command-palette-input').addEventListener('input', (event) => {
+  state.commandPalette.query = event.target.value;
+  state.commandPalette.selected = 0;
+  renderCommandPaletteResults();
+});
+$('command-palette-input').addEventListener('keydown', (event) => {
+  const commands = filteredCommands();
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    state.commandPalette.selected = commands.length ? (state.commandPalette.selected + 1) % commands.length : 0;
+    updateCommandPaletteHighlight();
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    state.commandPalette.selected = commands.length ? (state.commandPalette.selected - 1 + commands.length) % commands.length : 0;
+    updateCommandPaletteHighlight();
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    runSelectedCommand();
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeCommandPalette();
+  }
+  if (event.key === 'Tab') {
+    event.preventDefault();
+  }
+});
+$('command-palette-results').addEventListener('mousemove', (event) => {
+  const button = event.target.closest('[data-command-index]');
+  if (!button) return;
+  const next = Number(button.dataset.commandIndex);
+  if (state.commandPalette.selected === next) return;
+  state.commandPalette.selected = next;
+  updateCommandPaletteHighlight();
+});
+$('command-palette-results').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-command-index]');
+  if (button) runSelectedCommand(Number(button.dataset.commandIndex));
+});
+$('command-palette').addEventListener('mousedown', (event) => {
+  if (event.target.id === 'command-palette') closeCommandPalette();
+});
+document.addEventListener('keydown', (event) => {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+    event.preventDefault();
+    state.commandPalette.open ? closeCommandPalette() : openCommandPalette();
+    return;
+  }
+  if (event.key === '/' && !state.commandPalette.open && !isTypingTarget(event.target)) {
+    event.preventDefault();
+    $('service-search')?.focus();
+  }
+  if (event.key === 'Escape' && state.commandPalette.open) {
+    event.preventDefault();
+    closeCommandPalette();
+  }
+});
 $('login-button').addEventListener('click', showLoginModal);
 $('session-button').addEventListener('click', () => { const dd = $('user-dropdown'); const open = dd.hidden; dd.hidden = !open; $('session-button').setAttribute('aria-expanded', String(open)); });
 $('user-dropdown').addEventListener('click', async (event) => {

@@ -36,6 +36,60 @@ Current behavior:
 - Plugins are enabled/disabled/reloaded from the Admin console.
 - Plugins are not sandboxed.
 
+## Plugin catalog
+
+Admin → Plugins includes a curated catalog so operators can discover plugins without pasting GitHub URLs. The catalog is a static JSON file fetched from the official plugins repository (override with the `PLUGIN_CATALOG_URL` environment variable; default `https://raw.githubusercontent.com/TMASoft/home-lab-launcher-plugins/main/catalog.json`).
+
+The catalog improves discovery and review — it does **not** change the trust model. Catalog installs go through the exact same pinned GitHub install path as manual URL installs: version discovery from releases/tags, explicit version pinning, archive safety checks, optional SHA-256 verification, and the explicit trust acknowledgement. Manual GitHub URL installs remain fully supported for plugins that are not in the catalog.
+
+Behavior:
+
+- The catalog is Admin-only and cached server-side for 15 minutes; **Refresh catalog** forces a remote fetch.
+- Entries are annotated with launcher API compatibility and installed-plugin state (matched by manifest id, with a repo-URL fallback), so admins can compare declared permissions and compatibility before installing.
+- Remote catalog fetches and failures are audit-logged (`plugin_catalog.fetched`, `plugin_catalog.fetch_failed`). Installs from the catalog record the catalog entry id in the existing `plugin.installed` audit event.
+- Catalog fetch failures never affect installed plugins: the last cached catalog is served (marked stale), and with no cache the catalog list is simply empty.
+- When a catalog entry provides a SHA-256 for the selected version, the install dialog prefills it; mismatches fail before extraction.
+
+### Catalog metadata format
+
+```json
+{
+  "format": "home-lab-launcher-plugin-catalog-v1",
+  "updatedAt": "2026-07-06",
+  "plugins": [
+    {
+      "id": "hll-weather",
+      "name": "HLL Weather",
+      "description": "Weather forecast dashboard section powered by Open-Meteo.",
+      "repo": "https://github.com/TMASoft/hll-weather",
+      "homepage": "https://github.com/TMASoft/hll-weather#readme",
+      "trust": "official",
+      "launcherApiVersion": 1,
+      "latestVersion": "v0.3.0",
+      "permissions": ["routes", "storage", "jobs", "dashboard-section"],
+      "tags": ["weather", "dashboard"],
+      "sha256": { "v0.3.0": "<64-hex sha-256 of the release tarball>" }
+    }
+  ]
+}
+```
+
+| Field | Required | Description |
+| --- | --- | --- |
+| `id` | Yes | Must equal the plugin's manifest `id` so installed plugins can be matched to catalog entries. |
+| `name` | Yes | Display name. |
+| `description` | Yes | Short description shown in the catalog. |
+| `repo` | Yes | GitHub repository URL or `owner/repo` shorthand. |
+| `homepage` | Optional | Documentation link (http/https). |
+| `trust` | Optional | `official` or `community` (default). Curation metadata only — catalog plugins are still trusted server-side code. |
+| `launcherApiVersion` | Optional | Launcher plugin API version the plugin targets. Default `1`. Entries requiring a newer API are shown but cannot be installed from the catalog. |
+| `latestVersion` | Optional | Latest published release/tag, used as an update hint next to installed versions. Real versions are always discovered live from GitHub. |
+| `permissions` | Optional | Declared capability tokens, mirrored from the plugin manifest. |
+| `tags` | Optional | Search keywords. |
+| `sha256` | Optional | Map of version → expected tarball SHA-256. GitHub does not guarantee stable archive bytes forever, so hashes are optional; a mismatch fails the install rather than proceeding. |
+
+Invalid entries (bad id, missing name, non-GitHub repo, duplicate id) are skipped and reported as warnings; the rest of the catalog still loads.
+
 ## Plugin layout
 
 A plugin repository should look like this:
@@ -267,23 +321,25 @@ In production, local path installs are blocked unless `ENABLE_LOCAL_PLUGIN_INSTA
 5. Discover versions.
 6. Select the release/tag and install.
 
-## Example: News Reader
+To appear in the curated catalog, propose an entry for your plugin in [`catalog.json`](https://github.com/TMASoft/home-lab-launcher-plugins/blob/main/catalog.json) in the plugins repository (see the catalog metadata format above).
 
-The first plugin project is stored separately at:
+## Example plugins
+
+The official plugins each live in their own repository and are listed in the catalog:
 
 ```text
-https://github.com/TMASoft/home-lab-launcher-plugins/tree/main/uptime-kuma
+https://github.com/TMASoft/hll-weather
+https://github.com/TMASoft/hll-uptime-kuma
+https://github.com/TMASoft/hll-miniflux
 ```
 
-It demonstrates:
+Together they demonstrate:
 
-- plugin manifest metadata,
+- plugin manifest metadata and config scopes,
 - SQLite plugin tables,
-- RSS fetching/parsing,
-- an API under `/api/plugins/news`,
-- a dashboard section,
-- a scheduled refresh job,
-- feed/folder management UI,
-- per-feed refresh status,
-- item cleanup/retention, and
-- OPML import/export.
+- HTTP/RSS fetching and parsing,
+- APIs under `/api/plugins/:pluginId`,
+- dashboard sections with per-user preferences,
+- scheduled refresh jobs,
+- persistent caching for offline fallback, and
+- responsive plugin layout conventions.

@@ -9,7 +9,7 @@ function renderAdminConsole() {
   });
   const content = $('admin-content');
   if (!state.admin.overview) { content.innerHTML = '<p>Loading admin console…</p>'; return; }
-  const renderers = { overview: adminOverviewHtml, settings: adminSettingsHtml, appearance: adminAppearanceHtml, services: adminServicesHtml, users: adminUsersHtml, security: adminSecurityHtml, backups: adminBackupsHtml, plugins: adminPluginsHtml, logs: adminLogsHtml };
+  const renderers = { overview: adminOverviewHtml, settings: adminSettingsHtml, appearance: adminAppearanceHtml, services: adminServicesHtml, discovery: adminDiscoveryHtml, users: adminUsersHtml, security: adminSecurityHtml, backups: adminBackupsHtml, plugins: adminPluginsHtml, logs: adminLogsHtml };
   content.innerHTML = renderers[state.adminTab]();
   bindAdminTabHandlers();
 }
@@ -217,6 +217,9 @@ function adminPluginsHtml() {
     return `<div class="plugin-row plugin-row-expanded" data-plugin-row="${escapeHtml(p.id)}"><div><strong>${escapeHtml(p.name)}</strong><br><small>${escapeHtml(p.sourceType)} · ${escapeHtml(p.sourceUrl)} · ${escapeHtml(p.version)} · ${escapeHtml(p.lifecycle || (p.enabled ? 'enabled' : 'disabled'))}</small><div class="service-meta">${compat}${update}<span class="status-badge">hash ${escapeHtml((p.installedHash || 'none').slice(0, 12))}</span></div><div class="tags">${permissions}</div>${p.lastError ? `<code>${escapeHtml(p.lastError)}</code>` : ''}</div><div class="service-row-actions"><button class="ghost" data-plugin-toggle="${escapeHtml(p.id)}" data-enabled="${p.enabled}" type="button">${p.enabled ? 'Disable' : 'Enable'}</button><button class="ghost" data-plugin-logs="${escapeHtml(p.id)}" type="button">Logs</button>${p.sourceType === 'github' ? `<button class="ghost" data-plugin-update="${escapeHtml(p.id)}" data-source="${escapeHtml(p.sourceUrl)}" type="button">Discover update</button>` : `<button class="ghost" data-plugin-reload-local="${escapeHtml(p.id)}" type="button">Reload</button>`}<button class="ghost danger" data-plugin-delete="${escapeHtml(p.id)}" type="button">Remove</button></div><div class="plugin-config"><h4>Configuration</h4><div class="form-grid" data-plugin-config="${escapeHtml(p.id)}">${renderConfigFields(p)}<button class="ghost" data-plugin-save-config="${escapeHtml(p.id)}" type="button">Save plugin config</button></div></div></div>`;
   }).join('') || '<p>No plugins installed.</p>';
   return `<div class="settings-card"><div class="inline-between"><h3>Plugin manager</h3><button class="ghost" id="plugins-reload" type="button">Reload plugins</button></div><div class="callout warning"><strong>Trusted code boundary</strong><p>Plugins are trusted code and can run server-side. Install or update plugins only from authors and commits you trust.</p><label class="check-line"><input id="plugin-trust-confirm" type="checkbox"> I understand plugins can run server-side code.</label></div>${rows}
+    <div class="inline-between"><h3>Plugin catalog</h3><button class="ghost" id="plugin-catalog-refresh" type="button">Refresh catalog</button></div>
+    <p>Curated plugins with declared permissions and compatibility. Catalog installs pin the exact version you pick and require the same trust confirmation as manual installs — catalog plugins are still trusted server-side code, not sandboxed.</p>
+    <div id="plugin-catalog-list"><p>Loading plugin catalog…</p></div>
     <h3>Install from GitHub</h3><div class="field"><label>Repository URL</label><input id="plugin-repo" placeholder="https://github.com/owner/repo"></div><div class="field"><label>Expected SHA-256 checksum (optional)</label><input id="plugin-expected-sha256" placeholder="64 hex characters from a trusted release note"><small>When provided, installation fails unless the downloaded archive matches exactly.</small></div><div class="inline-controls"><button class="ghost" id="plugin-discover" type="button">Discover versions</button><select id="plugin-version"></select><button class="primary" id="plugin-install" type="button">Install selected version</button></div><div id="plugin-release-notes" class="plugin-release-notes"></div>
     <h3>Local development plugin</h3><p id="local-plugin-help">Loading local plugin status…</p><div class="inline-controls"><input id="plugin-local-path" placeholder="/app/local-plugins/news"><button class="ghost" id="plugin-install-local" type="button">Install local plugin</button></div></div>`;
 }
@@ -231,6 +234,7 @@ function bindAdminTabHandlers() {
   if (state.adminTab === 'settings') bindSettingsHandlers();
   if (state.adminTab === 'appearance') bindAppearanceHandlers(content);
   if (state.adminTab === 'services') bindServiceToolHandlers();
+  if (state.adminTab === 'discovery') bindDiscoveryHandlers();
   if (state.adminTab === 'users') bindUserHandlers(content);
   if (state.adminTab === 'security') bindSecurityHandlers(content);
   if (state.adminTab === 'backups') bindBackupHandlers();
@@ -316,6 +320,135 @@ function bindServiceAdminList() {
 function filterServiceAdminRows() {
   const q = formValue('admin-service-filter').toLowerCase();
   document.querySelectorAll('[data-service-row]').forEach((row) => { row.hidden = q && !row.dataset.serviceSearch.includes(q); });
+}
+
+function discoveryConflictHtml(candidate) {
+  if (!candidate.conflict) return '<span class="status-badge success">New</span>';
+  return `<span class="status-badge warning" title="Matched by ${escapeHtml(candidate.conflict.matchedBy)}">Matches “${escapeHtml(candidate.conflict.serviceName)}”</span>`;
+}
+function discoveryActionOptions(candidate) {
+  if (candidate.conflict) {
+    return `<option value="skip" selected>Skip</option><option value="update">Update “${escapeHtml(candidate.conflict.serviceName)}”</option><option value="create">Create duplicate</option>`;
+  }
+  return `<option value="create" ${candidate.url ? 'selected' : ''}>Create</option><option value="skip" ${candidate.url ? '' : 'selected'}>Skip</option>`;
+}
+function discoveryCandidateRow(candidate, index) {
+  const d = candidate.details || {};
+  const meta = [
+    candidate.source === 'docker' ? 'Docker' : 'Compose',
+    d.image,
+    d.project ? `project ${d.project}` : '',
+    d.container ? `container ${d.container}` : '',
+    d.state,
+    (d.ports || []).map((p) => `${p.published}→${p.target}`).join(', '),
+    d.urlSource && d.urlSource !== 'none' ? `URL from ${d.urlSource}` : ''
+  ].filter(Boolean).join(' · ');
+  const warnings = (candidate.warnings || []).map((w) => `<small class="discovery-warning">⚠ ${escapeHtml(w)}</small>`).join('');
+  return `<article class="discovery-row" data-discovery-row="${index}">
+    <div class="discovery-row-grid">
+      <div class="field"><label>Action</label><select data-discovery-action>${discoveryActionOptions(candidate)}</select></div>
+      <div class="field"><label>Name</label><input data-discovery-name value="${escapeHtml(candidate.name)}" maxlength="120"></div>
+      <div class="field discovery-url-field"><label>URL</label><input data-discovery-url value="${escapeHtml(candidate.url)}" placeholder="https://service.example.com"></div>
+      <div class="field"><label>Category</label><input data-discovery-category value="${escapeHtml(candidate.category)}" maxlength="80"></div>
+      <div class="field"><label>Icon</label><input data-discovery-icon value="${escapeHtml(candidate.icon)}" maxlength="80"></div>
+    </div>
+    <div class="discovery-row-meta">${discoveryConflictHtml(candidate)}<small>${escapeHtml(meta)}</small>${candidate.tags?.length ? `<div class="tags">${candidate.tags.map((t) => `<span class="tag">${escapeHtml(t)}</span>`).join('')}</div>` : ''}${warnings}</div>
+  </article>`;
+}
+function adminDiscoveryHtml() {
+  const status = state.admin.discoveryStatus || {};
+  const discovery = state.admin.discovery;
+  const endpointKindNote = status.dockerConfigured
+    ? (status.dockerEndpointKind === 'http' ? 'Configured via socket proxy / HTTP endpoint.' : 'Configured via unix socket path. A read-only socket proxy is the safer option.')
+    : 'Not configured. Discovery never mounts or assumes the Docker socket by default.';
+  const resultsHtml = discovery ? `<div class="settings-card"><div class="inline-between"><h3>Review candidates (${discovery.candidates.length})</h3><div class="inline-controls"><button class="ghost" id="discovery-clear" type="button">Clear results</button><button class="primary" id="discovery-apply" type="button">Import selected</button></div></div>
+    <p>Source: ${escapeHtml(discovery.source)} · scanned ${new Date(discovery.scannedAt).toLocaleString()}${discovery.counts?.ignored ? ` · ${escapeHtml(discovery.counts.ignored)} opted out via label` : ''}${discovery.counts?.truncated ? ` · ${escapeHtml(discovery.counts.truncated)} beyond the scan limit were left out` : ''}. Review and edit each candidate, then import. Nothing changes until you import. Environment values and secret-like labels are never read or shown.</p>
+    <div id="discovery-apply-result"></div>
+    <div class="discovery-list">${discovery.candidates.map(discoveryCandidateRow).join('') || '<p>No importable services were found.</p>'}</div></div>` : '';
+  return `<div class="admin-stack">
+    <div class="settings-card"><h3>Docker discovery</h3>
+      <p>Scan running containers for launchpad candidates using Compose, Traefik, and homepage-style labels. Point this at a <strong>read-only Docker socket proxy</strong> (recommended) or a unix socket path. ${escapeHtml(endpointKindNote)}</p>
+      <div class="form-grid"><div class="row"><div class="field"><label>Docker endpoint</label><input id="discovery-docker-endpoint" value="${escapeHtml(status.dockerEndpoint || '')}" placeholder="http://docker-socket-proxy:2375 or /var/run/docker.sock"><small>Stored in the database, never in YAML. Leave empty to disable Docker discovery.</small></div><div class="field"><label>Default URL host (optional)</label><input id="discovery-default-host" placeholder="server.lan"><small>Used to build URL guesses from published ports when no label or Traefik rule provides one.</small></div></div></div>
+      <div class="inline-controls"><button class="ghost" id="discovery-save-endpoint" type="button">Save endpoint</button><button class="primary" id="discovery-docker-scan" type="button" ${status.dockerConfigured ? '' : 'disabled'}>Scan Docker</button><span id="discovery-scan-status" class="test-result"></span></div></div>
+    <div class="settings-card"><h3>Compose import</h3>
+      <p>Paste docker-compose YAML to preview importable services. The YAML is treated as untrusted text: it is parsed with a strict schema, never executed, and environment values, env files, and secrets sections are never read.</p>
+      <div class="field"><label>Compose YAML</label><textarea id="discovery-compose-yaml" rows="10" placeholder="services:&#10;  jellyfin:&#10;    image: jellyfin/jellyfin&#10;    ports:&#10;      - 8096:8096">${escapeHtml(state.admin.discoveryComposeYaml || '')}</textarea><small>Up to 512 KiB. Add a <code>home-lab-launcher.ignore: "true"</code> label to exclude a service.</small></div>
+      <div class="inline-controls"><button class="primary" id="discovery-compose-preview" type="button">Preview candidates</button></div></div>
+    ${resultsHtml}
+  </div>`;
+}
+function readDiscoverySelections() {
+  const discovery = state.admin.discovery;
+  if (!discovery) return [];
+  const items = [];
+  document.querySelectorAll('[data-discovery-row]').forEach((row) => {
+    const candidate = discovery.candidates[Number(row.dataset.discoveryRow)];
+    if (!candidate) return;
+    const action = row.querySelector('[data-discovery-action]')?.value || 'skip';
+    if (action === 'skip') return;
+    items.push({
+      key: candidate.key,
+      source: candidate.source,
+      action,
+      targetId: action === 'update' ? candidate.conflict?.serviceId : undefined,
+      service: {
+        name: row.querySelector('[data-discovery-name]')?.value?.trim() || candidate.name,
+        url: row.querySelector('[data-discovery-url]')?.value?.trim() || candidate.url,
+        category: row.querySelector('[data-discovery-category]')?.value?.trim() || candidate.category,
+        icon: row.querySelector('[data-discovery-icon]')?.value?.trim() || candidate.icon,
+        description: candidate.description,
+        tags: candidate.tags || []
+      }
+    });
+  });
+  return items;
+}
+function bindDiscoveryHandlers() {
+  $('discovery-save-endpoint')?.addEventListener('click', async () => {
+    try {
+      await api('/api/settings', { method: 'PATCH', body: JSON.stringify({ discovery_docker_endpoint: formValue('discovery-docker-endpoint') }) });
+      state.admin.discoveryStatus = await api('/api/discovery/status');
+      renderAdminConsole(); toast('Discovery endpoint saved');
+    } catch (error) { toast(error.message); }
+  });
+  $('discovery-docker-scan')?.addEventListener('click', async () => {
+    const statusEl = $('discovery-scan-status');
+    const button = $('discovery-docker-scan');
+    button.disabled = true;
+    if (statusEl) statusEl.textContent = 'Scanning…';
+    try {
+      state.admin.discovery = await api('/api/discovery/docker/scan', { method: 'POST', body: JSON.stringify({ defaultHost: formValue('discovery-default-host') }) });
+      renderAdminConsole();
+    } catch (error) {
+      button.disabled = false;
+      if (statusEl) statusEl.textContent = '';
+      toast(error.message);
+    }
+  });
+  $('discovery-compose-preview')?.addEventListener('click', async () => {
+    state.admin.discoveryComposeYaml = $('discovery-compose-yaml')?.value || '';
+    try {
+      state.admin.discovery = await api('/api/discovery/compose/preview', { method: 'POST', body: JSON.stringify({ yaml: state.admin.discoveryComposeYaml, defaultHost: formValue('discovery-default-host') }) });
+      renderAdminConsole();
+    } catch (error) { toast(error.message); }
+  });
+  $('discovery-clear')?.addEventListener('click', () => { state.admin.discovery = null; renderAdminConsole(); });
+  $('discovery-apply')?.addEventListener('click', async () => {
+    const items = readDiscoverySelections();
+    if (!items.length) return toast('Set at least one candidate to create or update');
+    if (!confirm(`Import ${items.length} service${items.length === 1 ? '' : 's'} into the launchpad?`)) return;
+    try {
+      const result = await api('/api/discovery/apply', { method: 'POST', body: JSON.stringify({ items }) });
+      const failures = (result.results || []).filter((r) => !r.ok);
+      const appliedKeys = new Set((result.results || []).filter((r) => r.ok && r.action !== 'skip').map((r) => r.key));
+      state.admin.discovery.candidates = state.admin.discovery.candidates.filter((c) => !appliedKeys.has(c.key));
+      await Promise.all([loadServices(), loadAdminData()]);
+      render();
+      toast(`Imported: ${result.summary.created} created, ${result.summary.updated} updated${result.summary.failed ? `, ${result.summary.failed} failed` : ''}`);
+      const resultEl = $('discovery-apply-result');
+      if (resultEl && failures.length) resultEl.innerHTML = `<div class="callout warning"><strong>Some imports failed</strong><ul>${failures.map((f) => `<li>${escapeHtml(f.key || 'candidate')}: ${escapeHtml(f.error || 'unknown error')}</li>`).join('')}</ul></div>`;
+    } catch (error) { toast(error.message); }
+  });
 }
 
 function bindSecurityHandlers(content) {
@@ -759,8 +892,80 @@ function readPluginConfig(id) {
   });
   return config;
 }
+function pluginCatalogEntryHtml(entry) {
+  const trust = entry.trust === 'official' ? '<span class="status-badge success">Official</span>' : '<span class="status-badge">Community</span>';
+  const compat = entry.compatibility?.compatible ? '<span class="status-badge success">Compatible</span>' : `<span class="status-badge danger">${escapeHtml(entry.compatibility?.error || 'Incompatible')}</span>`;
+  const installed = entry.installed ? `<span class="status-badge">Installed ${escapeHtml(entry.installed.version)}</span>${entry.installed.updateHint && entry.latestVersion ? `<span class="status-badge warning">Catalog lists ${escapeHtml(entry.latestVersion)}</span>` : ''}` : '';
+  const permissions = (entry.permissions || []).map((perm) => `<span class="tag">${escapeHtml(perm)}</span>`).join('');
+  const links = `<a href="${escapeHtml(entry.repo)}" target="_blank" rel="noopener noreferrer">Repository</a>${entry.homepage ? ` · <a href="${escapeHtml(entry.homepage)}" target="_blank" rel="noopener noreferrer">Docs</a>` : ''}`;
+  return `<div class="plugin-row" data-catalog-entry="${escapeHtml(entry.id)}"><div><strong>${escapeHtml(entry.name)}</strong>${entry.latestVersion ? ` <small>${escapeHtml(entry.latestVersion)}</small>` : ''}<br><small>${escapeHtml(entry.description)}</small><div class="service-meta">${trust}${compat}${installed}</div><div class="tags">${permissions}</div><small>${links}</small></div><div class="service-row-actions"><button class="ghost" data-catalog-install="${escapeHtml(entry.id)}" type="button" ${entry.compatibility?.compatible ? '' : 'disabled'}>${entry.installed ? 'Install another version' : 'Choose version & install'}</button></div></div>`;
+}
+async function openCatalogInstallModal(entry) {
+  let data;
+  try {
+    data = await api(`/api/plugin-sources/github/versions?repo=${encodeURIComponent(entry.repo)}`);
+  } catch (error) {
+    return toast(error.message);
+  }
+  if (!data.versions.length) return toast('No releases or tags found for this plugin');
+  openModal(`<h2>Install ${escapeHtml(entry.name)}</h2><p>${escapeHtml(entry.description)}</p>
+    <p><strong>Declared permissions:</strong></p><div class="tags">${(entry.permissions || []).map((perm) => `<span class="tag">${escapeHtml(perm)}</span>`).join('') || '<span class="tag">none declared</span>'}</div>
+    <div class="callout warning"><strong>Trusted code boundary</strong><p>This plugin runs server-side with launcher privileges. The catalog curates metadata; it does not sandbox code.</p><label class="check-line"><input id="catalog-trust-confirm" type="checkbox"> I understand this plugin runs trusted server-side code.</label></div>
+    <div class="field"><label>Version to pin</label><select id="catalog-version">${data.versions.map((v) => `<option value="${escapeHtml(v.version)}" data-notes="${escapeHtml(v.body || '')}">${escapeHtml(v.version)} (${escapeHtml(v.type)})</option>`).join('')}</select></div>
+    <div id="catalog-release-notes" class="plugin-release-notes"></div>
+    <div class="field"><label>Expected SHA-256 checksum (optional)</label><input id="catalog-expected-sha256"><small>Prefilled from the catalog when available. Installation fails on mismatch.</small></div>
+    <button class="primary" id="catalog-install-confirm" type="button">Install pinned version</button>`);
+  const syncVersionDetails = () => {
+    const option = $('catalog-version').selectedOptions[0];
+    $('catalog-release-notes').innerHTML = option ? `<pre class="release-notes">${escapeHtml((option.dataset.notes || 'No release notes available.').slice(0, 2000))}</pre>` : '';
+    $('catalog-expected-sha256').value = (entry.sha256 || {})[option?.value] || '';
+  };
+  syncVersionDetails();
+  $('catalog-version').addEventListener('change', syncVersionDetails);
+  $('catalog-install-confirm').addEventListener('click', async () => {
+    if (!$('catalog-trust-confirm').checked) return toast('Confirm the plugin trust boundary before installing');
+    const button = $('catalog-install-confirm');
+    try {
+      button.disabled = true;
+      button.textContent = 'Installing…';
+      await api('/api/plugins/install', { method: 'POST', body: JSON.stringify({ repoUrl: entry.repo, version: $('catalog-version').value, expectedSha256: formValue('catalog-expected-sha256'), trustConfirmed: true, catalogId: entry.id }) });
+      closeModal();
+      await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin installed from catalog');
+    } catch (error) {
+      toast(error.message);
+      if (button) { button.disabled = false; button.textContent = 'Install pinned version'; }
+    }
+  });
+}
+async function loadPluginCatalog(refresh = false) {
+  const list = $('plugin-catalog-list');
+  if (!list) return;
+  try {
+    const data = await api(`/api/plugin-catalog${refresh ? '?refresh=1' : ''}`);
+    const catalog = data.catalog;
+    state.admin.pluginCatalog = catalog;
+    const notice = catalog.error
+      ? `<div class="callout warning"><strong>Catalog fetch failed</strong><p>${escapeHtml(catalog.error)}${catalog.stale ? ` Showing the cached catalog from ${new Date(catalog.fetchedAt).toLocaleString()}.` : ' Installed plugins are unaffected; manual GitHub installs still work.'}</p></div>`
+      : '';
+    list.innerHTML = `${notice}${catalog.entries.map(pluginCatalogEntryHtml).join('') || (catalog.error ? '' : '<p>The catalog is empty.</p>')}`;
+    list.querySelectorAll('[data-catalog-install]').forEach((button) => button.addEventListener('click', () => {
+      const entry = (state.admin.pluginCatalog?.entries || []).find((item) => item.id === button.dataset.catalogInstall);
+      if (entry) openCatalogInstallModal(entry);
+    }));
+  } catch (error) {
+    list.innerHTML = `<p>Could not load the plugin catalog: ${escapeHtml(error.message)}</p>`;
+  }
+}
 function bindPluginHandlers(content) {
   $('plugins-reload')?.addEventListener('click', async () => { await api('/api/plugins/reload', { method: 'POST' }); await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugins reloaded'); });
+  loadPluginCatalog();
+  $('plugin-catalog-refresh')?.addEventListener('click', async () => {
+    const button = $('plugin-catalog-refresh');
+    button.disabled = true;
+    await loadPluginCatalog(true);
+    button.disabled = false;
+    toast('Plugin catalog refreshed');
+  });
   content.querySelectorAll('[data-plugin-save-config]').forEach((button) => button.addEventListener('click', async () => {
     await api(`/api/plugins/${button.dataset.pluginSaveConfig}/config`, { method: 'PUT', body: JSON.stringify({ config: readPluginConfig(button.dataset.pluginSaveConfig) }) });
     await Promise.all([loadAdminData(), loadPluginSections()]); render(); toast('Plugin config saved');
