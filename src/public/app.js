@@ -1037,7 +1037,7 @@ function showServiceModal(s) {
 
 
 function showLoginModal() {
-  openModal(`<h2>Login</h2><div class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password"></div><div id="login-code-field" class="field" hidden><label id="login-code-label">2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric"><small><button class="link-button" id="login-use-recovery" type="button">Use a recovery code instead</button></small></div><div id="login-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="login-submit" type="button">Login</button></div>`);
+  openModal(`<h2>Login</h2><form id="login-form" class="form-grid"><div id="login-user-field" class="field"><label>Username</label><input id="login-username" autocomplete="username"></div><div id="login-pass-field" class="field"><label>Password</label><input id="login-password" type="password" autocomplete="current-password"></div><div id="login-code-field" class="field" hidden><label id="login-code-label">2FA Code</label><input id="login-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"><small><button class="link-button" id="login-use-recovery" type="button">Use a recovery code instead</button></small></div><div id="login-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" id="login-submit" type="submit">Login</button></form>`);
   let requiresTotp = false;
   let useRecoveryCode = false;
   $('login-use-recovery').onclick = () => {
@@ -1052,7 +1052,8 @@ function showLoginModal() {
     $('login-use-recovery').textContent = useRecoveryCode ? 'Use an authenticator code instead' : 'Use a recovery code instead';
     input.focus();
   };
-  $('login-submit').onclick = async () => {
+  $('login-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
     const username = formValue('login-username');
     const password = formValue('login-password');
     const codeValue = requiresTotp ? formValue('login-code') : '';
@@ -1084,7 +1085,7 @@ function showLoginModal() {
         toast(error.message);
       }
     }
-  };
+  });
 }
 function showBootstrapModal() {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -1093,9 +1094,10 @@ function showBootstrapModal() {
   let generatedSecret = '';
   for (let i = 0; i < bytes.length; i++) generatedSecret += alphabet[bytes[i] % 32];
   const formattedSecret = generatedSecret.match(/.{1,4}/g).join(' ');
-  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><div class="form-grid"><div class="field"><label>Username</label><input id="boot-username" autocomplete="username" minlength="3" required><small>Use at least 3 characters.</small></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters" autocomplete="new-password" minlength="10" required><small>Use at least 10 characters.</small></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app, then enter the current 6-digit code before creating the account:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"><small>Leave 2FA unchecked if you are not setting up an authenticator app now.</small></div></div><div id="boot-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="button">Create Admin</button></div>`);
+  openModal(`<h2>Create first Admin</h2><p>No users exist yet. Create the base Admin account to finish setup.</p><form id="boot-form" class="form-grid"><div class="field"><label>Username</label><input id="boot-username" autocomplete="username" minlength="3" required><small>Use at least 3 characters.</small></div><div class="field"><label>Password</label><input id="boot-password" type="password" placeholder="10+ characters" autocomplete="new-password" minlength="10" required><small>Use at least 10 characters.</small></div><label class="check-line"><input id="boot-enable-totp" type="checkbox"> Enable 2FA (TOTP) immediately</label><div id="boot-totp-setup" hidden class="settings-card" style="margin-top: 10px;"><p>Add this secret key to your authenticator app, then enter the current 6-digit code before creating the account:</p><p style="font-family: monospace; font-size: 1.25rem; font-weight: bold; text-align: center; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; letter-spacing: 2px;">${formattedSecret}</p><div class="field"><label>Enter the 6-digit code to verify</label><input id="boot-totp-code" type="text" placeholder="123456" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code"><small>Leave 2FA unchecked if you are not setting up an authenticator app now.</small></div></div><div id="boot-form-error" class="form-error-banner" style="display: none;"></div><button class="primary" style="margin-top: 15px;" id="boot-submit" type="submit">Create Admin</button></form>`);
   $('boot-enable-totp').addEventListener('change', (e) => { $('boot-totp-setup').hidden = !e.target.checked; });
-  $('boot-submit').onclick = async () => {
+  $('boot-form').addEventListener('submit', async (event) => {
+    event.preventDefault();
     const username = formValue('boot-username');
     const password = formValue('boot-password');
     const enableTotp = $('boot-enable-totp').checked;
@@ -1143,7 +1145,7 @@ function showBootstrapModal() {
         toast(error.message);
       }
     }
-  };
+  });
 }
 function showRecoveryCodesModal(codes, { onClose } = {}) {
   openModal(`<h2>Recovery codes</h2><p>Store these single-use backup codes somewhere safe (password manager or printout). Each code signs you in once in place of a 2FA code if you lose your authenticator.</p><p><strong>They are shown only this once and cannot be retrieved later.</strong></p><div class="recovery-codes">${codes.map((code) => `<code>${escapeHtml(code)}</code>`).join('')}</div><div class="inline-controls" style="margin-top: 12px;"><button class="ghost" id="copy-recovery-codes" type="button">Copy all</button><button class="ghost" id="download-recovery-codes" type="button">Download .txt</button><button class="primary" id="recovery-codes-done" type="button">I saved them</button></div>`);

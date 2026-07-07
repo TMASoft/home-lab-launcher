@@ -85,7 +85,6 @@ function openModal(html) {
 }
 function closeModal() { if (modal.open) modal.close(); else restoreModalFocus(); }
 modal?.addEventListener('close', restoreModalFocus);
-modal?.querySelector('form')?.addEventListener('submit', (event) => event.preventDefault());
 modal?.querySelector('.close')?.addEventListener('click', (e) => {
   e.preventDefault();
   closeModal();

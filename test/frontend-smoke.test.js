@@ -25,7 +25,7 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
     assert.ok(js.includes(token), `missing ${token}`);
   }
   // v0.7.0 additions: recovery codes, API tokens, health webhook settings, uptime badges
-  for (const token of ['showRecoveryCodesModal(', 'recoveryCodesRemaining', '/api/me/totp/recovery-codes', 'login-use-recovery', 'recoveryCode', 'apiTokensCardHtml()', '/api/admin/api-tokens', 'data-api-token-revoke', 'admin-health-webhook', 'health_webhook_url', 'health_history_retention_days', 'serviceUptimeHtml(', 'uptime24h']) {
+  for (const token of ['showRecoveryCodesModal(', 'recoveryCodesRemaining', '/api/me/totp/recovery-codes', 'login-use-recovery', 'login-form', 'recoveryCode', 'apiTokensCardHtml()', '/api/admin/api-tokens', 'data-api-token-revoke', 'admin-health-webhook', 'health_webhook_url', 'health_history_retention_days', 'serviceUptimeHtml(', 'uptime24h']) {
     assert.ok(js.includes(token), `missing v0.7.0 token ${token}`);
   }
   const accessibilityTokens = [

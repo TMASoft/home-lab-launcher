@@ -4,6 +4,16 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.9.3] - 2026-07-07
+
+### Added
+
+- Added GitHub-rendered README screenshots for the launchpad, Admin overview, Appearance customization, user management, and plugin trust acknowledgement screens.
+
+### Fixed
+
+- Login and first-admin bootstrap modals now submit through real form handlers, so pressing Enter in modal fields triggers the same API flow as clicking the primary button instead of being swallowed by the dialog shell.
+
 ## [0.9.1] - 2026-07-06
 
 ### Added

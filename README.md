@@ -1,5 +1,3 @@
-<img width="621" height="285" alt="Screenshot_20260609_162805" src="https://github.com/user-attachments/assets/cb352b92-f7ed-4906-804b-2e817f378cf2" />
-
 ## This is very beta, use at your own risk, for real.
 
 # Home Lab Launcher
@@ -12,6 +10,8 @@ Home Lab Launcher is a small Docker-first web app for turning a home server, lab
 ![Node](https://img.shields.io/badge/node-22-79f2c0?style=flat-square)
 ![SQLite](https://img.shields.io/badge/storage-SQLite-4de7ff?style=flat-square)
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
+
+![Home Lab Launcher launchpad](docs/assets/launchpad.png)
 
 ## Highlights
 
@@ -40,6 +40,8 @@ The main page includes:
 The UI intentionally hides empty plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
 
 The launchpad and Admin console are responsive for phone and tablet use. On narrow screens, Admin tabs become a horizontal scroll menu, dialogs use the available viewport height, and long service URLs, plugin paths, and audit-log entries wrap instead of forcing page-wide scrolling.
+
+![Admin overview with readiness checks](docs/assets/admin-overview.png)
 
 ## Public beta quick start
 
@@ -99,8 +101,8 @@ Admin usernames must be at least 3 characters and passwords must be at least 10 
 For a tagged public release, prefer the official GHCR image and skip a local build:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.1 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.1 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.3 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.3 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -185,6 +187,8 @@ Supported image formats are JPEG, PNG, GIF, and WebP. Animated GIF/WebP files an
 
 Admins control the global look of the launcher from **Admin console → Appearance**. Basic Users keep personal launchpad preferences such as favorites, favorite order, view mode, sort mode, custom service order, and hidden categories, but cannot change the site-wide theme.
 
+![Appearance customization controls](docs/assets/appearance-customization.png)
+
 Appearance settings include:
 
 - site/app name, browser title, header brand text/subtitle, and initials fallback,
@@ -262,6 +266,10 @@ Logged-in Admins see an **Admin** link in the top navigation. The console includ
 - **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record a preferred backup path/operator note.
 - **Plugins** — browse the curated plugin catalog (trust status, declared permissions, compatibility, update hints), discover GitHub versions, install pinned plugin releases/tags from repository roots or plugin subdirectory tree URLs, enable/disable, and remove plugins.
 - **Logs** — filtered audit log entries for login, settings, user, service, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
+
+![User management screen](docs/assets/user-management.png)
+
+![Plugin install trust acknowledgement](docs/assets/plugin-trust.png)
 
 Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
 
@@ -408,7 +416,7 @@ This project is in early development. The core app is functional, but plugin API
 
 ## Screenshots
 
-Screenshots and GIFs should be added under `docs/assets/` before a formal tagged public release. Suggested captures are listed in `docs/assets/README.md`: launchpad, service edit, appearance customization, admin overview, and mobile view. Use `npm run dev:seed`; do not capture private hosts, personal plugin locations, local paths, or tokens.
+Release screenshots live under `docs/assets/` and are referenced directly from this README so they render on GitHub. Use `npm run dev:seed` before refreshing them; do not capture private hosts, personal plugin locations, local paths, or tokens.
 
 ## License
 
