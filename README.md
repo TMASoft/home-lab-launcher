@@ -1,87 +1,71 @@
-## This is very beta, use at your own risk, for real.
+<div align="center">
 
-# Home Lab Launcher
+# 🏠 Home Lab Launcher
 
-> A self-hosted, role-aware home portal for service links, user favorites, admin settings, and trusted plugin-powered dashboard sections.
+**One beautiful front door for everything running in your home lab.**
 
-Home Lab Launcher is a small Docker-first web app for turning a home server, lab, or private network into a polished launchpad. It starts simple with service cards and is designed to grow through installable plugins such as weather, RSS/news, status widgets, inventory panels, or custom household dashboards.
+A self-hosted, role-aware portal for your services — with favorites, health checks,
+service discovery, theming, and a trusted plugin system. Docker-first, SQLite-backed,
+no cloud required.
 
-![Status](https://img.shields.io/badge/status-public%20beta%20prep-ffd166?style=flat-square)
+![Status](https://img.shields.io/badge/status-public%20beta-ffd166?style=flat-square)
 ![Node](https://img.shields.io/badge/node-22-79f2c0?style=flat-square)
 ![SQLite](https://img.shields.io/badge/storage-SQLite-4de7ff?style=flat-square)
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-a0e8a0?style=flat-square)
+
+[Quick start](#quick-start) · [Features](#what-you-get) · [Plugins](#plugins) · [Deployment guide](docs/deployment.md) · [Plugin docs](docs/plugins.md) · [API](docs/api.md)
 
 ![Home Lab Launcher launchpad](docs/assets/launchpad.png)
 
-## Highlights
+</div>
 
-- **Configurable service launchpad** — add, edit, duplicate, delete, bulk manage, reorder, group, enable/disable, feature, tag, color, assign emoji/uploaded/downloaded image icons, and enable health checks from the UI.
-- **Keyboard command palette** — open services, copy links, toggle favorites, jump to admin areas, and run safe management actions with `Ctrl+K`/`Cmd+K`.
-- **Service discovery** — scan running containers via a Docker socket proxy or paste Compose YAML, review candidates with conflict detection, then import selected services; secrets and environment values are never read.
-- **Role-based access** — Admins, Editors, Basic Users, and optional anonymous read-only access.
-- **Personal favorites and layout** — logged-in users get saved favorites, favorite ordering, card/list/compact layout preferences, and hidden categories; anonymous users get browser-local preferences.
-- **Appearance and theme presets** — Admins can customize global branding, hero copy, colors, fonts, density, radius, favicons, and brand images, then export/import safe shareable theme JSON.
-- **Admin console** — manage users, services, app settings, health, effective config, backups/restores, plugins, and audit logs.
-- **Trusted plugin system** — browse a curated plugin catalog or install pinned plugin versions from GitHub releases/tags or plugin subdirectory tree URLs, review permissions/compatibility before installing, configure plugins from schemas, inspect plugin logs, and use local plugin development mode.
-- **HTTP or HTTPS** — run directly over HTTP or place behind Nginx, Caddy, Traefik, or another reverse proxy.
-- **Portable by default** — no baked-in domain names or home-lab-specific assumptions.
-- **Security foundations** — CSRF protection, login throttling, optional TOTP 2FA, secure headers, session revocation, audit logging, log retention, and admin notices.
+> [!WARNING]
+> Home Lab Launcher is in **public beta**. It works, we run it, but it's pre-1.0 — review the [security notes](#security) before exposing it beyond a private LAN, and back up your data volume before upgrading.
 
-## Screens and capabilities
+---
 
-The main page includes:
+## Why?
 
-- a service card grid,
-- quick favorites,
-- a signed-in user menu,
-- optional plugin sections that can be moved independently in the dashboard layout, and
-- an admin console visible only to Admins.
+If you run a home server, you know the drill: Jellyfin on one port, Home Assistant on another, Uptime Kuma somewhere, three things behind Traefik, and a browser bookmark folder that nobody else in the house can find.
 
-The UI intentionally hides empty plugin sections for regular and anonymous viewers, so the portal stays clean until plugins are installed.
+Home Lab Launcher turns that sprawl into a single polished launchpad:
 
-The launchpad and Admin console are responsive for phone and tablet use. On narrow screens, Admin tabs become a horizontal scroll menu, dialogs use the available viewport height, and long service URLs, plugin paths, and audit-log entries wrap instead of forcing page-wide scrolling.
-
-![Admin overview with readiness checks](docs/assets/admin-overview.png)
-
-## Public beta quick start
-
-This beta is intended for self-hosters who can manage a Docker Compose service and review security warnings before exposing it beyond a private LAN. After first login, open **Admin → Overview** and complete the beta readiness checklist.
-
-Home Lab Launcher is distributed as a Docker/GHCR application, not as an npm package. `package.json` remains marked `"private": true`; use npm scripts only for local development, validation, and CI.
+- **It's for the whole household, not just you.** Role-based access (Admin / Editor / Basic User / optional anonymous read-only) means your family gets a clean page of links while you keep the admin console to yourself.
+- **It fills itself in.** Point service discovery at a Docker socket proxy — or paste your Compose YAML — and import your running services instead of typing them out one by one.
+- **It tells you what's down.** Per-service HTTP health checks with uptime history and webhook notifications (ntfy, Gotify, and Discord work out of the box).
+- **It looks the way you want.** Full theming — branding, hero copy, colors, fonts, density — with exportable, safely shareable theme presets.
+- **It grows with your lab.** A trusted plugin system adds weather, RSS, status widgets, or your own custom dashboard sections.
+- **It stays portable.** One container, one SQLite database, one Docker volume. No baked-in domains, no external dependencies, easy to back up.
 
 ## Quick start
 
-### Installer quick start
-
-For a guided Docker Compose install that creates `docker-compose.yml` and `.env`, run the installer for your platform.
-
-Linux:
+The fastest path is the guided installer — it checks for Docker + Compose v2, prompts for the basics, generates `docker-compose.yml` and `.env`, and can start the launcher for you:
 
 ```bash
+# Linux
 curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/linux.sh | sh
-```
 
-macOS:
-
-```bash
+# macOS
 curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/install/macos.sh | sh
 ```
 
-The installer checks for Docker and Docker Compose v2, points you to the official Docker installation docs if either is missing, prompts for the basic deployment settings, validates the generated Compose config, and can start the launcher for you. It can also add a basic bundled Nginx reverse-proxy service when you do not already have Nginx, Caddy, Traefik, or another reverse proxy on the host. The bundled Nginx option is HTTP-only; put a TLS-capable proxy in front before exposing the launcher outside a private LAN. If you prefer to inspect the script first, download it and run it with `sh` instead of piping it directly to the shell.
+(Prefer to inspect scripts before running them? Good instinct — download it first and run it with `sh`.) The installer can also add a basic bundled Nginx reverse proxy if you don't already run one; that option is HTTP-only, so put a TLS-capable proxy in front before exposing the launcher beyond a private LAN.
 
-### 1. Clone and configure
+### Manual setup
+
+**1. Clone and configure**
 
 ```bash
-git clone https://github.com/YOUR-ORG/home-lab-launcher.git
+git clone https://github.com/TMASoft/home-lab-launcher.git
 cd home-lab-launcher
 cp .env.example .env
 ```
 
-Edit `.env` before first start. At minimum, set a strong session secret and make `APP_BASE_URL` match the URL users will open in a browser:
+Edit `.env` before first start — at minimum set a strong session secret and the URL users will open:
 
 ```bash
-# One portable way to generate a secret on most Linux/macOS hosts:
-openssl rand -hex 48
+openssl rand -hex 48   # generate a session secret
 ```
 
 ```env
@@ -89,57 +73,41 @@ SESSION_SECRET=replace-with-a-long-random-string
 APP_BASE_URL=http://localhost:8080
 ```
 
-Choose one first-admin setup path:
+**2. Start it**
 
-- **Browser setup, recommended for most installs:** leave `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` empty or remove them from `.env`; the first page load prompts you to create the Admin account and can enable TOTP 2FA immediately.
-- **Environment bootstrap:** set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` before the first start when you need non-interactive setup. Change or remove the bootstrap password after first login.
-
-Admin usernames must be at least 3 characters and passwords must be at least 10 characters. If you enable TOTP during browser setup, add the displayed secret to an authenticator app and enter the current 6-digit code before submitting; otherwise leave 2FA unchecked and enable it later from the profile menu.
-
-### 2. Start with Docker Compose
-
-For a tagged public release, prefer the official GHCR image and skip a local build:
+For a tagged release, use the official GHCR image:
 
 ```bash
 APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.3 docker compose pull launcher
 APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.3 docker compose up -d --no-build
-docker compose ps
 ```
 
-When developing from a source checkout, build locally instead:
+Or build from source: `docker compose up --build -d`
+
+**3. Open it**
+
+Visit `http://localhost:8080`. The first page load walks you through creating the Admin account in the browser (with optional TOTP 2FA right from setup). Prefer non-interactive bootstrap? Set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env` before first start, then change or remove that password after login. Usernames need 3+ characters, passwords 10+.
+
+After first login, open **Admin → Overview** and run through the beta readiness checklist. To sanity-check the deployment:
 
 ```bash
-docker compose up --build -d
-docker compose ps
+curl -fsS http://localhost:8080/api/healthz           # { ok, version, uptimeSeconds }
+curl -fsS http://localhost:8080/api/bootstrap-status  # is first-admin setup still needed?
 ```
 
-Open:
+Data lives in the `launcher-data` Docker volume and persists across rebuilds. (Repeating a clean first-launch test locally? `docker compose down -v` wipes it — never on a real deployment.)
 
-```text
-http://localhost:8080
-```
+<details>
+<summary><strong>Ports and reverse proxies</strong></summary>
 
-Validate the anonymous health endpoint:
-
-```bash
-curl -fsS http://localhost:8080/api/healthz
-curl -fsS http://localhost:8080/api/bootstrap-status
-```
-
-`/api/healthz` returns only `{ ok, version, uptimeSeconds }`. `/api/bootstrap-status` reports whether first-admin setup is still needed.
-
-Docker named volumes persist across rebuilds and container recreation. If you are intentionally repeating a clean local first-launch test, stop the app and remove the Compose volume first with `docker compose down -v`; do not do this on a real deployment unless you want to erase application data.
-
-### 3. Optional port and reverse-proxy binding
-
-The container listens on port `8080` internally. To use a different host port, set `HOST_PORT` and update `APP_BASE_URL`:
+The container listens on `8080` internally. To publish a different host port:
 
 ```env
 HOST_PORT=9090
 APP_BASE_URL=http://localhost:9090
 ```
 
-When the launcher sits behind Nginx, Caddy, Traefik, or another reverse proxy on the same host, bind the published port to loopback only:
+Behind Nginx, Caddy, Traefik, or another same-host reverse proxy, bind to loopback only:
 
 ```env
 HOST_BIND_IP=127.0.0.1
@@ -148,140 +116,71 @@ TRUST_PROXY=loopback
 APP_BASE_URL=https://launcher.example.test
 ```
 
-`HOST` controls the interface the Node process listens on inside the container and normally stays at `0.0.0.0`. Standard Docker bridge networking is the supported default. In constrained Docker/LXC environments where normal port publishing is unavailable and you intentionally use host networking as a fallback, set `HOST=127.0.0.1`, keep the app behind a same-host reverse proxy, and document that local override outside the public Compose file.
+`HOST` controls the interface the Node process listens on *inside* the container and normally stays `0.0.0.0`. Standard Docker bridge networking is the supported default; if a constrained Docker/LXC environment forces host networking, set `HOST=127.0.0.1`, keep the app behind a same-host reverse proxy, and keep that override out of the public Compose file.
 
-If you do not already have a reverse proxy, the installer can generate a basic Nginx service in the same Compose project. In that mode, only Nginx is published to the host and the launcher stays on the internal Docker network. This is useful for a simple private-LAN HTTP setup, but it does not configure HTTPS certificates.
+Home Lab Launcher deliberately does **not** issue or manage TLS certificates — run it over direct HTTP on a private LAN, or put it behind Nginx, Caddy (ACME), Traefik, or any proxy you already trust. See [docs/deployment.md](docs/deployment.md) for worked examples.
 
-## Launchpad personalization and health
+</details>
 
-The launchpad supports card, compact, and list views with custom, alphabetical, and category sorting. Logged-in users can save their layout preference, drag service cards to customize order, reorder favorites, hide categories, and toggle launchpad metadata visibility. Anonymous visitors get the same preferences stored locally in their browser when public read-only access is enabled. Dragging cards while a search or category filter is active updates the visible cards without discarding the saved order of non-visible services.
+## What you get
 
-Use **Commands** in the header or press `Ctrl+K`/`Cmd+K` to open the command palette. Press `/` outside form fields to focus service search. The palette respects the current role: Basic Users get service/profile/docs commands, Editors also get service management actions, and Admins get admin tabs, backups, logs, and plugin settings/log commands.
+### 🚀 A launchpad your household will actually use
 
-On mobile screens, launchpad filters and view controls stack into touch-friendly rows while service cards, favorites, grouped services, and search remain single-column to avoid horizontal scrolling.
+Card, compact, and list views with search (`/`), category filters, drag-to-reorder, grouping, tags, colors, and emoji or image icons (pasted image URLs are downloaded and stored locally — no hotlinking). Logged-in users keep their own favorites, ordering, layout, and hidden categories; anonymous visitors (when enabled) get the same preferences stored in their browser. Fully responsive — filters stack into touch-friendly rows on phones, nothing scrolls sideways.
 
-Service hostnames in the launchpad are shown only to Admins. The metadata toggle hides both hostnames and tags for Admins, while non-admin viewers can use the same toggle to hide or show tags only.
+Press `Ctrl+K` / `Cmd+K` for a **command palette** that respects roles: Basic Users get open/copy/favorite commands, Editors add service management, Admins add admin tabs, backups, logs, and plugin actions.
 
-Editors and Admins can enable HTTP health checks per service, optionally override the health-check URL, set the check interval, and trigger manual checks. Cards show the latest status, last-check timing, response time, and error details where available. These checks are server-side fetches; see the SSRF notes below before granting Editor access in shared or internet-exposed deployments.
+### 🔍 Service discovery — stop typing URLs
 
-Every health sample is recorded to a history table (retention configurable in Admin → Settings, 1–90 days, default 7) and powers a 24-hour uptime percentage shown in the admin services list and returned in service payloads. Optionally configure a webhook URL in Admin → Settings → Health notifications to receive a JSON POST whenever a monitored service transitions up→down or down→up; the payload includes `title`, `message`, and `priority` (ntfy/Gotify) plus `content` (Discord), so most receivers work without an adapter.
+Scan running containers through a read-only Docker socket proxy, or paste `docker-compose.yml` content, and review import candidates in **Admin → Discovery**. Candidates are built from container names, images, published ports, `home-lab-launcher.*` / `homepage.*` labels, and Traefik ``Host(`…`)`` rules. Environment values, `env_file`, `secrets`, and secret-like labels are **never read**, and embedded credentials are stripped from URLs. Nothing imports until you review it — conflicts are detected, every candidate is editable, and every scan and import is audit-logged. Label a container `home-lab-launcher.ignore: "true"` to keep it out of scans.
 
-## Service discovery
+### 💓 Health checks and notifications
 
-Admins can bootstrap the launchpad from real infrastructure in **Admin console → Discovery** instead of typing every service by hand. Two sources are supported:
+Enable per-service HTTP health checks with configurable intervals and URL overrides. Cards show live status, response time, and error details; every sample feeds a history table (1–90 day retention) that powers a 24-hour uptime percentage. Configure a webhook to get a JSON POST on every up↔down transition — the payload includes `title`/`message`/`priority` (ntfy, Gotify) plus `content` (Discord), so most receivers work without an adapter.
 
-- **Docker scan** — point discovery at a read-only Docker socket proxy (recommended) or a unix socket path and scan running containers. The Docker socket is never mounted or assumed by default, and the endpoint is stored in the database, never in YAML. See `docs/deployment.md` for a hardened socket-proxy Compose snippet.
-- **Compose paste** — paste `docker-compose.yml` content (up to 512 KiB) to preview importable services. The YAML is treated as untrusted text: parsed with a strict schema, never executed or interpolated.
+### 🎨 Theming and branding
 
-Candidates are built from container/service names, images, published ports, and a small label allowlist: `home-lab-launcher.*` (`name`, `url`, `icon`, `category`, `description`, `tags`, `ignore`), `homepage.*` (`name`, `href`, `icon`, `description`, `group`), and Traefik router `` Host(`…`) `` rules for URL guesses. Environment values, `env_file`, `secrets`, and secret-like label keys are never read, stored, or displayed, and credentials embedded in URLs are stripped.
-
-Nothing is imported until you review: each candidate shows its proposed name, URL, category, icon, tags, source details, and whether it conflicts with an existing service (matched by URL or id). Conflicting candidates default to **Skip** and can instead update the existing service or create a duplicate; new candidates can be edited before import. Imports go through the same validation as manually created services, are capped at 50 per batch, and every scan and import is recorded in the audit log. Label any container `home-lab-launcher.ignore: "true"` to keep it out of scans.
-
-## Service icons
-
-Service cards can use either a simple emoji/text icon or an image. When an Editor/Admin pastes an `http://` or `https://` image URL into the icon field, the launcher downloads and stores the image locally instead of hotlinking it. Editors/Admins can also choose a local image file from the service form.
-
-Supported image formats are JPEG, PNG, GIF, and WebP. Animated GIF/WebP files and transparent images are preserved. Icon uploads/downloads are limited to 5 MiB.
-
-## Appearance customization and theme packs
-
-Admins control the global look of the launcher from **Admin console → Appearance**. Basic Users keep personal launchpad preferences such as favorites, favorite order, view mode, sort mode, custom service order, and hidden categories, but cannot change the site-wide theme.
+Admins control the global look from **Admin → Appearance**: app name, favicon, brand images, hero copy, dark/light/system mode, colors, fonts, density, and corner radius — with live preview. Save the result as a preset and export it as shareable JSON (`home-lab-launcher-theme-v1`) that contains *only* appearance data — never users, services, secrets, or plugin config. Imports are validated and sanitized before they can be applied.
 
 ![Appearance customization controls](docs/assets/appearance-customization.png)
 
-Appearance settings include:
+### 👥 Roles that match a real household
 
-- site/app name, browser title, header brand text/subtitle, and initials fallback,
-- favicon, brand icon, and optional hero/header image assets,
-- hero visibility, eyebrow, heading, and subheading copy,
-- dark/light/system mode,
-- controlled theme colors, fonts, density, and corner radius.
+| Role | View | Favorites | Manage services | Plugin settings | Install plugins | Users / settings / logs |
+| --- | :-: | :-: | :-: | :-: | :-: | :-: |
+| **Admin** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **Editor** | ✅ | ✅ | ✅ | Editor-safe fields | — | — |
+| **Basic User** | ✅ | ✅ | — | User-safe preferences | — | — |
+| **Anonymous** | Optional | Browser-local | — | — | — | — |
 
-Branding assets are separate from service icons. App assets are stored under the launcher data directory and served from `/api/app-assets/:filename`; service icons continue to use `/api/service-icons/:filename`. Stored service icons support JPEG, PNG, GIF, WebP, and SVG up to 5 MiB. App asset formats remain limited to JPEG, PNG, GIF, and WebP because unsafe SVG content can include script-like behavior.
+Anonymous read-only access is off by default and toggled in **Admin → Settings**.
 
-Admins can save the current appearance as a preset, apply a preset, duplicate/delete presets, export a preset, or import one. Preset exports are designed for safe sharing and contain only appearance data:
+### 🛠️ A real admin console
 
-```json
-{
-  "format": "home-lab-launcher-theme-v1",
-  "name": "Midnight Lab",
-  "description": "Dark blue theme for network dashboards",
-  "appearance": {
-    "version": 1,
-    "brand": {
-      "appName": "Home Lab Launcher",
-      "pageTitle": "Home Lab Launcher",
-      "brandText": "Home Lab Launcher",
-      "brandSubtitle": "Home lab control plane",
-      "brandMarkText": "HL",
-      "faviconUrl": "",
-      "brandIconUrl": "",
-      "heroImageUrl": ""
-    },
-    "hero": {
-      "enabled": true,
-      "eyebrow": "Home lab operations",
-      "heading": "Launch and manage your internal services.",
-      "subheading": "A role-aware launcher for the tools, dashboards, and dynamic sections that make up your home lab."
-    },
-    "theme": {
-      "mode": "dark",
-      "fontFamily": "system",
-      "density": "comfortable",
-      "radius": "soft",
-      "colors": {
-        "primary": "#8fd3ff"
-      }
-    }
-  }
-}
-```
+![Admin overview with readiness checks](docs/assets/admin-overview.png)
 
-Theme preset JSON never includes users, services, sessions, secrets, plugin configuration, logs, or backups. Imported presets are validated and sanitized before they can be applied.
+Everything an operator needs, in one place: overview with readiness checks and notices · settings · appearance · services (bulk actions, import/export, drag ordering) · discovery · users (roles, password/2FA resets) · security (sessions, effective config, deployment warnings) · backups (portable config backup + SQLite export/restore) · plugins · filtered audit logs with JSON export and retention controls.
 
-## User roles
+Every user gets profile self-service too: password changes, TOTP 2FA with ten single-use recovery codes (shown exactly once, regenerable), active-session review, and session revocation. Admins can additionally issue **API tokens** for automation — role-scoped bearer tokens (`Authorization: Bearer hll_…`) with optional expiry, last-used tracking, and instant revocation, audit-logged as `token:<name>`.
 
-| Role | Can view | Favorites | Manage services | Plugin settings | Install/remove plugins | Users/app settings/logs |
-| --- | --- | --- | --- | --- | --- | --- |
-| **Admin** | Yes | Yes | Yes | Yes | Yes | Yes |
-| **Editor** | Yes | Yes | Yes | Editor-safe plugin settings | No | No |
-| **Basic User** | Yes | Yes | No | User-safe plugin preferences, when exposed | No | No |
-| **Anonymous** | Optional | Browser-local only | No | No | No | No |
+## Plugins
 
-Admins can choose whether anonymous visitors may view the portal. Disable anonymous read-only access in **Admin console → Settings** to require login for all page views.
+Plugins are trusted, Admin-installed code that can add backend routes, SQLite migrations, scheduled jobs, frontend assets, and movable dashboard sections. The portal stays clean by default — empty plugin sections are hidden from regular viewers until something is installed.
 
-Trusted plugins can expose per-user display preferences such as plugin-local themes, filters, and panel state. Signed-in users store those preferences with their account; anonymous public-read viewers store them in browser local storage.
+Browse the **curated catalog** (trust status, declared permissions, compatibility, update hints) or install a pinned version straight from GitHub releases/tags. Installs always require an explicit trust acknowledgement, support optional SHA-256 checksum verification, show release notes, and roll back automatically if a new version fails to load. Plugin config fields are role-scoped by the manifest, and a local development mode makes writing your own plugin painless.
 
-## Admin console
+Official plugins so far: [hll-weather](https://github.com/TMASoft/hll-weather) · [hll-uptime-kuma](https://github.com/TMASoft/hll-uptime-kuma) · [hll-miniflux](https://github.com/TMASoft/hll-miniflux) — cataloged in [home-lab-launcher-plugins](https://github.com/TMASoft/home-lab-launcher-plugins), which also hosts plugin-author docs.
 
-Logged-in Admins see an **Admin** link in the top navigation. The console includes:
-
-- **Overview** — service/user/plugin/log counts, runtime information, configuration warnings, and admin notices.
-- **Settings** — app name, base URL, and public read-only access.
-- **Appearance** — branding, hero visibility/content, app assets, color/font/density controls, live preview, default restore, and theme preset import/export.
-- **Services** — export/import service JSON, drag-and-drop ordering, duplicate services, image/emoji icons, color/icon presets, health-check settings, and bulk enable/disable/feature/delete actions.
-- **Discovery** — scan a Docker socket proxy or paste Compose YAML, review candidates with conflict detection, and import selected services.
-- **Users** — create users, change roles, reset passwords, reset user 2FA, and delete users.
-- **Security** — active-session count, CSRF/header status, deployment warnings, effective configuration, reverse-proxy/HTTPS status, plugin health, and scheduled job status.
-- **Backups** — download a portable configuration backup, export the SQLite database, restore settings/services from a config backup, and record a preferred backup path/operator note.
-- **Plugins** — browse the curated plugin catalog (trust status, declared permissions, compatibility, update hints), discover GitHub versions, install pinned plugin releases/tags from repository roots or plugin subdirectory tree URLs, enable/disable, and remove plugins.
-- **Logs** — filtered audit log entries for login, settings, user, service, plugin, backup, and management actions, with JSON export, retention policy, and pruning controls.
-
-![User management screen](docs/assets/user-management.png)
+Want to build one? Start with [docs/plugins.md](docs/plugins.md).
 
 ![Plugin install trust acknowledgement](docs/assets/plugin-trust.png)
 
-Users access profile actions from the username dropdown in the header. The profile menu includes password changes, optional TOTP 2FA setup/disable, active session review, session revocation, and logout. Disabling TOTP requires the current password and, when 2FA is enabled, the current TOTP code.
-
-Enabling 2FA generates ten single-use recovery codes, shown exactly once (copy or download them). Each code signs you in once in place of a TOTP code via "Use a recovery code instead" on the login form. The profile shows how many codes remain and can regenerate a fresh set (current password + TOTP code required); disabling 2FA or an admin 2FA reset deletes them.
-
-Admins can also issue **API tokens** (Admin → Security) for automation: bearer tokens scoped to a role (`Authorization: Bearer hll_…`), with optional expiry, last-used tracking, and immediate revocation. The token value is shown exactly once at creation. Token requests skip CSRF (they carry no cookies) and cannot use session/profile endpoints; actions are audit-logged as `token:<name>`.
-
-On mobile screens, the Admin section tabs are displayed as a horizontally scrollable tab bar so every Admin area remains reachable without compressing labels or forcing the whole page wider than the viewport.
-
 ## Configuration
 
-Most runtime settings are environment variables on first boot, then editable in the Admin console where applicable.
+Most settings are environment variables on first boot, then editable in the Admin console where applicable.
+
+<details>
+<summary><strong>Environment variable reference</strong></summary>
 
 | Variable | Purpose | Default/example |
 | --- | --- | --- |
@@ -301,122 +200,78 @@ Most runtime settings are environment variables on first boot, then editable in 
 | `DATA_DIR` | SQLite/session/plugin data directory | `/app/data` in Docker |
 | `PLUGIN_DIR` | Installed plugin directory | `/app/data/plugins` |
 | `PLUGIN_CATALOG_URL` | Source URL for the curated plugin catalog JSON | official `home-lab-launcher-plugins` catalog |
-| `NODE_EXTRA_CA_CERTS` | Optional path inside the container/native runtime to an internal CA bundle that Node.js should trust for outbound HTTPS requests, including trusted plugins | empty |
+| `NODE_EXTRA_CA_CERTS` | Optional path to an internal CA bundle Node.js should trust for outbound HTTPS, including trusted plugins | empty |
 | `BOOTSTRAP_ADMIN_USERNAME` | Optional initial Admin username; omit for browser first-admin setup | empty |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Optional initial Admin password; omit for browser first-admin setup | empty |
 | `PUBLIC_READ_ENABLED` | Initial anonymous read-only access | `false` |
 | `LOG_RETENTION_DAYS` | Initial audit-log retention window | `90` |
 | `SCHEDULED_BACKUP_LOCATION` | Optional operator note for desired backup destination | empty |
-| `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` | Which roles may make arbitrary server-side fetches to private, loopback, link-local, or reserved addresses through service health checks and remote image downloads. Use `admin-editor`, `admin`, or `disabled` | `admin-editor` |
+| `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` | Which roles may make server-side fetches to private/loopback/link-local/reserved addresses via health checks and remote image downloads: `admin-editor`, `admin`, or `disabled` | `admin-editor` |
 
-Runtime data is stored in SQLite in the Docker volume `launcher-data` unless you override `DATA_DIR`. Keep `.env`, database files, plugin installs, and private certificates out of Git.
+For internal services signed by a private CA, mount the CA certificate read-only and set `NODE_EXTRA_CA_CERTS` to the container path (e.g. `/app/certs/internal-ca.pem`) instead of disabling TLS verification anywhere.
 
-For internal services that use a private CA, prefer mounting the CA certificate and setting `NODE_EXTRA_CA_CERTS` instead of disabling TLS verification in a plugin. For Docker Compose, mount the CA file read-only and set `NODE_EXTRA_CA_CERTS` to the container path, such as `/app/certs/internal-ca.pem`.
+</details>
 
-## HTTPS and domains
+Runtime data is stored in SQLite in the `launcher-data` Docker volume unless you override `DATA_DIR`. Keep `.env`, database files, plugin installs, and private certificates out of Git.
 
-Home Lab Launcher does **not** issue or manage certificates itself. This keeps the app portable and avoids security-sensitive certificate handling in the application process.
+## Security
 
-Supported deployment styles:
+Security foundations are built in, not bolted on: CSRF protection, SQLite-backed login throttling, optional TOTP 2FA with recovery codes, secure headers, immediate session revalidation (deleted accounts and role changes take effect instantly), a DNS-rebinding-resistant SSRF guard on all server-side fetches, and audit logging with retention controls.
 
-- direct HTTP, such as `http://server-ip:8080`,
-- HTTPS behind Nginx with your own certificate,
-- HTTPS behind Caddy with ACME, or
-- any other reverse proxy that forwards to the launcher container.
+The essentials before you deploy:
 
-See [docs/deployment.md](docs/deployment.md) for examples.
+- Set a strong `SESSION_SECRET`, and change/remove any bootstrap password after first login.
+- Use HTTPS (via your reverse proxy) whenever credentials cross an untrusted network.
+- Enable TOTP 2FA if the launcher is reachable beyond a trusted private LAN.
+- Plugins are trusted code and are **not sandboxed** — install only from sources you trust.
+- Health checks and image downloads are server-side fetches; tighten `SERVER_FETCH_PRIVATE_NETWORK_ACCESS` in shared or internet-exposed deployments.
 
-## API reference
+<details>
+<summary><strong>Full security notes</strong></summary>
 
-Core API routes and plugin-management endpoints are documented in [docs/api.md](docs/api.md). Plugin extension points, manifest fields, config scopes, and trust requirements are documented in [docs/plugins.md](docs/plugins.md).
+- CSRF protection is enabled for mutating API routes after login, using the `X-CSRF-Token` returned by login/session endpoints. API-token requests skip CSRF (they carry no cookies) and cannot use session/profile endpoints.
+- Authenticated and read-gated API requests revalidate the session user against the database. Password changes, Admin password/TOTP resets, role downgrades, and account deletion revoke affected sessions; at least one Admin account must remain.
+- Failed logins are rate-limited with SQLite-backed counters that survive restarts, and audited. Public deployments should still add reverse-proxy/WAF protections.
+- Sessions roll on activity and expire after `SESSION_MAX_AGE_DAYS` (default 14, clamped 1–90) on both the cookie and the server side. Users can revoke their other active sessions from their profile.
+- TOTP secrets live in the application database — include the SQLite database in backup planning and protect those backups. Recovery codes are stored bcrypt-hashed, are single-use, and each use is audit-logged with the remaining count; regeneration requires the current password plus a TOTP code. Disabling TOTP requires the current password and TOTP code, and revokes other sessions.
+- API tokens are stored as SHA-256 hashes with only a display prefix retained. Treat them like passwords and revoke unused ones; they never mix with forward-auth.
+- Keep `TRUST_PROXY=false` for direct exposure; set `loopback`/`1` only when a trusted reverse proxy supplies forwarded headers. Forward-auth (`AUTH_PROXY_*`) trusts a proxy-supplied username header, so enable it only when the proxy strips that header from client requests — the server refuses to start otherwise. Prefer auto-create off unless the proxy is the sole entry point.
+- The SSRF guard resolves each requested host before fetching, pins the connection to the resolved IP to prevent DNS rebinding, and re-checks redirect targets. It blocks private-network destinations for roles excluded by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`, applies timeouts and size limits to image downloads (5 MiB), allows SVG for stored service icons, and rejects SVG branding assets. It is defense-in-depth, not a sandbox — trusted plugins run server-side code and can make their own requests.
+- Service discovery is Admin-only and read-only until an explicit import. The Docker socket is never mounted or assumed by default; prefer a read-only socket proxy (see [docs/deployment.md](docs/deployment.md)). Pasted Compose YAML (max 512 KiB) is parsed with a strict schema, never executed or interpolated; environment values, `env_file`, `secrets`, and secret-like labels are never read or stored. Imports (max 50 per batch) pass through the same validation and SSRF-guarded fetch paths as manually created services.
+- Branding assets (`/api/app-assets/`) are public by design so the login page can show custom branding; service icons (`/api/service-icons/`) are served only to users with read access. Treat uploaded images as public/read-authorized web assets — no secrets or private screenshots. Icon formats: JPEG/PNG/GIF/WebP (+ SVG for stored service icons), 5 MiB limit, animation and transparency preserved.
+- Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
 
-## Plugin system
+</details>
 
-Plugins are trusted Admin-installed code. The Admin console shows lifecycle state, compatibility, permissions, installed hash, config schema fields, logs, update discovery, and release-note previews. A plugin can add:
-
-- backend API routes,
-- SQLite tables/migrations,
-- scheduled jobs,
-- static frontend assets, and
-- dashboard sections.
-
-The plugin manager includes a curated catalog (fetched as static JSON from the official plugins repository, override with `PLUGIN_CATALOG_URL`) showing each plugin's trust status, declared permissions, launcher compatibility, and installed state, so admins can compare plugins before installing. Catalog installs use the same pinned GitHub install path as manual URL installs, including the explicit trust acknowledgement, and catalog fetch failures never affect installed plugins. The plugin manager also supports manual GitHub repository URLs and version discovery from releases/tags. Admins choose an explicit version to install and may paste an expected SHA-256 checksum from a trusted release note (prefilled from the catalog when available); when provided, the downloaded archive must match before extraction. Updates are manual, show release notes when available, and roll back to the previous installed plugin if the new version fails to load. After a successful install or update, superseded install directories and leftover download archives in the plugin directory are cleaned up automatically. Plugin `GET`/`HEAD` API routes honor the launcher's public-read setting by default; a plugin manifest can opt out with `"publicAccess": true` (see docs/plugins.md). Plugin config fields are scoped by the manifest: Admins can edit all fields, Editors can edit only `scope: "editor"` or `scope: "user"` fields, and Admin-only values are preserved when Editors save config. Development installs from a local filesystem path are allowed when `NODE_ENV` is not `production` or `ENABLE_LOCAL_PLUGIN_INSTALL=true`. In Docker, mount the host plugin directory with `LOCAL_PLUGIN_HOST_DIR` and install using the container path such as `/app/local-plugins/news`; host paths under `LOCAL_PLUGIN_HOST_DIR` are auto-mapped when possible.
-
-See [docs/plugins.md](docs/plugins.md) for the manifest and API reference.
-
-### Official plugins
-
-The official plugins live in their own repositories and are listed in the catalog: [hll-weather](https://github.com/TMASoft/hll-weather), [hll-uptime-kuma](https://github.com/TMASoft/hll-uptime-kuma), and [hll-miniflux](https://github.com/TMASoft/hll-miniflux). The catalog itself is `catalog.json` in [home-lab-launcher-plugins](https://github.com/TMASoft/home-lab-launcher-plugins), which also hosts plugin-author documentation.
+To report a vulnerability, see [SECURITY.md](SECURITY.md) — please don't open a public issue.
 
 ## Development
 
-Native development should use Node.js 22, the active LTS release supported by `better-sqlite3` and the Docker image. Newer current/non-LTS releases may not have compatible native SQLite bindings yet.
-
-The API overview is documented in [`docs/api.md`](docs/api.md), and the machine-readable OpenAPI 3.1 contract is maintained in [`docs/openapi.json`](docs/openapi.json) and served at `/api/openapi.json`. Update both when changing endpoint behavior, request/response shapes, authentication, or CSRF requirements.
-
-`better-sqlite3` may compile a native binding during `npm install`. Install the usual native build prerequisites first: a C/C++ compiler toolchain, Python 3, `make`, and SQLite development headers/libraries from your OS package manager.
+Home Lab Launcher is distributed as a Docker/GHCR application, not an npm package (`package.json` is `"private": true`). For local development use **Node.js 22** (the active LTS supported by `better-sqlite3` and the Docker image) plus the usual native-build prerequisites (C/C++ toolchain, Python 3, `make`, SQLite dev headers):
 
 ```bash
 npm install
-npm run check
-npm run dev
+npm run check     # validate JavaScript syntax
+npm run dev       # run natively
 ```
 
-Useful commands:
+Other useful commands:
 
 ```bash
-# Validate JavaScript syntax
-npm run check
-
-# Build and run with Docker from source
-docker compose up --build
-
-# Validate release hygiene before publishing
-npm run release:check
-
-# Reset local development SQLite/plugin data under ./data
-npm run dev:reset
-
-# Seed neutral demo data for screenshots and UI checks
-npm run dev:seed
-
-# Inspect logs
-docker compose logs -f launcher
+docker compose up --build         # build and run from source
+docker compose logs -f launcher   # inspect logs
+npm run release:check             # validate release hygiene
+npm run dev:reset                 # reset local SQLite/plugin data under ./data
+npm run dev:seed                  # seed neutral demo data for screenshots
 ```
 
-The reset/seed commands use `DATA_DIR` when set; otherwise they operate on the ignored `./data` directory in the repository. `dev:reset` refuses to delete a `DATA_DIR` outside the repository unless you intentionally run `node scripts/reset-dev-data.js --force`.
+`dev:reset`/`dev:seed` use `DATA_DIR` when set, otherwise the ignored `./data` directory; `dev:reset` refuses to delete a `DATA_DIR` outside the repository unless forced.
 
-## Security notes
-
-- Change `SESSION_SECRET` before deployment.
-- Change or remove the bootstrap password after first login.
-- Enable TOTP 2FA from the first-admin setup or the profile menu when the deployment is reachable beyond a trusted private LAN. Disabling TOTP requires current password verification plus the current TOTP code when 2FA is enabled, and revokes other active sessions. TOTP secrets are stored in the application database; include the SQLite database in backup planning and protect database backups accordingly.
-- CSRF protection is enabled for mutating API routes after login, using the `X-CSRF-Token` returned by login/session endpoints.
-- Authenticated and read-gated API requests revalidate the session user against the database, so deleted accounts and role changes take effect immediately even on service/plugin read paths. Password changes, Admin password resets, Admin TOTP resets, role downgrades, and account deletion revoke affected sessions; at least one Admin account must remain.
-- Failed logins are rate-limited with SQLite-backed counters and audited. This slows repeated attempts across app restarts, but public deployments should still use reverse-proxy/WAF protections.
-- Security headers are set by the application; still use HTTPS for real deployments.
-- Keep `TRUST_PROXY=false` for direct exposure. Set `TRUST_PROXY=loopback` or `TRUST_PROXY=1` only when a trusted reverse proxy supplies forwarded headers.
-- Sessions roll on activity and expire after `SESSION_MAX_AGE_DAYS` (default 14, clamped 1–90) of inactivity, on both the cookie and the server side.
-- TOTP recovery codes are stored bcrypt-hashed and are single-use; each use is audit-logged with the remaining count. Regeneration requires the current password plus a TOTP code.
-- API tokens are stored as SHA-256 hashes with only a display prefix retained. Treat issued tokens like passwords; revoke unused ones. Tokens cannot access session/profile endpoints and never mix with forward-auth.
-- Forward-auth (`AUTH_PROXY_*`) trusts a proxy-supplied username header, so enable it only when the reverse proxy strips that header from client requests and `TRUST_PROXY` is configured; the server refuses to start otherwise. Prefer auto-create off unless your proxy is the sole entry point.
-- Users can revoke other active sessions from their profile.
-- Admins can export logs, set retention, prune old audit events, and review management-plane notices.
-- Plugins are trusted Admin-installed code and are not sandboxed. Install/update only plugins from sources you trust; the UI requires an explicit trust acknowledgement and supports optional SHA-256 checksum verification for GitHub archives.
-- Remote service/branding image fetches, URL tests, and service health checks are server-side fetches. By default, Admins and Editors may target private, loopback, link-local, and reserved addresses for home-lab use. Set `SERVER_FETCH_PRIVATE_NETWORK_ACCESS=admin` in shared deployments, or `disabled` for internet-exposed demos where no operator should use the launcher as an internal-network HTTP client.
-- The SSRF guard resolves each requested host before fetching, pins the connection directly to the resolved IP to prevent DNS rebinding attacks, and re-checks/re-resolves redirect targets. It blocks private-network destinations for roles not allowed by `SERVER_FETCH_PRIVATE_NETWORK_ACCESS`, uses timeouts and size limits for image downloads, allows SVG for stored service icons, and still rejects SVG branding assets. This is a defense-in-depth boundary, not a browser sandbox; trusted plugins still run server-side code and can make their own network requests.
-- Service discovery is Admin-only and read-only until an explicit import. The Docker socket is never mounted or assumed by default; configure a read-only socket proxy (preferred) or unix socket path in the admin UI. Pasted Compose YAML is parsed as untrusted text with a strict schema and alias/size limits, and environment values, `env_file`, `secrets`, and secret-like labels are never read or stored. Scans and imports are audit-logged, and imported URLs pass through the same validation and SSRF-guarded fetch paths as manually created services.
-- Branding assets are served from `/api/app-assets/` and are public by design so the login page can display custom branding. Service icons, however, are access-controlled and served from `/api/service-icons/` only to users with launcher read access (requiring authentication when anonymous read is disabled). Treat uploaded images as public/read-authorized web assets and do not store secrets or private screenshots there.
-- Keep `.env`, SQLite databases, plugin installs, and private certificates out of Git.
-- Put the launcher behind HTTPS if credentials traverse an untrusted network.
+The API is documented in [docs/api.md](docs/api.md), with a machine-readable OpenAPI 3.1 contract in [docs/openapi.json](docs/openapi.json) (served at `/api/openapi.json`) — update both when endpoint behavior changes. Screenshots in `docs/assets/` are refreshed with `npm run dev:seed`; never capture private hosts, paths, or tokens.
 
 ## Project status
 
-This project is in early development. The core app is functional, but plugin APIs and schemas may still change before a stable release. Public release work is tracked through GitHub issues, milestones, and `CHANGELOG.md`.
-
-## Screenshots
-
-Release screenshots live under `docs/assets/` and are referenced directly from this README so they render on GitHub. Use `npm run dev:seed` before refreshing them; do not capture private hosts, personal plugin locations, local paths, or tokens.
+The core app is functional and in public beta, but plugin APIs and schemas may still change before 1.0. Release work is tracked through GitHub issues, milestones, and [CHANGELOG.md](CHANGELOG.md). Upgrading? See [docs/upgrading.md](docs/upgrading.md).
 
 ## License
 
