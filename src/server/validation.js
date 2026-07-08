@@ -100,7 +100,8 @@ function normalizeLaunchpad(value) {
       hideMetadata: false,
       layoutOrder: ['hero', 'services'],
       sortBy: 'custom',
-      servicesOrder: []
+      servicesOrder: [],
+      hiddenSectionTitles: []
     };
   }
   const out = {};
@@ -168,6 +169,19 @@ function normalizeLaunchpad(value) {
     servicesOrder = value.servicesOrder.map((id) => slugId(id, '')).filter(Boolean).slice(0, 500);
   }
   out.servicesOrder = servicesOrder;
+
+  let hiddenSectionTitles = [];
+  if (Object.prototype.hasOwnProperty.call(value, 'hiddenSectionTitles') && Array.isArray(value.hiddenSectionTitles)) {
+    const seenTitles = new Set();
+    for (const item of value.hiddenSectionTitles) {
+      if (typeof item === 'string' && /^plugin:[a-z0-9][a-z0-9_.:-]{0,119}$/i.test(item) && !seenTitles.has(item)) {
+        seenTitles.add(item);
+        hiddenSectionTitles.push(item);
+      }
+    }
+    hiddenSectionTitles = hiddenSectionTitles.slice(0, 200);
+  }
+  out.hiddenSectionTitles = hiddenSectionTitles;
 
   return out;
 }

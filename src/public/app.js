@@ -160,12 +160,16 @@ function updateLayoutEditingUi() {
     if (state.layoutEditing && !handle) {
       handle = document.createElement('div');
       handle.className = 'layout-drag-handle';
-      handle.innerHTML = `<span>☰ ${escapeHtml(layoutLabels[item.dataset.layoutId] || 'Section')}</span><span class="layout-keyboard-controls"><button class="ghost" type="button" data-layout-move="up" data-layout-target="${escapeHtml(item.dataset.layoutId)}" aria-label="Move ${escapeHtml(layoutLabels[item.dataset.layoutId] || 'section')} up">↑</button><button class="ghost" type="button" data-layout-move="down" data-layout-target="${escapeHtml(item.dataset.layoutId)}" aria-label="Move ${escapeHtml(layoutLabels[item.dataset.layoutId] || 'section')} down">↓</button></span>`;
+      const label = layoutLabels[item.dataset.layoutId] || 'Section';
+      const isPluginSection = String(item.dataset.layoutId || '').startsWith('plugin:');
+      const titleToggle = isPluginSection ? `<button class="ghost" type="button" data-layout-title-toggle="${escapeHtml(item.dataset.layoutId)}" aria-label="Toggle ${escapeHtml(label)} title">Hide title</button>` : '';
+      handle.innerHTML = `<span>☰ ${escapeHtml(label)}</span><span class="layout-keyboard-controls">${titleToggle}<button class="ghost" type="button" data-layout-move="up" data-layout-target="${escapeHtml(item.dataset.layoutId)}" aria-label="Move ${escapeHtml(label)} up">↑</button><button class="ghost" type="button" data-layout-move="down" data-layout-target="${escapeHtml(item.dataset.layoutId)}" aria-label="Move ${escapeHtml(label)} down">↓</button></span>`;
       item.prepend(handle);
     } else if (!state.layoutEditing && handle) {
       handle.remove();
     }
   });
+  applySectionTitleVisibility();
 }
 
 async function setLayoutEditing(enabled) {
@@ -183,6 +187,35 @@ async function persistLayoutOrder() {
   if (!root) return;
   state.preferences.layoutOrder = normalizeLayoutOrder([...root.querySelectorAll('[data-layout-id]')].map((item) => item.dataset.layoutId));
   await saveLaunchpadPreferences();
+}
+
+function isSectionTitleHidden(layoutId) {
+  return (state.preferences.hiddenSectionTitles || []).includes(layoutId);
+}
+
+function applySectionTitleVisibility() {
+  document.querySelectorAll('#layout-root > [data-layout-id^="plugin:"]').forEach((item) => {
+    const hidden = isSectionTitleHidden(item.dataset.layoutId);
+    item.classList.toggle('section-title-hidden', hidden);
+    const toggle = item.querySelector(':scope > .layout-drag-handle [data-layout-title-toggle]');
+    if (toggle) {
+      toggle.textContent = hidden ? 'Show title' : 'Hide title';
+      toggle.setAttribute('aria-pressed', hidden ? 'true' : 'false');
+    }
+  });
+}
+
+async function toggleSectionTitle(layoutId) {
+  const hidden = new Set(state.preferences.hiddenSectionTitles || []);
+  if (hidden.has(layoutId)) hidden.delete(layoutId);
+  else hidden.add(layoutId);
+  state.preferences.hiddenSectionTitles = [...hidden];
+  applySectionTitleVisibility();
+  try {
+    await saveLaunchpadPreferences();
+  } catch (error) {
+    toast(`Could not save layout preferences: ${error.message}`);
+  }
 }
 
 function showAccessError(error) {
@@ -583,6 +616,7 @@ async function renderPluginSections() {
     el.dataset.layoutId = layoutId;
     layoutLabels[layoutId] = section.title || section.id || 'Plugin section';
     el.setAttribute('aria-label', layoutLabels[layoutId]);
+    el.classList.toggle('section-title-hidden', isSectionTitleHidden(layoutId));
     el.innerHTML = `<h2>${escapeHtml(section.title || section.id)}</h2><div class="plugin-body"></div>`;
     root.insertBefore(el, host);
     section.render({
@@ -613,6 +647,12 @@ function layoutDropTarget(event) {
 }
 
 $('layout-root').addEventListener('click', async (event) => {
+  const titleToggle = event.target.closest('[data-layout-title-toggle]');
+  if (titleToggle && state.layoutEditing) {
+    await toggleSectionTitle(titleToggle.dataset.layoutTitleToggle);
+    toast(isSectionTitleHidden(titleToggle.dataset.layoutTitleToggle) ? 'Section title hidden' : 'Section title shown');
+    return;
+  }
   const button = event.target.closest('[data-layout-move]');
   if (!button || !state.layoutEditing) return;
   const item = document.querySelector(`[data-layout-id="${CSS.escape(button.dataset.layoutTarget)}"]`);
@@ -1324,7 +1364,7 @@ async function showProfileModal() {
     try {
       if (state.user) await api('/api/me/preferences/launchpad', { method: 'DELETE' });
       else localStorage.removeItem('hll.launchpad');
-      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, sortBy: 'custom', servicesOrder: [], plugins: state.preferences.plugins || {} };
+      state.preferences = { viewMode: 'cards', hiddenCategories: [], layoutOrder: [...defaultLayoutOrder], hideMetadata: false, sortBy: 'custom', servicesOrder: [], hiddenSectionTitles: [], plugins: state.preferences.plugins || {} };
       closeModal(); render(); await setLayoutEditing(false); toast('Layout and launchpad preferences reset');
     } catch (error) {
       showError(error.message);

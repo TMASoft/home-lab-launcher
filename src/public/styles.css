@@ -891,6 +891,7 @@ td select:focus,
 .plugin-sections { display: none; }
 .plugin-panel { padding: 16px; }
 .plugin-panel h2 { margin-top: 0; }
+.plugin-panel.section-title-hidden > h2 { display: none; }
 
 .modal-card {
   position: relative;

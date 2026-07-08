@@ -78,8 +78,8 @@ APP_BASE_URL=http://localhost:8080
 For a tagged release, use the official GHCR image:
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.3 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.3 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose pull launcher
+APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
 ```
 
 Or build from source: `docker compose up --build -d`

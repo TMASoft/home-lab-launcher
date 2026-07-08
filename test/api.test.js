@@ -335,7 +335,8 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hideMetadata: false,
     layoutOrder: ['hero', 'services'],
     sortBy: 'custom',
-    servicesOrder: []
+    servicesOrder: [],
+    hiddenSectionTitles: []
   });
 
   await basic.request('/api/me/preferences/launchpad', {
@@ -345,7 +346,8 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
         layoutOrder: ['services', 'plugin:demo:status', 'hero', 'invalid-section', 'services'],
         viewMode: 'compact',
         hideMetadata: true,
-        hiddenCategories: ['Media']
+        hiddenCategories: ['Media'],
+        hiddenSectionTitles: ['plugin:demo:status', 'plugin:demo:status', 'invalid-section', 'hero', 42]
       }
     }
   });
@@ -356,7 +358,8 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hideMetadata: true,
     layoutOrder: ['services', 'plugin:demo:status', 'hero'],
     sortBy: 'custom',
-    servicesOrder: []
+    servicesOrder: [],
+    hiddenSectionTitles: ['plugin:demo:status']
   });
 
   await basic.request('/api/me/preferences/launchpad', {

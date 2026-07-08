@@ -4,6 +4,12 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
+## [0.9.4] - 2026-07-08
+
+### Added
+
+- Added a per-user option to hide any plugin dashboard section's title. In layout-editing mode (user menu → Edit layout), each plugin section's drag handle now has a "Hide title"/"Show title" toggle that collapses the section's `<h2>` heading to reclaim vertical space. The choice is stored per user as part of launchpad preferences (`hiddenSectionTitles`), persists across sessions, and is applied when the section renders; resetting layout preferences clears it.
+
 ## [0.9.3] - 2026-07-07
 
 ### Added
