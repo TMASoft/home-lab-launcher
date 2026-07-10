@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const totp = require('../src/server/totp');
+const { sqliteTimestamp } = require('../src/server/routes');
 
 test('TOTP helpers - generateSecret generates valid Base32 secret', () => {
   const secret = totp.generateSecret();
@@ -94,4 +95,11 @@ test('TOTP helpers - normalizeRecoveryCode strips separators and lowercases', ()
   assert.equal(totp.normalizeRecoveryCode('  ab2de fg3jk  '), 'ab2defg3jk');
   assert.equal(totp.normalizeRecoveryCode(null), '');
   assert.equal(totp.normalizeRecoveryCode(12345), '12345');
+});
+
+test('SQLite timestamps sort consistently with SQLite-generated values', () => {
+  const cutoff = sqliteTimestamp('2026-07-10T21:30:09.245Z');
+  assert.equal(cutoff, '2026-07-10 21:30:09');
+  assert.ok('2026-07-10 21:30:10' > cutoff);
+  assert.ok('2026-07-10 21:30:08' < cutoff);
 });

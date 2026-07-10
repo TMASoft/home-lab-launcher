@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const path = require('node:path');
 const Database = require('better-sqlite3');
 const { startServer, Client } = require('./helpers');
 
@@ -654,6 +655,50 @@ test('TOTP recovery codes (login, single-use, regenerate, cleared on disable)', 
   assert.equal(meDisabled.user.recoveryCodesRemaining, undefined);
   const plainLogin = await new Client(server.baseUrl).request('/api/auth/login', { method: 'POST', body: { username: 'admin', password: 'test-admin-password-please-change' } });
   assert.equal(plainLogin.user.role, 'admin');
+});
+
+test('bootstrap and recovery code use are atomic across concurrent requests', async (t) => {
+  const server = startServer({
+    port: 19149,
+    env: { BOOTSTRAP_ADMIN_USERNAME: '', BOOTSTRAP_ADMIN_PASSWORD: '', PUBLIC_READ_ENABLED: 'false' }
+  });
+  await server.ready();
+  t.after(() => server.stop());
+
+  const post = async (pathname, body) => {
+    const response = await fetch(`${server.baseUrl}${pathname}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    return { status: response.status, body: await response.json() };
+  };
+  const bootstrapAttempts = await Promise.all([
+    post('/api/bootstrap', { username: 'first-admin', password: 'first-admin-password' }),
+    post('/api/bootstrap', { username: 'second-admin', password: 'second-admin-password' })
+  ]);
+  assert.deepEqual(bootstrapAttempts.map((result) => result.status).sort(), [200, 409]);
+  const db = new Database(path.join(server.dataDir, 'launcher.sqlite'));
+  assert.equal(db.prepare('SELECT COUNT(*) AS count FROM users').get().count, 1);
+  db.close();
+
+  const admin = bootstrapAttempts.find((result) => result.status === 200).body.user;
+  const password = admin.username === 'first-admin' ? 'first-admin-password' : 'second-admin-password';
+  const client = new Client(server.baseUrl);
+  await client.request('/api/auth/login', { method: 'POST', body: { username: admin.username, password } });
+  const secret = require('../src/server/totp').generateSecret();
+  const buffer = require('../src/server/totp').decodeBase32(secret);
+  const counter = Math.floor(Date.now() / 1000 / 30);
+  const enabled = await client.request('/api/me/totp/enable', {
+    method: 'POST',
+    body: { secret, code: require('../src/server/totp').formatToken(require('../src/server/totp').generateHOTP(buffer, counter)) }
+  });
+  const recoveryCode = enabled.recoveryCodes[0];
+  const recoveryAttempts = await Promise.all([
+    post('/api/auth/login', { username: admin.username, password, recoveryCode }),
+    post('/api/auth/login', { username: admin.username, password, recoveryCode })
+  ]);
+  assert.deepEqual(recoveryAttempts.map((result) => result.status).sort(), [200, 401]);
 });
 
 test('session lifetime honors SESSION_MAX_AGE_DAYS and rolls on activity', async (t) => {

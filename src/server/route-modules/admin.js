@@ -3,6 +3,10 @@ const path = require('path');
 const { getSetting, setSetting } = require('../db');
 const { generateApiToken, hashApiToken, tokenPrefix, apiTokenPayload } = require('../api-tokens');
 
+function sqliteTimestamp(date) {
+  return new Date(date).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+}
+
 function registerAdminRoutes(router, deps) {
   const { db, dataDir, pluginDir, requireRole, logEvent, publicSettings, settingsPayload, getAppearance, DEFAULT_APPEARANCE, sanitizeAppearance, getThemePresets, saveAppAssetDataUrl, downloadAppAsset, slug, cleanText, THEME_PRESET_FORMAT, packageJson, fileSize, configWarnings, adminNotices, pluginManager, effectiveConfig, buildBackup, applyConfigBackup, previewConfigBackup, safeJsonParse, scheduler } = deps;
   router.patch('/settings', requireRole('admin'), express.json(), (req, res) => {
@@ -299,7 +303,7 @@ function registerAdminRoutes(router, deps) {
 
   router.post('/admin/logs/prune', requireRole('admin'), (req, res) => {
     const days = Math.min(3650, Math.max(1, Number(getSetting(db, 'log_retention_days', 90))));
-    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const cutoff = sqliteTimestamp(Date.now() - days * 24 * 60 * 60 * 1000);
     const result = db.prepare('DELETE FROM app_logs WHERE created_at < ?').run(cutoff);
     logEvent(db, req, 'logs.pruned', { days, deleted: result.changes }, 'warn');
     res.json({ ok: true, deleted: result.changes, days });

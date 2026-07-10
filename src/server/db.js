@@ -299,6 +299,15 @@ const MIGRATIONS = [
         CREATE INDEX IF NOT EXISTS idx_service_health_history_service_time ON service_health_history(service_id, checked_at);
       `);
     }
+  },
+  {
+    id: 10,
+    name: 'canonical-health-check-timestamps',
+    up(db) {
+      // Previous releases persisted ISO timestamps while SQLite generates
+      // space-separated timestamps, which breaks lexical due-date checks.
+      db.prepare("UPDATE service_health SET next_check_at = replace(substr(next_check_at, 1, 19), 'T', ' ') WHERE next_check_at LIKE '%T%'").run();
+    }
   }
 ];
 

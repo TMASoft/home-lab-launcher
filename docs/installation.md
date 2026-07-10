@@ -49,8 +49,8 @@ APP_BASE_URL=http://localhost:8080
 **3.** Start from the published image (recommended):
 
 ```bash
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose pull launcher
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose up -d --no-build
 ```
 
 Or build from source: `docker compose up --build -d`
@@ -70,7 +70,7 @@ docker run -d --name home-lab-launcher \
   -e APP_BASE_URL="http://localhost:8080" \
   --cap-drop ALL \
   --security-opt no-new-privileges:true \
-  ghcr.io/tmasoft/home-lab-launcher:v0.9.4
+  ghcr.io/tmasoft/home-lab-launcher:v0.9.5
 ```
 
 Check it:

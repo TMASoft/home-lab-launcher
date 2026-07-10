@@ -74,8 +74,8 @@ test('openDb upgrades a pre-migration schema and records versions', () => {
     assert.ok(healthHistoryColumns.includes('service_id'));
     assert.ok(healthHistoryColumns.includes('status'));
     assert.ok(healthHistoryColumns.includes('checked_at'));
-    assert.equal(upgraded.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9)").get().count, 9);
-    assert.equal(upgraded.pragma('user_version', { simple: true }), 9);
+    assert.equal(upgraded.prepare("SELECT COUNT(*) AS count FROM schema_migrations WHERE id IN (1, 2, 3, 4, 5, 6, 7, 8, 9, 10)").get().count, 10);
+    assert.equal(upgraded.pragma('user_version', { simple: true }), 10);
     upgraded.close();
   } finally {
     fs.rmSync(dataDir, { recursive: true, force: true });
