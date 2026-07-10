@@ -4,7 +4,18 @@ All notable changes to Home Lab Launcher will be documented here.
 
 The project follows a lightweight semantic-versioning style while it is pre-1.0: minor versions may include breaking changes, and patch versions should be safe fixes.
 
-## [0.9.4] - 2026-07-08
+## [Unreleased]
+
+### Added
+
+- New [docs/installation.md](docs/installation.md) with step-by-step directions for all install paths: Docker Compose, single-container `docker run`, and local from-source (including a systemd unit example). The README quick start now links to it and summarizes each path.
+- Project logo and Vaporwave-themed screenshots (first-admin setup, command palette, service discovery) in `docs/assets/`.
+
+### Fixed
+
+- Docs and installers referenced the GHCR image as `ghcr.io/TMASoft/home-lab-launcher`, which Docker rejects — registry repository names must be lowercase. All pull/upgrade commands now use `ghcr.io/tmasoft/home-lab-launcher` (the name the publish workflow actually produces).
+- The guided installers defaulted to the stale `v0.9.1` image tag; they now default to `v0.9.4`.
+- Installer hardening: `.env` permissions are set to `600` before credentials are written (was after), `SESSION_SECRET` generation falls back to `/dev/urandom` when OpenSSL is missing, and running the Linux installer on macOS (or vice versa) prints a warning pointing at the right script.
 
 ### Added
 

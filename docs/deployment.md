@@ -2,6 +2,8 @@
 
 Home Lab Launcher is designed to run anywhere Docker Compose can run. It can be exposed directly over HTTP for private LAN use or placed behind a reverse proxy for HTTPS.
 
+> Looking for step-by-step install directions (Compose, single-container `docker run`, or local from-source)? See [installation.md](installation.md). This guide covers deployment topology, reverse proxies, discovery, and hardening.
+
 ## Prerequisites
 
 - Docker Engine installed and running.
@@ -24,7 +26,7 @@ docker compose version
 
 ## Docker Compose quick start
 
-The official release image is published to GHCR as `ghcr.io/TMASoft/home-lab-launcher`.
+The official release image is published to GHCR as `ghcr.io/tmasoft/home-lab-launcher`.
 
 For a guided install that does not require a source checkout, use the platform installer. It creates an install directory with `docker-compose.yml` and `.env`, checks that Docker and Docker Compose v2 are available, validates the generated Compose config, and can start the app.
 
@@ -56,8 +58,8 @@ For source checkouts, configure and start Compose manually:
 ```bash
 cp .env.example .env
 # edit .env
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -309,8 +311,8 @@ For image-based installs, update by pulling the next tagged GHCR image:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
 
 # Or, for source checkouts:
 # docker compose build --pull

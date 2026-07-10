@@ -5,7 +5,7 @@ Use this checklist before publishing a version tag and again before upgrading a 
 ## 1. Versioned release gates
 
 - Confirm `package.json` has the intended version and that `CHANGELOG.md` has a release entry or an explicit Unreleased section for the tag.
-- Confirm the release tag will publish `ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z` through `.github/workflows/docker-publish.yml`.
+- Confirm the release tag will publish `ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z` through `.github/workflows/docker-publish.yml`.
 - Confirm public docs use neutral examples and do not include private domains, tokens, local filesystem paths, personal plugin configuration, certificates, or `.env` values.
 - Confirm `docs/openapi.json`, `/api/openapi.json`, and `docs/api.md` reflect any route, auth, CSRF, request-body, response-envelope, or status-code changes.
 - Confirm mobile launchpad and Admin console formatting still works on narrow screens, including Admin tab scrolling, modal sizing, and long log/URL wrapping.
@@ -78,8 +78,8 @@ CI should also pass JavaScript syntax checks, automated tests, dependency audit,
 ## 5. Image deployment smoke checks
 
 ```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z docker compose up -d --no-build
 docker compose ps
 docker compose logs --tail=200
 curl -fsS http://localhost:8080/api/healthz
@@ -102,7 +102,7 @@ Use this structure in release notes when a tag affects deployment behavior:
 ```markdown
 ### Upgrade notes for vX.Y.Z
 
-- Image: `ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z`
+- Image: `ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z`
 - Required action: back up the config and Docker volume before upgrading.
 - Deployment changes: describe changes to Compose, reverse proxy, host binding, or required environment variables.
 - Security changes: describe new defaults, warnings, plugin trust, SSRF, or public-read behavior.

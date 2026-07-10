@@ -8,8 +8,8 @@ Use the official GHCR image for production-style installs:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z docker compose up -d --no-build
 ```
 
 For source checkouts, use `docker compose build --pull && docker compose up -d` instead.
@@ -48,7 +48,7 @@ For source checkouts, use `docker compose build --pull && docker compose up -d` 
 ```markdown
 ### Upgrade notes for vX.Y.Z
 
-- Image: `ghcr.io/TMASoft/home-lab-launcher:vX.Y.Z`
+- Image: `ghcr.io/tmasoft/home-lab-launcher:vX.Y.Z`
 - Backups: download a config backup and back up the Docker volume first.
 - Environment: list any required `.env`, reverse-proxy, binding, or bootstrap changes.
 - Security: list public-read, plugin trust, SSRF, session, or rate-limit behavior changes.

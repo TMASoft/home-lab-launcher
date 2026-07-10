@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🏠 Home Lab Launcher
+<img src="docs/assets/logo.svg" width="120" alt="Home Lab Launcher logo">
+
+# Home Lab Launcher
 
 **One beautiful front door for everything running in your home lab.**
 
@@ -14,7 +16,7 @@ no cloud required.
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose-6da8ff?style=flat-square)
 ![License](https://img.shields.io/badge/license-MIT-a0e8a0?style=flat-square)
 
-[Quick start](#quick-start) · [Features](#what-you-get) · [Plugins](#plugins) · [Deployment guide](docs/deployment.md) · [Plugin docs](docs/plugins.md) · [API](docs/api.md)
+[Quick start](#quick-start) · [Features](#what-you-get) · [Plugins](#plugins) · [Install guide](docs/installation.md) · [Deployment guide](docs/deployment.md) · [Plugin docs](docs/plugins.md) · [API](docs/api.md)
 
 ![Home Lab Launcher launchpad](docs/assets/launchpad.png)
 
@@ -54,39 +56,60 @@ curl -fsSL https://raw.githubusercontent.com/TMASoft/home-lab-launcher/main/inst
 
 ### Manual setup
 
-**1. Clone and configure**
+Prefer to do it yourself? **[docs/installation.md](docs/installation.md)** has full directions for Docker Compose, a single `docker run` container, and a local from-source install. The short version:
+
+<details>
+<summary><strong>Docker Compose</strong></summary>
 
 ```bash
 git clone https://github.com/TMASoft/home-lab-launcher.git
 cd home-lab-launcher
 cp .env.example .env
-```
+# edit .env: set SESSION_SECRET (openssl rand -hex 48) and APP_BASE_URL
 
-Edit `.env` before first start — at minimum set a strong session secret and the URL users will open:
-
-```bash
-openssl rand -hex 48   # generate a session secret
-```
-
-```env
-SESSION_SECRET=replace-with-a-long-random-string
-APP_BASE_URL=http://localhost:8080
-```
-
-**2. Start it**
-
-For a tagged release, use the official GHCR image:
-
-```bash
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose pull launcher
-APP_IMAGE=ghcr.io/TMASoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
 ```
 
 Or build from source: `docker compose up --build -d`
 
-**3. Open it**
+</details>
 
-Visit `http://localhost:8080`. The first page load walks you through creating the Admin account in the browser (with optional TOTP 2FA right from setup). Prefer non-interactive bootstrap? Set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env` before first start, then change or remove that password after login. Usernames need 3+ characters, passwords 10+.
+<details>
+<summary><strong>Docker (single container)</strong></summary>
+
+```bash
+docker run -d --name home-lab-launcher \
+  --restart unless-stopped \
+  -p 8080:8080 \
+  -v launcher-data:/app/data \
+  -e SESSION_SECRET="$(openssl rand -hex 48)" \
+  -e APP_BASE_URL="http://localhost:8080" \
+  --cap-drop ALL \
+  --security-opt no-new-privileges:true \
+  ghcr.io/tmasoft/home-lab-launcher:v0.9.4
+```
+
+</details>
+
+<details>
+<summary><strong>Local (from source, no Docker)</strong></summary>
+
+Requires Node.js 22 plus a C/C++ toolchain, Python 3, and `make` for the SQLite native module.
+
+```bash
+git clone https://github.com/TMASoft/home-lab-launcher.git
+cd home-lab-launcher
+npm ci --omit=dev
+# create .env: NODE_ENV=production, SESSION_SECRET, APP_BASE_URL
+npm start
+```
+
+Data lands in `./data` (override with `DATA_DIR`). A systemd unit example is in [docs/installation.md](docs/installation.md#local-from-source).
+
+</details>
+
+**Open it.** Visit `http://localhost:8080`. The first page load walks you through creating the Admin account in the browser (with optional TOTP 2FA right from setup). Prefer non-interactive bootstrap? Set `BOOTSTRAP_ADMIN_USERNAME` and `BOOTSTRAP_ADMIN_PASSWORD` in `.env` before first start, then change or remove that password after login. Usernames need 3+ characters, passwords 10+.
 
 After first login, open **Admin → Overview** and run through the beta readiness checklist. To sanity-check the deployment:
 
@@ -130,9 +153,13 @@ Card, compact, and list views with search (`/`), category filters, drag-to-reord
 
 Press `Ctrl+K` / `Cmd+K` for a **command palette** that respects roles: Basic Users get open/copy/favorite commands, Editors add service management, Admins add admin tabs, backups, logs, and plugin actions.
 
+![Command palette](docs/assets/command-palette.png)
+
 ### 🔍 Service discovery — stop typing URLs
 
 Scan running containers through a read-only Docker socket proxy, or paste `docker-compose.yml` content, and review import candidates in **Admin → Discovery**. Candidates are built from container names, images, published ports, `home-lab-launcher.*` / `homepage.*` labels, and Traefik ``Host(`…`)`` rules. Environment values, `env_file`, `secrets`, and secret-like labels are **never read**, and embedded credentials are stripped from URLs. Nothing imports until you review it — conflicts are detected, every candidate is editable, and every scan and import is audit-logged. Label a container `home-lab-launcher.ignore: "true"` to keep it out of scans.
+
+![Service discovery Compose import review](docs/assets/service-discovery.png)
 
 ### 💓 Health checks and notifications
 

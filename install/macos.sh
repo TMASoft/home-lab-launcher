@@ -4,8 +4,8 @@ set -eu
 INSTALLER_OS="macOS"
 DOCKER_INSTALL_URL="https://docs.docker.com/desktop/setup/install/mac-install/"
 DEFAULT_INSTALL_DIR="$HOME/home-lab-launcher"
-DEFAULT_IMAGE_TAG="v0.9.1"
-IMAGE_REPOSITORY="ghcr.io/TMASoft/home-lab-launcher"
+DEFAULT_IMAGE_TAG="v0.9.4"
+IMAGE_REPOSITORY="ghcr.io/tmasoft/home-lab-launcher"
 
 TTY_PATH="/dev/tty"
 
@@ -82,13 +82,28 @@ check_docker() {
   fi
 }
 
+check_platform() {
+  detected_os=$(uname -s 2>/dev/null || echo unknown)
+  if [ "$detected_os" != "Darwin" ]; then
+    say "Warning: this is the macOS installer, but this system reports '$detected_os'."
+    if [ "$detected_os" = "Linux" ]; then
+      say "Consider using install/linux.sh instead."
+    fi
+  fi
+}
+
 generate_secret() {
   if command -v openssl >/dev/null 2>&1; then
     openssl rand -hex 48
     return 0
   fi
 
-  say "OpenSSL was not found, so the installer cannot generate SESSION_SECRET automatically."
+  if [ -r /dev/urandom ]; then
+    head -c 48 /dev/urandom | od -An -vtx1 | tr -d ' \n'
+    return 0
+  fi
+
+  say "Neither OpenSSL nor /dev/urandom is available, so the installer cannot generate SESSION_SECRET automatically."
   prompt_required "Paste a long random SESSION_SECRET" ""
 }
 
@@ -266,6 +281,7 @@ ENV
 say "Home Lab Launcher installer for $INSTALLER_OS"
 say "This creates a Docker Compose install using the published GHCR image."
 
+check_platform
 check_docker
 
 install_dir=$(prompt_required "Install directory" "$DEFAULT_INSTALL_DIR")
@@ -283,13 +299,13 @@ else
   host_port=$(prompt_required "Host port" "8080")
   reverse_proxy=$(prompt_yes_no "Will this run behind an existing same-host reverse proxy" "no")
   if [ "$reverse_proxy" = "yes" ]; then
-  host_bind_ip="127.0.0.1"
-  trust_proxy="loopback"
-  default_base_url="https://launcher.example.test"
+    host_bind_ip="127.0.0.1"
+    trust_proxy="loopback"
+    default_base_url="https://launcher.example.test"
   else
-  host_bind_ip="0.0.0.0"
-  trust_proxy="false"
-  default_base_url="http://localhost:$host_port"
+    host_bind_ip="0.0.0.0"
+    trust_proxy="false"
+    default_base_url="http://localhost:$host_port"
   fi
 fi
 
@@ -333,11 +349,12 @@ if [ "$include_nginx" = "yes" ]; then
   mkdir -p "$nginx_dir"
 fi
 write_compose_file "$compose_file"
+: > "$env_file"
+chmod 600 "$env_file"
 write_env_file "$env_file"
 if [ "$include_nginx" = "yes" ]; then
   write_nginx_file "$nginx_file"
 fi
-chmod 600 "$env_file"
 
 say "Generated: $compose_file"
 say "Generated: $env_file"

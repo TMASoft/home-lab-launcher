@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Home Lab Launcher logo">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#17102e"/>
+      <stop offset="1" stop-color="#2a1f55"/>
+    </linearGradient>
+    <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffd86b"/>
+      <stop offset="0.45" stop-color="#ff8fab"/>
+      <stop offset="1" stop-color="#ff71ce"/>
+    </linearGradient>
+    <linearGradient id="door" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ff71ce"/>
+      <stop offset="1" stop-color="#b3479a"/>
+    </linearGradient>
+    <mask id="sunStripes">
+      <rect width="256" height="256" fill="#fff"/>
+      <rect x="40" y="118" width="176" height="5" fill="#000"/>
+      <rect x="40" y="131" width="176" height="6" fill="#000"/>
+      <rect x="40" y="145" width="176" height="7" fill="#000"/>
+      <rect x="40" y="160" width="176" height="8" fill="#000"/>
+    </mask>
+  </defs>
+
+  <!-- badge -->
+  <rect width="256" height="256" rx="56" fill="url(#bg)"/>
+  <rect x="6" y="6" width="244" height="244" rx="50" fill="none" stroke="#4d3f86" stroke-width="2"/>
+
+  <!-- vaporwave sun -->
+  <circle cx="128" cy="112" r="62" fill="url(#sun)" mask="url(#sunStripes)"/>
+
+  <!-- grid floor -->
+  <g stroke="#4de7ff" stroke-width="1.5" opacity="0.5">
+    <path d="M20 190 H236"/>
+    <path d="M28 205 H228"/>
+    <path d="M38 222 H218"/>
+    <path d="M128 182 V232"/>
+    <path d="M88 182 L70 232"/>
+    <path d="M168 182 L186 232"/>
+    <path d="M48 182 L14 232"/>
+    <path d="M208 182 L242 232"/>
+  </g>
+
+  <!-- house silhouette -->
+  <g>
+    <path d="M128 84 L196 140 L186 140 L186 196 L70 196 L70 140 L60 140 Z"
+          fill="#201741" stroke="#f2ecff" stroke-width="7"
+          stroke-linejoin="round" stroke-linecap="round"/>
+    <!-- doorway -->
+    <path d="M113 196 V162 Q113 148 128 148 Q143 148 143 162 V196 Z" fill="url(#door)"/>
+    <!-- launch chevron in the roof -->
+    <path d="M112 122 L128 104 L144 122" fill="none" stroke="#4de7ff"
+          stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>
