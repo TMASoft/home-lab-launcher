@@ -11,9 +11,9 @@ const DUMMY_PASSWORD_HASH = '$2a$12$abdPSDFEQ.WRYzarpYqmJu0afTCOpyv4fG9xbQI8nu4G
 function verifyTotpForUser(db, user, code) {
   const result = totp.verifyTOTPWithCounter(user.totp_secret, code);
   if (!result) return false;
-  if (user.totp_last_counter !== null && user.totp_last_counter !== undefined && result.counter <= user.totp_last_counter) return false;
-  db.prepare('UPDATE users SET totp_last_counter = ? WHERE id = ?').run(result.counter, user.id);
-  return true;
+  const update = db.prepare('UPDATE users SET totp_last_counter = ? WHERE id = ? AND (totp_last_counter IS NULL OR totp_last_counter < ?)')
+    .run(result.counter, user.id, result.counter);
+  return update.changes === 1;
 }
 
 const RECOVERY_CODE_COUNT = 10;
@@ -35,8 +35,8 @@ async function consumeRecoveryCode(db, userId, input) {
   const rows = db.prepare('SELECT id, code_hash FROM totp_recovery_codes WHERE user_id = ? AND used_at IS NULL').all(userId);
   for (const row of rows) {
     if (await bcrypt.compare(normalized, row.code_hash)) {
-      db.prepare('UPDATE totp_recovery_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ?').run(row.id);
-      return true;
+      const update = db.prepare('UPDATE totp_recovery_codes SET used_at = CURRENT_TIMESTAMP WHERE id = ? AND used_at IS NULL').run(row.id);
+      if (update.changes === 1) return true;
     }
   }
   return false;
@@ -53,8 +53,6 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
   });
 
   router.post('/bootstrap', express.json(), async (req, res) => {
-    const count = db.prepare('SELECT COUNT(*) AS count FROM users').get().count;
-    if (count !== 0) return res.apiError(409, 'Bootstrap already completed');
     const username = String(req.body.username || '').trim();
     const password = String(req.body.password || '');
     if (username.length < 3 || password.length < 10) return res.apiError(400, 'Username must be 3+ chars and password 10+ chars');
@@ -74,7 +72,12 @@ function registerAuthRoutes(router, { db, requireAuth, logEvent, isLoginLimited,
       totpCounter = codeResult.counter;
     }
 
-    const info = db.prepare('INSERT INTO users (username, password_hash, role, totp_secret, totp_enabled, totp_last_counter) VALUES (?, ?, ?, ?, ?, ?)').run(username, hash, 'admin', totpSecret, totpEnabled, totpCounter);
+    const info = db.prepare(`
+      INSERT INTO users (username, password_hash, role, totp_secret, totp_enabled, totp_last_counter)
+      SELECT ?, ?, ?, ?, ?, ?
+      WHERE NOT EXISTS (SELECT 1 FROM users)
+    `).run(username, hash, 'admin', totpSecret, totpEnabled, totpCounter);
+    if (info.changes === 0) return res.apiError(409, 'Bootstrap already completed');
     const recoveryCodes = totpEnabled ? await replaceRecoveryCodes(db, info.lastInsertRowid) : undefined;
     req.session.user = { id: info.lastInsertRowid, username, role: 'admin' };
     req.session.createdAt = new Date().toISOString();

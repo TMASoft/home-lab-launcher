@@ -58,8 +58,8 @@ For source checkouts, configure and start Compose manually:
 ```bash
 cp .env.example .env
 # edit .env
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose pull launcher
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose up -d --no-build
 docker compose ps
 ```
 
@@ -311,8 +311,8 @@ For image-based installs, update by pulling the next tagged GHCR image:
 
 ```bash
 docker compose down
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose pull launcher
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.4 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose up -d --no-build
 
 # Or, for source checkouts:
 # docker compose build --pull

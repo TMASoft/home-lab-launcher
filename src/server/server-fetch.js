@@ -53,9 +53,31 @@ function isPrivateIpv6(address) {
   if (lower.startsWith('fe8') || lower.startsWith('fe9') || lower.startsWith('fea') || lower.startsWith('feb')) return true; // link-local
   if (lower.startsWith('ff')) return true; // multicast
   if (lower.startsWith('2001:db8:')) return true; // documentation
-  const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
-  if (mapped) return isPrivateIpv4(mapped[1]);
+  const mapped = mappedIpv4FromIpv6(lower);
+  if (mapped) return isPrivateIpv4(mapped);
   return false;
+}
+
+function mappedIpv4FromIpv6(address) {
+  let normalized = address;
+  if (normalized.includes('.')) {
+    const separator = normalized.lastIndexOf(':');
+    const dottedIpv4 = normalized.slice(separator + 1);
+    if (net.isIP(dottedIpv4) !== 4) return null;
+    const value = ipv4ToInt(dottedIpv4);
+    normalized = `${normalized.slice(0, separator)}:${(value >>> 16).toString(16)}:${(value & 0xffff).toString(16)}`;
+  }
+
+  const parts = normalized.split('::');
+  if (parts.length > 2) return null;
+  const left = parts[0] ? parts[0].split(':') : [];
+  const right = parts.length === 2 && parts[1] ? parts[1].split(':') : [];
+  if (left.length + right.length > 8) return null;
+  const groups = [...left, ...Array(8 - left.length - right.length).fill('0'), ...right];
+  if (!groups.slice(0, 5).every((group) => Number.parseInt(group, 16) === 0) || Number.parseInt(groups[5], 16) !== 0xffff) return null;
+
+  const value = (Number.parseInt(groups[6], 16) << 16) + Number.parseInt(groups[7], 16);
+  return `${(value >>> 24) & 0xff}.${(value >>> 16) & 0xff}.${(value >>> 8) & 0xff}.${value & 0xff}`;
 }
 
 function isPrivateAddress(address) {

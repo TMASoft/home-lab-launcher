@@ -6,6 +6,19 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## [Unreleased]
 
+## [0.9.5] - 2026-07-10
+
+### Security
+
+- Closed an outbound-request SSRF bypass for hexadecimal and expanded IPv4-mapped IPv6 addresses, including loopback destinations.
+- Made browser bootstrap atomic so concurrent initial setup requests cannot create multiple Administrator accounts.
+- Made TOTP counters and recovery-code consumption conditional database updates, preventing concurrent reuse of a single one-time code.
+- Excluded `.env.*` files from Docker build contexts while retaining `.env.example`.
+
+### Fixed
+
+- Standardized persisted health-check and retention timestamps to SQLite's sortable UTC format. Configured health-check intervals now run on schedule, retention jobs no longer remove same-day records early, and existing health schedules are upgraded automatically.
+
 ### Added
 
 - New [docs/installation.md](docs/installation.md) with step-by-step directions for all install paths: Docker Compose, single-container `docker run`, and local from-source (including a systemd unit example). The README quick start now links to it and summarizes each path.

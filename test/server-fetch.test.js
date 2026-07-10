@@ -20,6 +20,9 @@ test('server-fetch - isPrivateAddress detects private/reserved IPs', () => {
   assert.ok(isPrivateAddress('::'));
   assert.ok(isPrivateAddress('fd00::1')); // Unique Local Address
   assert.ok(isPrivateAddress('fe80::1')); // Link-Local
+  assert.ok(isPrivateAddress('::ffff:127.0.0.1')); // IPv4-mapped loopback
+  assert.ok(isPrivateAddress('::ffff:7f00:1')); // Hexadecimal IPv4-mapped loopback
+  assert.ok(isPrivateAddress('0:0:0:0:0:ffff:7f00:1')); // Expanded IPv4-mapped loopback
   assert.ok(!isPrivateAddress('2001:4860:4860::8888')); // Google Public DNS
 });
 

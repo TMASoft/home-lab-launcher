@@ -432,11 +432,15 @@ function healthStatusFrom(code) {
   return 'unknown';
 }
 
+function sqliteTimestamp(date) {
+  return new Date(date).toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+}
+
 async function checkServiceHealth(db, service) {
   const target = service.healthCheckUrl || service.url;
   const started = Date.now();
   const interval = Math.max(1, Number(service.healthCheckIntervalMinutes || 15));
-  const nextCheckAt = new Date(Date.now() + interval * 60 * 1000).toISOString();
+  const nextCheckAt = sqliteTimestamp(Date.now() + interval * 60 * 1000);
   let status = 'unknown';
   let statusCode = null;
   let error = null;
@@ -567,13 +571,13 @@ function pruneExpiredSessions(db) {
 
 function pruneHealthHistoryByRetention(db) {
   const days = Math.min(90, Math.max(1, Number(getSetting(db, 'health_history_retention_days', 7))));
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = sqliteTimestamp(Date.now() - days * 24 * 60 * 60 * 1000);
   return db.prepare('DELETE FROM service_health_history WHERE checked_at < ?').run(cutoff).changes;
 }
 
 function pruneAppLogsByRetention(db) {
   const days = Math.min(3650, Math.max(1, Number(getSetting(db, 'log_retention_days', 90))));
-  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const cutoff = sqliteTimestamp(Date.now() - days * 24 * 60 * 60 * 1000);
   return db.prepare('DELETE FROM app_logs WHERE created_at < ?').run(cutoff).changes;
 }
 
@@ -919,4 +923,4 @@ function registerCoreRoutes(app, { db, pluginManager, dataDir, pluginDir, schedu
   return { requireAuth, requireRole };
 }
 
-module.exports = { registerCoreRoutes, requireRole, requireAuth, logEvent };
+module.exports = { registerCoreRoutes, requireRole, requireAuth, logEvent, sqliteTimestamp };
