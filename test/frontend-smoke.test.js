@@ -24,6 +24,9 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
   for (const token of ['isAdmin()', 'canEditServices()', 'renderServices()', 'setLayoutEditing(', 'persistLayoutOrder(', 'adminAppearanceHtml()', 'applyAppearance(', 'healthCheckEnabled', 'saveLaunchpadPreferences', 'Beta readiness checklist', 'checklist-link', 'docs/release-checklist.md', 'docs/deployment.md#first-admin-bootstrap', 'docs/examples/backup-restore.md', 'plugin-trust-confirm', 'preview-restore', 'reset-layout-preferences', 'data-layout-move', 'data-layout-title-toggle', 'toggleSectionTitle(', 'applySectionTitleVisibility(', 'test-service-url', 'data-toggle-metadata', 'showServiceHostnames()', 'showServiceTags()', '/api/admin/presets/import', 'svc-preset-id']) {
     assert.ok(js.includes(token), `missing ${token}`);
   }
+  for (const token of ['data-view-mode="icon"', 'aria-pressed="${state.preferences.viewMode', 'aria-label="Open ${escapeHtml(s.name)}"', 'class="service-actions"', 'aria-label="Actions for ${escapeHtml(s.name)}"']) {
+    assert.ok(js.includes(token), `missing icon-view token ${token}`);
+  }
   // v0.7.0 additions: recovery codes, API tokens, health webhook settings, uptime badges
   for (const token of ['showRecoveryCodesModal(', 'recoveryCodesRemaining', '/api/me/totp/recovery-codes', 'login-use-recovery', 'login-form', 'recoveryCode', 'apiTokensCardHtml()', '/api/admin/api-tokens', 'data-api-token-revoke', 'admin-health-webhook', 'health_webhook_url', 'health_history_retention_days', 'serviceUptimeHtml(', 'uptime24h']) {
     assert.ok(js.includes(token), `missing v0.7.0 token ${token}`);
@@ -56,7 +59,7 @@ test('frontend script includes role-gated admin and launchpad behaviors', () => 
 
 test('frontend styles include reduced-motion and mobile layout safeguards', () => {
   const css = fs.readFileSync(path.join(__dirname, '..', 'src/public/styles.css'), 'utf8');
-  for (const token of ['@media (prefers-reduced-motion: reduce)', 'animation: none !important', 'transition: none !important', '@media (max-width: 720px)', '.grid { grid-template-columns: 1fr; }', 'scroll-snap-type: x proximity', '-webkit-overflow-scrolling: touch', 'max-height: calc(100dvh - 16px)', '.command-palette-card', '.command-result.active', '.checklist-link', 'overflow-wrap: anywhere', '.discovery-row-grid { grid-template-columns: 1fr; }']) {
+  for (const token of ['@media (prefers-reduced-motion: reduce)', 'animation: none !important', 'transition: none !important', '@media (max-width: 720px)', '.grid { grid-template-columns: 1fr; }', 'scroll-snap-type: x proximity', '-webkit-overflow-scrolling: touch', 'max-height: calc(100dvh - 16px)', '.command-palette-card', '.command-result.active', '.checklist-link', 'overflow-wrap: anywhere', '.discovery-row-grid { grid-template-columns: 1fr; }', '.view-icon', '.view-icon .service-group-grid']) {
     assert.ok(css.includes(token), `missing CSS quality token ${token}`);
   }
 });

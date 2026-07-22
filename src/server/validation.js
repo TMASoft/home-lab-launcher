@@ -125,7 +125,7 @@ function normalizeLaunchpad(value) {
       }
     }
   }
-  out.viewMode = ['cards', 'compact', 'list'].includes(viewMode) ? viewMode : 'cards';
+  out.viewMode = ['cards', 'compact', 'icon', 'list'].includes(viewMode) ? viewMode : 'cards';
 
   if (Object.prototype.hasOwnProperty.call(value, 'hideMetadata')) {
     out.hideMetadata = value.hideMetadata === true;

@@ -6,6 +6,12 @@ The project follows a lightweight semantic-versioning style while it is pre-1.0:
 
 ## [Unreleased]
 
+## [0.9.6] - 2026-07-22
+
+### Added
+
+- Added a persisted icon-only service launchpad view alongside Cards, Compact, and List, with category grouping, accessible service labels, and a keyboard- and touch-friendly action menu.
+
 ## [0.9.5] - 2026-07-10
 
 ### Security

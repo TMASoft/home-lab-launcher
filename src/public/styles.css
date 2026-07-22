@@ -1536,6 +1536,149 @@ tr:hover td { background: color-mix(in srgb, var(--ink) 3%, transparent); }
   font-size: 0.7rem;
 }
 
+.view-icon {
+  grid-template-columns: repeat(auto-fill, 104px);
+  gap: 12px;
+}
+.view-icon.has-groups {
+  grid-template-columns: 1fr;
+}
+.view-icon .service-group {
+  display: grid;
+  gap: 8px;
+}
+.view-icon .service-group-head h3 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  letter-spacing: -.015em;
+  text-transform: capitalize;
+}
+.view-icon .service-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 104px);
+  gap: 12px;
+}
+.view-icon .service-card {
+  min-height: 104px;
+  height: 104px;
+  align-items: center;
+  justify-content: center;
+  padding: 10px;
+  overflow: visible;
+}
+.view-icon .service-card:hover,
+.view-icon .service-card:focus-within {
+  z-index: 4;
+}
+.view-icon .card-top {
+  align-items: center;
+  justify-content: center;
+}
+.view-icon .service-card .icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 14px;
+  font-size: 1.65rem;
+}
+.view-icon .service-card h3,
+.view-icon .service-card p,
+.view-icon .service-card > div:last-child,
+.view-icon .service-link span {
+  display: none;
+}
+.view-icon .service-link {
+  position: absolute;
+  inset: 0;
+  display: block;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+.view-icon .service-link:focus-visible::after {
+  box-shadow: 0 0 0 3px var(--ink);
+}
+.view-icon .service-actions {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.view-icon .service-actions summary {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  list-style: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+.view-icon .service-actions summary::-webkit-details-marker {
+  display: none;
+}
+.view-icon .service-actions summary > span {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow-sm);
+  font-size: .75rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  opacity: .72;
+  transition: color .14s ease, border-color .14s ease, background-color .14s ease, opacity .14s ease;
+}
+.view-icon .service-actions summary:hover,
+.view-icon .service-actions summary:focus-visible,
+.view-icon .service-actions[open] summary {
+  outline: 0;
+}
+.view-icon .service-actions summary:hover > span,
+.view-icon .service-actions summary:focus-visible > span,
+.view-icon .service-actions[open] summary > span {
+  border-color: var(--line-strong);
+  color: var(--ink);
+  background: var(--surface);
+  opacity: 1;
+}
+.view-icon .service-actions summary:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: 0 0 0 3px var(--ink);
+  border-radius: 11px;
+}
+.view-icon .service-actions .actions {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 44px);
+  gap: 4px;
+  width: max-content;
+  padding: 5px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  pointer-events: auto;
+}
+.view-icon .service-actions:not([open]) .actions {
+  display: none;
+}
+.view-icon .service-card .actions .icon-btn {
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+  font-size: .9rem;
+}
+
 .view-compact {
   grid-template-columns: 1fr;
 }

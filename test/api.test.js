@@ -363,6 +363,10 @@ test('roles, public/private read modes, preferences, and CSRF boundaries are enf
     hiddenSectionTitles: ['plugin:demo:status']
   });
 
+  await basic.request('/api/me/preferences/launchpad', { method: 'PUT', body: { value: { viewMode: 'icon' } } });
+  launchpadPrefs = await basic.request('/api/me/preferences');
+  assert.equal(launchpadPrefs.preferences.launchpad.viewMode, 'icon');
+
   await basic.request('/api/me/preferences/launchpad', {
     method: 'PUT',
     body: {

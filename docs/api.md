@@ -66,7 +66,7 @@ Admins and Editors can manage services.
 
 ## User preferences
 
-Logged-in users can manage their own preferences. Basic Users are limited to personal launchpad state such as favorites, favorite order, view mode, hidden categories, and trusted plugin preferences stored under the `plugins` namespace.
+Logged-in users can manage their own preferences. Basic Users are limited to personal launchpad state such as favorites, favorite order, view mode (`cards`, `compact`, `icon`, or `list`), hidden categories, and trusted plugin preferences stored under the `plugins` namespace.
 
 | Method | Path | Purpose |
 | --- | --- | --- |

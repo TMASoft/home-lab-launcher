@@ -67,8 +67,8 @@ cd home-lab-launcher
 cp .env.example .env
 # edit .env: set SESSION_SECRET (openssl rand -hex 48) and APP_BASE_URL
 
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose pull launcher
-APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.5 docker compose up -d --no-build
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.6 docker compose pull launcher
+APP_IMAGE=ghcr.io/tmasoft/home-lab-launcher:v0.9.6 docker compose up -d --no-build
 ```
 
 Or build from source: `docker compose up --build -d`
@@ -87,7 +87,7 @@ docker run -d --name home-lab-launcher \
   -e APP_BASE_URL="http://localhost:8080" \
   --cap-drop ALL \
   --security-opt no-new-privileges:true \
-  ghcr.io/tmasoft/home-lab-launcher:v0.9.5
+  ghcr.io/tmasoft/home-lab-launcher:v0.9.6
 ```
 
 </details>
@@ -149,7 +149,7 @@ Home Lab Launcher deliberately does **not** issue or manage TLS certificates —
 
 ### 🚀 A launchpad your household will actually use
 
-Card, compact, and list views with search (`/`), category filters, drag-to-reorder, grouping, tags, colors, and emoji or image icons (pasted image URLs are downloaded and stored locally — no hotlinking). Logged-in users keep their own favorites, ordering, layout, and hidden categories; anonymous visitors (when enabled) get the same preferences stored in their browser. Fully responsive — filters stack into touch-friendly rows on phones, nothing scrolls sideways.
+Card, compact, icon-only, and list views with search (`/`), category filters, drag-to-reorder, grouping, tags, colors, and emoji or image icons (pasted image URLs are downloaded and stored locally — no hotlinking). Logged-in users keep their own favorites, ordering, layout, and hidden categories; anonymous visitors (when enabled) get the same preferences stored in their browser. Fully responsive — filters stack into touch-friendly rows on phones, nothing scrolls sideways.
 
 Press `Ctrl+K` / `Cmd+K` for a **command palette** that respects roles: Basic Users get open/copy/favorite commands, Editors add service management, Admins add admin tabs, backups, logs, and plugin actions.
 
